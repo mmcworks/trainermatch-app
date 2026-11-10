@@ -147,27 +147,6 @@ export const AcademiaView: React.FC = () => {
 
   const [activeMenu, setActiveMenu] = useState<"turnos" | "propostas" | "professores" | "assinatura" | "perfil">("turnos");
   const [scheduleViewMode, setScheduleViewMode] = useState<"mes" | "semana">("mes");
-  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return window.innerWidth < 768;
-    }
-    return false;
-  });
-  const [forceDesktopMode, setForceDesktopMode] = useState<boolean>(false);
-  const [isMobilePreview, setIsMobilePreview] = useState<boolean>(false);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobileScreen(window.innerWidth < 768);
-    };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  const isMobileView = isMobileScreen ? !forceDesktopMode : isMobilePreview;
-  const isActualMobileDevice = isMobileScreen && !forceDesktopMode;
-
   const [proposalFilter, setProposalFilter] = useState<"todas" | "aceita" | "pendente" | "recusada">("todas");
   const [showNewShiftModal, setShowNewShiftModal] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
@@ -612,64 +591,40 @@ export const AcademiaView: React.FC = () => {
   };
 
   return (
-    <div
-      className={`min-h-screen text-navy-900 dark:text-slate-100 transition-colors duration-200 ${
-        isMobileView
-          ? isActualMobileDevice
-            ? "bg-background dark:bg-navy-900 flex justify-center"
-            : "p-4 flex items-center justify-center bg-slate-200 dark:bg-navy-950"
-          : "bg-background dark:bg-navy-900 flex flex-col"
-      }`}
-    >
-      {isMobileView ? (
-        /* ===================== VERSÃO MOBILE DEDICADA DA ACADEMIA ===================== */
-        <div
-          className={`w-full max-w-md bg-background dark:bg-navy-900 font-sans transition-colors duration-200 relative flex flex-col ${
-            isActualMobileDevice
-              ? "min-h-screen pb-24 shadow-2xl overflow-x-hidden"
-              : "rounded-[36px] shadow-2xl overflow-hidden border-8 border-slate-800 dark:border-slate-700 h-[860px] max-h-[92vh]"
-          }`}
-        >
-          {/* Header Mobile da Academia */}
-          <header className="p-4 bg-card/95 dark:bg-navy-800/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-700/60 flex justify-between items-center z-10 flex-shrink-0 sticky top-0">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-navy-900 p-0.5 border border-slate-200 dark:border-slate-700 flex-shrink-0 overflow-hidden shadow-xs flex items-center justify-center">
-                {profileLogo ? (
-                  <img src={profileLogo} alt="Logo" className="w-full h-full object-cover rounded-full" />
-                ) : (
-                  <Building2 size={18} className="text-primary" />
-                )}
-              </div>
-              <div className="truncate">
-                <span className="text-[10px] text-muted dark:text-slate-400 font-bold block leading-none">Academia</span>
-                <h2 className="font-black text-sm text-navy-900 dark:text-white truncate mt-0.5">{profileName}</h2>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <button
-                onClick={toggleDarkMode}
-                className="w-8 h-8 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-navy-900 dark:hover:text-white bg-slate-100 dark:bg-navy-700 rounded-full transition-colors"
-                title="Alternar Modo Escuro"
-              >
-                {isDarkMode ? "☀️" : "🌙"}
-              </button>
-
-              {!isActualMobileDevice && (
-                <button
-                  onClick={() => setIsMobilePreview(false)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-full transition-colors"
-                  title="Voltar ao Painel Web Desktop"
-                >
-                  <Monitor size={13} />
-                  <span>Web</span>
-                </button>
+    <div className="min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 transition-colors duration-200">
+      
+      {/* ===================== VERSÃO MOBILE DEDICADA DA ACADEMIA (SOMENTE EM CELULARES: < 768px) ===================== */}
+      <div className="block md:hidden w-full max-w-md mx-auto min-h-screen pb-24 shadow-2xl relative font-sans transition-colors duration-200 flex flex-col overflow-x-hidden">
+        
+        {/* Header Mobile da Academia */}
+        <header className="p-4 bg-card/95 dark:bg-navy-800/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-700/60 flex justify-between items-center z-10 flex-shrink-0 sticky top-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-navy-900 p-0.5 border border-slate-200 dark:border-slate-700 flex-shrink-0 overflow-hidden shadow-xs flex items-center justify-center">
+              {profileLogo ? (
+                <img src={profileLogo} alt="Logo" className="w-full h-full object-cover rounded-full" />
+              ) : (
+                <Building2 size={18} className="text-primary" />
               )}
             </div>
-          </header>
+            <div className="truncate">
+              <span className="text-[10px] text-muted dark:text-slate-400 font-bold block leading-none">Academia</span>
+              <h2 className="font-black text-sm text-navy-900 dark:text-white truncate mt-0.5">{profileName}</h2>
+            </div>
+          </div>
 
-          {/* Conteúdo com rolagem da Aba Selecionada */}
-          <div className={`flex-1 p-4 ${isActualMobileDevice ? "pb-28" : "pb-24 overflow-y-auto no-scrollbar"} space-y-4 animate-fade-in`}>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              onClick={toggleDarkMode}
+              className="w-8 h-8 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-navy-900 dark:hover:text-white bg-slate-100 dark:bg-navy-700 rounded-full transition-colors"
+              title="Alternar Modo Escuro"
+            >
+              {isDarkMode ? "☀️" : "🌙"}
+            </button>
+          </div>
+        </header>
+
+        {/* Conteúdo da Aba Selecionada (Mobile) */}
+        <div className="flex-1 p-4 pb-28 space-y-4 animate-fade-in">
 
             {/* BANNER DE DESTAQUE: PROFESSOR INICIOU AULA (MOBILE) */}
             {pendingCheckInShifts.length > 0 && (
@@ -1711,17 +1666,6 @@ export const AcademiaView: React.FC = () => {
                     </div>
                   </div>
 
-                  {isMobileScreen && (
-                    <button
-                      type="button"
-                      onClick={() => setForceDesktopMode(true)}
-                      className="w-full py-2.5 px-4 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-navy-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors active:scale-95"
-                    >
-                      <Monitor size={14} className="text-primary" />
-                      <span>Ver Painel Web (Modo Desktop)</span>
-                    </button>
-                  )}
-
                   <button
                     type="button"
                     onClick={() => logout()}
@@ -1853,14 +1797,10 @@ export const AcademiaView: React.FC = () => {
 
           </div>
 
-          {/* Bottom Bar Mobile Fixa */}
+          {/* Bottom Bar Mobile Fixa (Somente Celular: < 768px) */}
           <nav
             aria-label="Navegação da Academia Mobile"
-            className={`${
-              isActualMobileDevice
-                ? "fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40"
-                : "absolute bottom-0 left-0 right-0 z-20"
-            } bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-700/60 px-4 py-3 flex justify-around items-center transition-colors duration-200`}
+            className="fixed bottom-0 left-0 right-0 max-w-md mx-auto md:hidden z-40 bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-700/60 px-4 py-3 flex justify-around items-center transition-colors duration-200"
           >
             <button
               onClick={() => setActiveMenu("turnos")}
@@ -1903,25 +1843,9 @@ export const AcademiaView: React.FC = () => {
             </button>
           </nav>
         </div>
-      ) : (
-        /* ===================== PAINEL WEB DESKTOP DA ACADEMIA ===================== */
-        <div className="w-full flex flex-col md:flex-row flex-1 relative">
-          {/* Banner de aviso se o usuário em celular forçou o modo desktop */}
-          {isMobileScreen && forceDesktopMode && (
-            <div className="w-full bg-primary text-white text-xs font-bold py-2.5 px-4 flex items-center justify-between z-30 shadow-sm md:hidden">
-              <div className="flex items-center gap-1.5">
-                <Monitor size={14} />
-                <span>Modo Desktop Ativado</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setForceDesktopMode(false)}
-                className="bg-white text-primary text-xs font-black px-3 py-1 rounded-full hover:bg-slate-100 transition-colors shadow-xs"
-              >
-                Voltar ao App Mobile
-              </button>
-            </div>
-          )}
+
+        {/* ===================== PAINEL WEB (TABLETS E DESKTOPS: >= 768px) ===================== */}
+        <div className="hidden md:flex w-full min-h-screen flex-row flex-1">
           {/* SIDEBAR WEB */}
           <aside
             aria-label="Menu Principal da Academia"
@@ -2108,18 +2032,6 @@ export const AcademiaView: React.FC = () => {
               </div>
 
               <div className="flex items-center flex-wrap gap-2.5">
-                {/* Botão de alternar visão Web / Mobile Preview */}
-                <button
-                  onClick={() => {
-                    setForceDesktopMode(false);
-                    setIsMobilePreview(true);
-                  }}
-                  className="flex items-center gap-1.5 bg-card dark:bg-navy-800 border border-slate-200 dark:border-slate-700 text-xs font-bold px-3 py-2 rounded-full shadow-xs hover:bg-slate-50 dark:hover:bg-navy-700 transition-all text-navy-900 dark:text-white"
-                  title="Testar como a academia visualiza no app mobile"
-                >
-                  <Smartphone size={14} className="text-primary" />
-                  <span>Ver App Mobile</span>
-                </button>
 
                 <button
                   onClick={toggleDarkMode}
@@ -4604,7 +4516,6 @@ export const AcademiaView: React.FC = () => {
 
           </main>
         </div>
-      )}
 
       {/* ===================== MODAL DE CADASTRAR HORÁRIO DE AULA (INDIVIDUAL OU GRADE) ===================== */}
       <AnimatedModal
