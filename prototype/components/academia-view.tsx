@@ -147,7 +147,27 @@ export const AcademiaView: React.FC = () => {
 
   const [activeMenu, setActiveMenu] = useState<"turnos" | "propostas" | "professores" | "assinatura" | "perfil">("turnos");
   const [scheduleViewMode, setScheduleViewMode] = useState<"mes" | "semana">("mes");
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+  const [forceDesktopMode, setForceDesktopMode] = useState<boolean>(false);
   const [isMobilePreview, setIsMobilePreview] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const isMobileView = isMobileScreen ? !forceDesktopMode : isMobilePreview;
+  const isActualMobileDevice = isMobileScreen && !forceDesktopMode;
+
   const [proposalFilter, setProposalFilter] = useState<"todas" | "aceita" | "pendente" | "recusada">("todas");
   const [showNewShiftModal, setShowNewShiftModal] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
@@ -592,14 +612,26 @@ export const AcademiaView: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 transition-colors duration-200 ${isMobilePreview ? "p-4 flex items-center justify-center bg-slate-200 dark:bg-navy-950" : "flex flex-col md:flex-row"}`}>
-      
-      {isMobilePreview ? (
+    <div
+      className={`min-h-screen text-navy-900 dark:text-slate-100 transition-colors duration-200 ${
+        isMobileView
+          ? isActualMobileDevice
+            ? "bg-background dark:bg-navy-900 flex justify-center"
+            : "p-4 flex items-center justify-center bg-slate-200 dark:bg-navy-950"
+          : "bg-background dark:bg-navy-900 flex flex-col"
+      }`}
+    >
+      {isMobileView ? (
         /* ===================== VERSÃO MOBILE DEDICADA DA ACADEMIA ===================== */
-        <div className="w-full max-w-md bg-background dark:bg-navy-900 rounded-[36px] shadow-2xl overflow-hidden border-8 border-slate-800 dark:border-slate-700 relative min-h-[860px] max-h-[92vh] flex flex-col font-sans transition-colors duration-200">
-          
+        <div
+          className={`w-full max-w-md bg-background dark:bg-navy-900 font-sans transition-colors duration-200 relative flex flex-col ${
+            isActualMobileDevice
+              ? "min-h-screen pb-24 shadow-2xl overflow-x-hidden"
+              : "rounded-[36px] shadow-2xl overflow-hidden border-8 border-slate-800 dark:border-slate-700 h-[860px] max-h-[92vh]"
+          }`}
+        >
           {/* Header Mobile da Academia */}
-          <header className="p-4 bg-card dark:bg-navy-800 border-b border-slate-100 dark:border-slate-700/60 flex justify-between items-center z-10 flex-shrink-0">
+          <header className="p-4 bg-card/95 dark:bg-navy-800/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-700/60 flex justify-between items-center z-10 flex-shrink-0 sticky top-0">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-navy-900 p-0.5 border border-slate-200 dark:border-slate-700 flex-shrink-0 overflow-hidden shadow-xs flex items-center justify-center">
                 {profileLogo ? (
@@ -623,19 +655,21 @@ export const AcademiaView: React.FC = () => {
                 {isDarkMode ? "☀️" : "🌙"}
               </button>
 
-              <button
-                onClick={() => setIsMobilePreview(false)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-full transition-colors"
-                title="Voltar ao Painel Web Desktop"
-              >
-                <Monitor size={13} />
-                <span>Web</span>
-              </button>
+              {!isActualMobileDevice && (
+                <button
+                  onClick={() => setIsMobilePreview(false)}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-full transition-colors"
+                  title="Voltar ao Painel Web Desktop"
+                >
+                  <Monitor size={13} />
+                  <span>Web</span>
+                </button>
+              )}
             </div>
           </header>
 
           {/* Conteúdo com rolagem da Aba Selecionada */}
-          <div className="flex-1 p-4 pb-24 overflow-y-auto space-y-4 animate-fade-in no-scrollbar">
+          <div className={`flex-1 p-4 ${isActualMobileDevice ? "pb-28" : "pb-24 overflow-y-auto no-scrollbar"} space-y-4 animate-fade-in`}>
 
             {/* BANNER DE DESTAQUE: PROFESSOR INICIOU AULA (MOBILE) */}
             {pendingCheckInShifts.length > 0 && (
@@ -1677,6 +1711,17 @@ export const AcademiaView: React.FC = () => {
                     </div>
                   </div>
 
+                  {isMobileScreen && (
+                    <button
+                      type="button"
+                      onClick={() => setForceDesktopMode(true)}
+                      className="w-full py-2.5 px-4 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-navy-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors active:scale-95"
+                    >
+                      <Monitor size={14} className="text-primary" />
+                      <span>Ver Painel Web (Modo Desktop)</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => logout()}
@@ -1689,10 +1734,134 @@ export const AcademiaView: React.FC = () => {
               </div>
             )}
 
+            {/* ABA 5: ASSINATURA & PLANOS (MOBILE) */}
+            {activeMenu === "assinatura" && (
+              <div className="space-y-4 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-black text-navy-900 dark:text-white">Planos de Assinatura</h2>
+                    <p className="text-xs text-muted dark:text-slate-400">
+                      O cadastro e a 1ª contratação são 100% gratuitos. Escolha o plano ideal.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMenu("perfil")}
+                    className="text-xs font-bold text-primary hover:underline"
+                  >
+                    ← Voltar
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {/* Grátis */}
+                  <div className="p-4 rounded-squircle border border-slate-200 dark:border-slate-700 bg-card dark:bg-navy-800 space-y-2.5 shadow-soft">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-sm font-bold text-navy-900 dark:text-white">Plano Grátis</h3>
+                      <span className="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">R$ 0</span>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-300">1ª contratação 100% gratuita para testar o sistema.</p>
+                    <button
+                      type="button"
+                      onClick={() => subscribePlan("gratis")}
+                      className={`w-full py-2 rounded-full text-xs font-bold transition-colors ${
+                        gymPlan === "gratis"
+                          ? "bg-slate-100 dark:bg-navy-700 text-slate-600 dark:text-slate-300 cursor-default"
+                          : "bg-navy-900 dark:bg-primary text-white hover:opacity-90"
+                      }`}
+                    >
+                      {gymPlan === "gratis" ? "Plano Atual" : "Selecionar Grátis"}
+                    </button>
+                  </div>
+
+                  {/* Essencial */}
+                  <div className="p-4 rounded-squircle border border-slate-200 dark:border-slate-700 bg-card dark:bg-navy-800 space-y-2.5 shadow-soft">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-sm font-bold text-navy-900 dark:text-white">Essencial</h3>
+                      <span className="text-sm font-black text-navy-900 dark:text-white">R$ 89<span className="text-[10px] text-muted font-normal">/mês</span></span>
+                    </div>
+                    <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                      <li>✓ Até 4 contratações por mês</li>
+                      <li>✓ 1 unidade / 1 gestor</li>
+                      <li>✓ Liberação imediata de contatos</li>
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => subscribePlan("essencial")}
+                      className={`w-full py-2 rounded-full text-xs font-bold transition-colors ${
+                        gymPlan === "essencial"
+                          ? "bg-slate-100 dark:bg-navy-700 text-slate-600 dark:text-slate-300 cursor-default"
+                          : "bg-primary text-white hover:bg-primary-hover"
+                      }`}
+                    >
+                      {gymPlan === "essencial" ? "Plano Ativo" : "Assinar Essencial"}
+                    </button>
+                  </div>
+
+                  {/* Pro */}
+                  <div className="p-4 rounded-squircle border-2 border-primary bg-primary/5 dark:bg-primary/10 space-y-2.5 relative shadow-soft">
+                    <span className="absolute -top-2.5 right-4 bg-primary text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                      MAIS POPULAR
+                    </span>
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-sm font-bold text-navy-900 dark:text-white">Pro</h3>
+                      <span className="text-sm font-black text-primary">R$ 189<span className="text-[10px] text-muted font-normal">/mês</span></span>
+                    </div>
+                    <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                      <li>✓ Até 15 contratações por mês</li>
+                      <li>✓ 1 unidade / 3 gestores</li>
+                      <li>✓ Turnos urgentes SOS com destaque</li>
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => subscribePlan("pro")}
+                      className={`w-full py-2 rounded-full text-xs font-bold transition-colors ${
+                        gymPlan === "pro"
+                          ? "bg-slate-100 dark:bg-navy-700 text-slate-600 dark:text-slate-300 cursor-default"
+                          : "bg-primary text-white hover:bg-primary-hover shadow-sm"
+                      }`}
+                    >
+                      {gymPlan === "pro" ? "Plano Ativo" : "Assinar Pro"}
+                    </button>
+                  </div>
+
+                  {/* Rede */}
+                  <div className="p-4 rounded-squircle border border-slate-200 dark:border-slate-700 bg-card dark:bg-navy-800 space-y-2.5 shadow-soft">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-sm font-bold text-navy-900 dark:text-white">Rede</h3>
+                      <span className="text-xs font-black text-navy-900 dark:text-white">A partir de R$ 390<span className="text-[10px] text-muted font-normal">/mês</span></span>
+                    </div>
+                    <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                      <li>✓ Contratações ilimitadas</li>
+                      <li>✓ Múltiplas unidades e gestores</li>
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => subscribePlan("rede")}
+                      className={`w-full py-2 rounded-full text-xs font-bold transition-colors ${
+                        gymPlan === "rede"
+                          ? "bg-slate-100 dark:bg-navy-700 text-slate-600 dark:text-slate-300 cursor-default"
+                          : "bg-navy-900 dark:bg-primary text-white hover:opacity-90"
+                      }`}
+                    >
+                      {gymPlan === "rede" ? "Plano Ativo" : "Assinar Plano Rede"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Bottom Bar Mobile Fixa */}
-          <nav aria-label="Navegação da Academia Mobile" className="absolute bottom-0 left-0 right-0 bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-700/60 px-4 py-3 flex justify-around items-center z-20">
+          <nav
+            aria-label="Navegação da Academia Mobile"
+            className={`${
+              isActualMobileDevice
+                ? "fixed bottom-0 left-0 right-0 max-w-md mx-auto z-40"
+                : "absolute bottom-0 left-0 right-0 z-20"
+            } bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-700/60 px-4 py-3 flex justify-around items-center transition-colors duration-200`}
+          >
             <button
               onClick={() => setActiveMenu("turnos")}
               className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
@@ -1736,7 +1905,23 @@ export const AcademiaView: React.FC = () => {
         </div>
       ) : (
         /* ===================== PAINEL WEB DESKTOP DA ACADEMIA ===================== */
-        <div className="w-full flex flex-col md:flex-row flex-1">
+        <div className="w-full flex flex-col md:flex-row flex-1 relative">
+          {/* Banner de aviso se o usuário em celular forçou o modo desktop */}
+          {isMobileScreen && forceDesktopMode && (
+            <div className="w-full bg-primary text-white text-xs font-bold py-2.5 px-4 flex items-center justify-between z-30 shadow-sm md:hidden">
+              <div className="flex items-center gap-1.5">
+                <Monitor size={14} />
+                <span>Modo Desktop Ativado</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForceDesktopMode(false)}
+                className="bg-white text-primary text-xs font-black px-3 py-1 rounded-full hover:bg-slate-100 transition-colors shadow-xs"
+              >
+                Voltar ao App Mobile
+              </button>
+            </div>
+          )}
           {/* SIDEBAR WEB */}
           <aside
             aria-label="Menu Principal da Academia"
@@ -1925,7 +2110,10 @@ export const AcademiaView: React.FC = () => {
               <div className="flex items-center flex-wrap gap-2.5">
                 {/* Botão de alternar visão Web / Mobile Preview */}
                 <button
-                  onClick={() => setIsMobilePreview(true)}
+                  onClick={() => {
+                    setForceDesktopMode(false);
+                    setIsMobilePreview(true);
+                  }}
                   className="flex items-center gap-1.5 bg-card dark:bg-navy-800 border border-slate-200 dark:border-slate-700 text-xs font-bold px-3 py-2 rounded-full shadow-xs hover:bg-slate-50 dark:hover:bg-navy-700 transition-all text-navy-900 dark:text-white"
                   title="Testar como a academia visualiza no app mobile"
                 >
