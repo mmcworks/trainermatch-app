@@ -747,17 +747,35 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   updateInstructorProfile: (instructorId, data) => {
+    const targetId = instructorId || get().activeInstructorId || get().instructors[0]?.id;
+    if (!targetId) return;
+
     set((state) => ({
       instructors: state.instructors.map((inst) =>
-        inst.id === instructorId ? { ...inst, ...data } : inst
+        inst.id === targetId ? { ...inst, ...data } : inst
       )
     }));
 
-    fetch(`/api/instructors/${instructorId}`, {
+    fetch(`/api/instructors/${targetId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
-    }).catch((err) => console.error("Erro ao persistir perfil de instrutor:", err));
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const json = await res.json();
+          if (json.instructor) {
+            set((state) => ({
+              instructors: state.instructors.map((inst) =>
+                inst.id === targetId ? { ...inst, ...json.instructor } : inst
+              )
+            }));
+          }
+        } else {
+          console.error("Erro ao atualizar instrutor no backend:", await res.text());
+        }
+      })
+      .catch((err) => console.error("Erro ao persistir perfil de instrutor:", err));
   },
 
   updateGymPricing: (gymId, pricingRules) => {
@@ -1209,15 +1227,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   updateGymProfile: (gymId, data) => {
+    const targetId = gymId || get().activeGymId || get().gyms[0]?.id;
+    if (!targetId) return;
+
     set((state) => ({
-      gyms: state.gyms.map((g) => (g.id === gymId ? { ...g, ...data } : g))
+      gyms: state.gyms.map((g) => (g.id === targetId ? { ...g, ...data } : g))
     }));
 
-    fetch(`/api/gyms/${gymId}`, {
+    fetch(`/api/gyms/${targetId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
-    }).catch((err) => console.error("Erro ao persistir perfil de academia:", err));
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const json = await res.json();
+          if (json.gym) {
+            set((state) => ({
+              gyms: state.gyms.map((g) => (g.id === targetId ? { ...g, ...json.gym } : g))
+            }));
+          }
+        } else {
+          console.error("Erro ao atualizar academia no backend:", await res.text());
+        }
+      })
+      .catch((err) => console.error("Erro ao persistir perfil de academia:", err));
   },
 
   createShift: (shiftData) => {

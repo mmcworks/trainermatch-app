@@ -60,6 +60,8 @@ import { OnboardingModal } from "@/components/onboarding-modal";
 import { ReviewModal } from "@/components/review-modal";
 import { CancelShiftModal } from "@/components/cancel-shift-modal";
 import { HorizontalBars } from "@/components/horizontal-bars";
+import { cropAndCompressImage } from "@/lib/image-utils";
+
 
 export const AcademiaView: React.FC = () => {
   const {
@@ -341,6 +343,28 @@ export const AcademiaView: React.FC = () => {
     currentGym.modalities || ["Musculação", "Spinning", "Funcional", "Pilates"]
   );
 
+  useEffect(() => {
+    if (currentGym) {
+      if (currentGym.name) setProfileName(currentGym.name);
+      setProfileLogo(currentGym.logo || "");
+      setProfileFacade(currentGym.facadeUrl || "");
+      if (currentGym.cnpj) setProfileCnpj(currentGym.cnpj);
+      if (currentGym.phone) setProfilePhone(currentGym.phone);
+      if (currentGym.email) setProfileEmail(currentGym.email);
+      if (currentGym.address) setProfileAddress(currentGym.address);
+      if (currentGym.neighborhood) setProfileNeighborhood(currentGym.neighborhood);
+      if (currentGym.city) setProfileCity(currentGym.city);
+      if (currentGym.managerName) setProfileManagerName(currentGym.managerName);
+      if (currentGym.managerRole) setProfileManagerRole(currentGym.managerRole);
+      if (currentGym.managerPhone) setProfileManagerPhone(currentGym.managerPhone);
+      if (currentGym.managerEmail) setProfileManagerEmail(currentGym.managerEmail);
+      if (currentGym.modalities && currentGym.modalities.length > 0) {
+        setProfileModalities(currentGym.modalities);
+      }
+    }
+  }, [currentGym.id, currentGym.logo, currentGym.facadeUrl, currentGym.name, currentGym.cnpj, currentGym.address]);
+
+
   // Modo de cadastro da modal de horário: 'individual' ou 'grade'
   const [shiftModalMode, setShiftModalMode] = useState<"individual" | "grade">("individual");
   // Dias da semana selecionados para a grade (0 = Dom, 1 = Seg, 2 = Ter, 3 = Qua, 4 = Qui, 5 = Sex, 6 = Sáb)
@@ -450,10 +474,12 @@ export const AcademiaView: React.FC = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    updateGymProfile(activeGymId, {
+    const gymId = currentGym.id || activeGymId;
+    updateGymProfile(gymId, {
       name: profileName,
       logo: profileLogo,
       facadeUrl: profileFacade,
+
       cnpj: profileCnpj,
       phone: profilePhone,
       email: profileEmail,
@@ -525,13 +551,16 @@ export const AcademiaView: React.FC = () => {
     setShowCropModal(true);
   };
 
-  const handleSaveCroppedImage = () => {
+  const handleSaveCroppedImage = async () => {
+    const gymId = currentGym.id || activeGymId;
     if (cropTarget === "logo") {
-      setProfileLogo(cropImageSrc);
-      updateGymProfile(activeGymId, { logo: cropImageSrc });
+      const compressed = await cropAndCompressImage(cropImageSrc, 320, 320, cropZoom, cropOffsetX, cropOffsetY, 0.85);
+      setProfileLogo(compressed);
+      updateGymProfile(gymId, { logo: compressed });
     } else {
-      setProfileFacade(cropImageSrc);
-      updateGymProfile(activeGymId, { facadeUrl: cropImageSrc });
+      const compressed = await cropAndCompressImage(cropImageSrc, 800, 450, cropZoom, cropOffsetX, cropOffsetY, 0.82);
+      setProfileFacade(compressed);
+      updateGymProfile(gymId, { facadeUrl: compressed });
     }
     setShowCropModal(false);
     setProfileSuccessMsg(
@@ -541,6 +570,7 @@ export const AcademiaView: React.FC = () => {
     );
     setTimeout(() => setProfileSuccessMsg(null), 4000);
   };
+
 
   const handleAddNewModality = () => {
     const modToAdd = customModalityInput.trim() ? customModalityInput.trim() : selectedPredefinedModality;

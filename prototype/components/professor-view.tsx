@@ -58,6 +58,8 @@ import { AnimatedModal } from "@/components/animated-modal";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import { ReviewModal } from "@/components/review-modal";
 import { CancelShiftModal } from "@/components/cancel-shift-modal";
+import { cropAndCompressImage } from "@/lib/image-utils";
+
 
 export const ProfessorView: React.FC = () => {
   const {
@@ -363,12 +365,23 @@ export const ProfessorView: React.FC = () => {
     setShowProfessorCropModal(true);
   };
 
-  const handleSaveCroppedProfAvatar = () => {
-    updateInstructorProfile(activeInstructorId, { avatar: profCropImageSrc });
+  const handleSaveCroppedProfAvatar = async () => {
+    const instructorId = currentInstructor?.id || activeInstructorId;
+    const compressed = await cropAndCompressImage(
+      profCropImageSrc,
+      320,
+      320,
+      profCropZoom,
+      profCropOffsetX,
+      profCropOffsetY,
+      0.85
+    );
+    updateInstructorProfile(instructorId, { avatar: compressed });
     setShowProfessorCropModal(false);
     setProfileSuccessMsg("Foto de perfil circular atualizada com sucesso!");
     setTimeout(() => setProfileSuccessMsg(null), 3000);
   };
+
 
   // Proposta prioritária (convite da academia aguardando resposta do professor)
   const urgentProposal = proposals.find(
