@@ -1,0 +1,110 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  role         String      // "ACADEMIA" | "PROFESSOR"
+  name         String
+  phone        String?     @default("")
+  document     String?     @default("")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  gym          Gym?
+  instructor   Instructor?
+}
+
+model Gym {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  cnpj         String?  @default("")
+  phone        String?  @default("")
+  email        String?  @default("")
+  address      String?  @default("")
+  neighborhood String?  @default("")
+  city         String?  @default("")
+  logo         String?  @default("")
+  facadeUrl    String?  @default("")
+  rating       Float    @default(5.0)
+  ratingCount  Int      @default(0)
+  plan         String   @default("gratis")
+  modalities   String   @default("[]") // JSON
+  pricingRules String?  @default("{}") // JSON
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  shifts       Shift[]
+}
+
+model Instructor {
+  id              String      @id @default(uuid())
+  userId          String      @unique
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  email           String?     @default("")
+  phone           String?     @default("")
+  cpf             String?     @default("")
+  cref            String?     @default("")
+  avatar          String?     @default("")
+  bio             String?     @default("")
+  rating          Float       @default(5.0)
+  ratingCount     Int         @default(0)
+  hourlyRate      Float       @default(45.0)
+  modalities      String      @default("[]") // JSON
+  pixKeys         String      @default("[]") // JSON
+  availability    String      @default("[]") // JSON (grade semanal)
+  blockedDates    String      @default("[]") // JSON (datas bloqueadas pontualmente)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  confirmedShifts Shift[]
+  proposals       Proposal[]
+}
+
+model Shift {
+  id                    String      @id @default(uuid())
+  gymId                 String
+  gym                   Gym         @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  date                  String      // YYYY-MM-DD
+  startTime             String      // HH:MM
+  endTime               String      // HH:MM
+  modality              String
+  rate                  Float
+  status                String      @default("aberto") // "aberto" | "negociando" | "confirmado" | "realizada" | "cancelado"
+  confirmedInstructorId String?
+  confirmedInstructor   Instructor? @relation(fields: [confirmedInstructorId], references: [id], onDelete: SetNull)
+  instructorCheckInAt   DateTime?
+  gymValidatedAt        DateTime?
+  completedAt           DateTime?
+  cancelledBy           String?     // "professor" | "academia"
+  cancelledByName       String?
+  cancellationReason    String?
+  cancelledAt           DateTime?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  proposals             Proposal[]
+}
+
+model Proposal {
+  id           String     @id @default(uuid())
+  shiftId      String
+  shift        Shift      @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  instructorId String
+  instructor   Instructor @relation(fields: [instructorId], references: [id], onDelete: Cascade)
+  rate         Float
+  status       String     @default("pendente") // "pendente" | "aceita" | "recusada" | "expirada"
+  history      String?    @default("[]") // JSON
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
