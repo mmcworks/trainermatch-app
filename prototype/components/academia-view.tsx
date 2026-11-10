@@ -1698,25 +1698,18 @@ export const AcademiaView: React.FC = () => {
                 </div>
 
                 <div className="space-y-3">
-                  {/* Grátis */}
-                  <div className="p-4 rounded-squircle border border-slate-200 dark:border-slate-700 bg-card dark:bg-navy-800 space-y-2.5 shadow-soft">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-sm font-bold text-navy-900 dark:text-white">Plano Grátis</h3>
-                      <span className="text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">R$ 0</span>
+                  {/* Grátis (Informativo) */}
+                  {gymPlan === "gratis" && (
+                    <div className="p-4 rounded-squircle border border-slate-200 dark:border-slate-700 bg-card dark:bg-navy-800 space-y-2 shadow-soft">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-sm font-bold text-navy-900 dark:text-white">Plano Grátis</h3>
+                        <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full">Plano Ativo</span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        {isFirstHireFreeUsed ? "1ª contratação gratuita já realizada" : "1ª contratação gratuita ativa para teste."}
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300">1ª contratação 100% gratuita para testar o sistema.</p>
-                    <button
-                      type="button"
-                      onClick={() => subscribePlan("gratis")}
-                      className={`w-full py-2 rounded-full text-xs font-bold transition-colors ${
-                        gymPlan === "gratis"
-                          ? "bg-slate-100 dark:bg-navy-700 text-slate-600 dark:text-slate-300 cursor-default"
-                          : "bg-navy-900 dark:bg-primary text-white hover:opacity-90"
-                      }`}
-                    >
-                      {gymPlan === "gratis" ? "Plano Atual" : "Selecionar Grátis"}
-                    </button>
-                  </div>
+                  )}
 
                   {/* Essencial */}
                   <div className="p-4 rounded-squircle border border-slate-200 dark:border-slate-700 bg-card dark:bg-navy-800 space-y-2.5 shadow-soft">
