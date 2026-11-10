@@ -29,16 +29,21 @@ export async function POST(req: NextRequest) {
 
       const ext = path.extname(file.name) || ".jpg";
       const randomName = `${crypto.randomUUID()}${ext}`;
-      const uploadDir = path.join(process.cwd(), "public", "uploads");
 
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
+      try {
+        const uploadDir = path.join(process.cwd(), "public", "uploads");
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const filePath = path.join(uploadDir, randomName);
+        fs.writeFileSync(filePath, buffer);
+        return NextResponse.json({ url: `/uploads/${randomName}` });
+      } catch (fsErr) {
+        // Ambiente Serverless read-only (ex: Vercel): retorna DataURL inline
+        const mimeType = file.type || "image/jpeg";
+        const base64 = buffer.toString("base64");
+        return NextResponse.json({ url: `data:${mimeType};base64,${base64}` });
       }
-
-      const filePath = path.join(uploadDir, randomName);
-      fs.writeFileSync(filePath, buffer);
-
-      return NextResponse.json({ url: `/uploads/${randomName}` });
     }
 
     // Suporte a JSON com Base64 (Data URL)
@@ -66,16 +71,19 @@ export async function POST(req: NextRequest) {
       if (mimeType.includes("pdf")) ext = ".pdf";
 
       const randomName = `${crypto.randomUUID()}${ext}`;
-      const uploadDir = path.join(process.cwd(), "public", "uploads");
 
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
+      try {
+        const uploadDir = path.join(process.cwd(), "public", "uploads");
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const filePath = path.join(uploadDir, randomName);
+        fs.writeFileSync(filePath, buffer);
+        return NextResponse.json({ url: `/uploads/${randomName}` });
+      } catch (fsErr) {
+        // Ambiente Serverless read-only (ex: Vercel): retorna a DataURL diretamente
+        return NextResponse.json({ url: body.dataUrl });
       }
-
-      const filePath = path.join(uploadDir, randomName);
-      fs.writeFileSync(filePath, buffer);
-
-      return NextResponse.json({ url: `/uploads/${randomName}` });
     }
 
     return NextResponse.json({ error: "Formato de upload não suportado" }, { status: 400 });

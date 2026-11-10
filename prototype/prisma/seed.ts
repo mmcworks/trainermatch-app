@@ -6,12 +6,19 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("Iniciando seed do banco de dados...");
 
+  const existingUsers = await prisma.user.count();
+  if (existingUsers > 0) {
+    console.log(`Banco de dados já possui ${existingUsers} usuário(s). Seed inicial dispensado para preservar dados existentes.`);
+    return;
+  }
+
   // Limpa registros anteriores para garantir inicialização limpa
   await prisma.proposal.deleteMany({});
   await prisma.shift.deleteMany({});
   await prisma.gym.deleteMany({});
   await prisma.instructor.deleteMany({});
   await prisma.user.deleteMany({});
+
 
   const saltRounds = 10;
   const commonPasswordHash = await bcrypt.hash("12345qwe", saltRounds);
