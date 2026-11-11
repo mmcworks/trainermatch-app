@@ -6,9 +6,27 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const instructor = await prisma.instructor.findUnique({
+    let instructor = await prisma.instructor.findUnique({
       where: { id: params.id }
     });
+
+    if (!instructor) {
+      const sessionCookie = req.cookies.get("trainer_session")?.value;
+      if (sessionCookie) {
+        try {
+          const session = JSON.parse(sessionCookie);
+          if (session?.userId) {
+            instructor = await prisma.instructor.findUnique({
+              where: { userId: session.userId }
+            });
+          }
+        } catch (e) {}
+      }
+      if (!instructor) {
+        instructor = await prisma.instructor.findFirst();
+      }
+    }
+
     if (!instructor) return NextResponse.json({ error: "Professor não encontrado" }, { status: 404 });
 
     return NextResponse.json({
@@ -38,7 +56,9 @@ export async function PUT(
     const updateData: any = {};
 
     if (body.name !== undefined) updateData.name = body.name;
+    if (body.displayName !== undefined && updateData.name === undefined) updateData.name = body.displayName;
     if (body.phone !== undefined) updateData.phone = body.phone;
+    if (body.email !== undefined) updateData.email = body.email;
     if (body.bio !== undefined) updateData.bio = body.bio;
     if (body.avatar !== undefined) updateData.avatar = body.avatar;
     if (body.cref !== undefined) updateData.cref = body.cref;
@@ -58,10 +78,47 @@ export async function PUT(
       updateData.blockedDates = typeof body.blockedDates === "string" ? body.blockedDates : JSON.stringify(body.blockedDates);
     }
 
+    let targetInstructor = await prisma.instructor.findUnique({
+      where: { id: params.id }
+    });
+
+    if (!targetInstructor) {
+      const sessionCookie = req.cookies.get("trainer_session")?.value;
+      if (sessionCookie) {
+        try {
+          const session = JSON.parse(sessionCookie);
+          if (session?.userId) {
+            targetInstructor = await prisma.instructor.findUnique({
+              where: { userId: session.userId }
+            });
+          }
+        } catch (e) {}
+      }
+      if (!targetInstructor) {
+        targetInstructor = await prisma.instructor.findFirst();
+      }
+    }
+
+    if (!targetInstructor) {
+      return NextResponse.json({ error: "Professor não encontrado" }, { status: 404 });
+    }
+
     const updated = await prisma.instructor.update({
-      where: { id: params.id },
+      where: { id: targetInstructor.id },
       data: updateData
     });
+
+    // Sincroniza usuário se nome ou telefone ou email forem alterados
+    if (targetInstructor.userId && (body.name || body.phone || body.email)) {
+      const userUpdate: any = {};
+      if (body.name) userUpdate.name = body.name;
+      if (body.phone) userUpdate.phone = body.phone;
+      if (body.email) userUpdate.email = body.email;
+      await prisma.user.update({
+        where: { id: targetInstructor.userId },
+        data: userUpdate
+      }).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,

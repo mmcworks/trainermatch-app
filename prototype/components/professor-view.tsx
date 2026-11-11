@@ -16,6 +16,14 @@ import {
   AlertCircle,
   Star,
   Dumbbell,
+  Bike,
+  Zap,
+  Activity,
+  Heart,
+  Flame,
+  Waves,
+  Music,
+  Shield,
   X,
   ChevronRight,
   ChevronLeft,
@@ -68,6 +76,8 @@ export const ProfessorView: React.FC = () => {
     instructors,
     proposals,
     activeInstructorId,
+    userName,
+    userEmail,
     createProposal,
     acceptProposal,
     rejectProposal,
@@ -137,6 +147,25 @@ export const ProfessorView: React.FC = () => {
   });
   const [slotErrorMsg, setSlotErrorMsg] = useState<Record<number, string | null>>({});
 
+  // Wizard: Quero Oferecer um Horário (Professor)
+  const [showOfferSlotWizard, setShowOfferSlotWizard] = useState<boolean>(false);
+  const [offerWizardStep, setOfferWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [offerHourlyRate, setOfferHourlyRate] = useState<number>(45);
+  const [offerAllowNegotiation, setOfferAllowNegotiation] = useState<boolean>(true);
+  const [offerMinHourlyRate, setOfferMinHourlyRate] = useState<number>(35);
+  const [offerModalities, setOfferModalities] = useState<string[]>(["Musculação"]);
+  const [offerCustomModality, setOfferCustomModality] = useState<string>("");
+  const [offerDate, setOfferDate] = useState<string>(() => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  });
+  const [offerStartTime, setOfferStartTime] = useState<string>("07:00");
+  const [offerEndTime, setOfferEndTime] = useState<string>("12:00");
+  const [offerSuccessMsg, setOfferSuccessMsg] = useState<string | null>(null);
+
   // Modal de alteração de senha
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
   const [passwordFlowStep, setPasswordFlowStep] = useState<"alterar" | "esqueceu_envio" | "esqueceu_codigo" | "esqueceu_nova">("alterar");
@@ -204,8 +233,8 @@ export const ProfessorView: React.FC = () => {
 
   const fallbackInstructor = {
     id: activeInstructorId || "inst-new",
-    name: "Professor",
-    email: "",
+    name: userName || "Professor",
+    email: userEmail || "",
     phone: "",
     cpf: "",
     cref: "CREF Regular",
@@ -224,7 +253,7 @@ export const ProfessorView: React.FC = () => {
     }
   };
 
-  const rawInstructor = instructors.find((i) => i.id === activeInstructorId) || instructors[0] || fallbackInstructor;
+  const rawInstructor = instructors.find((i) => i.id === activeInstructorId) || (activeInstructorId ? fallbackInstructor : instructors[0]) || fallbackInstructor;
   const currentInstructor = useMemo(() => ({
     ...rawInstructor,
     criteria: rawInstructor.criteria || {
@@ -276,7 +305,15 @@ export const ProfessorView: React.FC = () => {
         setNotifications(rawInstructor.notificationsEnabled);
       }
     }
-  }, [rawInstructor.id]);
+  }, [
+    rawInstructor.id,
+    rawInstructor.name,
+    rawInstructor.email,
+    rawInstructor.phone,
+    rawInstructor.avatar,
+    JSON.stringify(rawInstructor.modalities || []),
+    JSON.stringify(rawInstructor.pixKeys || [])
+  ]);
 
   const [professorDocuments, setProfessorDocuments] = useState<{
     diploma: { name: string; size: string; status: string } | null;
@@ -383,23 +420,32 @@ export const ProfessorView: React.FC = () => {
   };
 
 
+  // Helper para identificar o instrutor ativo
+  const isMyInstructorId = (id?: string) =>
+    id === activeInstructorId || id === currentInstructor?.id || (!activeInstructorId && id === "inst-1");
+
   // Proposta prioritária (convite da academia aguardando resposta do professor)
   const urgentProposal = proposals.find(
-    (p) => p.instructorId === activeInstructorId && p.status === "pendente" && p.turn === "professor"
+    (p) => isMyInstructorId(p.instructorId) && p.status === "pendente" && p.turn === "professor"
+  ) || proposals.find(
+    (p) => isMyInstructorId(p.instructorId) && p.status === "pendente"
   );
 
   // Turno selecionado para a modal de detalhes
   const detailShift = shifts.find((s) => s.id === detailShiftId);
   const detailGym = gyms.find((g) => g.id === detailShift?.gymId);
 
-  // Helper para formatar data em destaque: DD-MM-AAAA + Dia da semana + Horários
+  // Helper para formatar data em destaque: DD mmm AAAA + Dia da semana + Horários
   const formatShiftDate = (shift?: Shift) => {
-    if (!shift) return { fullDate: "04-11-2026", dayMonth: "04-11-2026", weekday: "Quarta-feira", hours: "18:00 – 21:00" };
+    const monthNamesPt = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    if (!shift) return { fullDate: "04 nov 2026", dayMonth: "04 nov 2026", weekday: "Quarta-feira", hours: "18:00 – 21:00" };
     const parts = shift.date.split("-");
     const day = (parts[2] || "04").padStart(2, "0");
     const month = (parts[1] || "11").padStart(2, "0");
     const year = parts[0] || "2026";
-    const fullDate = `${day}-${month}-${year}`;
+    const monthIdx = parseInt(month, 10) - 1;
+    const monthShort = monthNamesPt[monthIdx] || month;
+    const fullDate = `${day} ${monthShort} ${year}`;
     const dayMonth = fullDate;
 
     const weekdaysMap: Record<string, string> = {
@@ -410,6 +456,10 @@ export const ProfessorView: React.FC = () => {
       "2026-11-08": "Domingo",
       "2026-11-09": "Segunda-feira",
       "2026-11-10": "Terça-feira",
+      "2026-11-11": "Quarta-feira",
+      "2026-11-12": "Quinta-feira",
+      "2026-11-13": "Sexta-feira",
+      "2026-11-14": "Sábado",
     };
     const weekday = weekdaysMap[shift.date] || "Quarta-feira";
     const hours = `${shift.startTime} – ${shift.endTime}`;
@@ -452,7 +502,7 @@ export const ProfessorView: React.FC = () => {
   const WEEKDAY_NAMES = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
 
   // Propostas do professor (Abertas vs Concluídas)
-  const myProposals = proposals.filter((p) => p.instructorId === activeInstructorId);
+  const myProposals = proposals.filter((p) => isMyInstructorId(p.instructorId));
   const openProposals = myProposals.filter((p) => p.status === "pendente");
   const closedProposals = myProposals.filter((p) => p.status !== "pendente").filter((p) => {
     if (proposalMonthFilter === "todos") return true;
@@ -464,7 +514,7 @@ export const ProfessorView: React.FC = () => {
 
   // Turnos do professor para o mês selecionado (confirmados, já realizados ou cancelados)
   const myConfirmedShifts = shifts.filter((s) => {
-    const isMine = s.confirmedInstructorId === activeInstructorId;
+    const isMine = isMyInstructorId(s.confirmedInstructorId);
     if (!isMine) return false;
     const isValidStatus = s.status === "confirmado" || s.status === "realizada" || s.status === "cancelado";
     if (!isValidStatus) return false;
@@ -477,7 +527,7 @@ export const ProfessorView: React.FC = () => {
 
   // Todos os turnos confirmados ou realizados do mês atual para o resumo (não inclui cancelados)
   const monthAllConfirmedShifts = shifts.filter((s) => {
-    const isMine = s.confirmedInstructorId === activeInstructorId;
+    const isMine = isMyInstructorId(s.confirmedInstructorId);
     if (!isMine) return false;
     const isValidStatus = s.status === "confirmado" || s.status === "realizada";
     if (!isValidStatus) return false;
@@ -515,12 +565,12 @@ export const ProfessorView: React.FC = () => {
     const dateStr = `${selectedMonthStr}-${String(dayNum).padStart(2, "0")}`;
 
     const dayShifts = shifts.filter(
-      (s) => s.confirmedInstructorId === activeInstructorId &&
+      (s) => isMyInstructorId(s.confirmedInstructorId) &&
              (s.status === "confirmado" || s.status === "realizada") &&
              s.date === dateStr
     );
     const dayCancelledShifts = shifts.filter(
-      (s) => s.confirmedInstructorId === activeInstructorId &&
+      (s) => isMyInstructorId(s.confirmedInstructorId) &&
              s.status === "cancelado" &&
              s.date === dateStr
     );
@@ -676,65 +726,78 @@ export const ProfessorView: React.FC = () => {
           </div>
 
           {/* 3. AVISO DE DESTAQUE DE NEGOCIAÇÃO (CARD ENTRE O MAPA E AS AULAS NA COR AZUL PADRÃO) */}
-          {urgentProposal && !isUrgentAlertDismissed && (
-            <div
-              onClick={() => {
-                setIsUrgentAlertDismissed(true);
-                setActiveTab("propostas");
-              }}
-              className="bg-primary text-white rounded-squircle p-4 shadow-md space-y-3 cursor-pointer hover:bg-primary-hover hover:scale-[1.01] transition-all group"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-white/20 text-white flex items-center justify-center flex-shrink-0 shadow-xs backdrop-blur-xs">
-                    <AlertCircle size={20} />
+          {urgentProposal && !isUrgentAlertDismissed && (() => {
+            const upShift = shifts.find((s) => s.id === urgentProposal.shiftId);
+            const upGym = gyms.find((g) => g.id === upShift?.gymId);
+            const isInvite = urgentProposal.type === "convite" || urgentProposal.turn === "professor";
+
+            return (
+              <div
+                onClick={() => {
+                  setIsUrgentAlertDismissed(true);
+                  setActiveTab("propostas");
+                }}
+                className="bg-primary text-white rounded-squircle p-4 shadow-md space-y-3 cursor-pointer hover:bg-primary-hover hover:scale-[1.01] transition-all group"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-2xl bg-white/20 text-white flex items-center justify-center flex-shrink-0 shadow-xs backdrop-blur-xs">
+                      <AlertCircle size={20} strokeWidth={1.5} />
+                    </div>
+                    <div className="truncate">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-300 block">
+                        {isInvite ? "Novo Convite de Aula Recebido" : "Proposta em Aberto"}
+                      </span>
+                      <p className="text-xs font-bold truncate text-white mt-0.5">
+                        {upGym?.name || "Academia Parceira"}: R$ {urgentProposal.proposedRate}/h fixo
+                      </p>
+                      {upShift && (
+                        <p className="text-[11px] text-white/90 font-medium truncate mt-0.5">
+                          {upShift.modality} · {formatDateDDMMAAAA(upShift.date)} · {upShift.startTime} às {upShift.endTime}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="truncate">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-300 block">
-                      Novo Convite de Aula Recebido
-                    </span>
-                    <p className="text-xs font-bold truncate text-white mt-0.5">
-                      {gyms.find((g) => g.id === shifts.find((s) => s.id === urgentProposal.shiftId)?.gymId)?.name || "Academia"}: R$ {urgentProposal.proposedRate}/h fixo
-                    </p>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {urgentProposal.expiresInMinutes > 0 && (
+                      <div className="flex items-center gap-1 bg-black/20 px-2.5 py-1 rounded-full text-xs font-bold text-white backdrop-blur-xs">
+                        <Clock size={12} strokeWidth={1.5} />
+                        <span>{urgentProposal.expiresInMinutes}m</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsUrgentAlertDismissed(true);
+                      }}
+                      className="text-white/70 hover:text-white text-xs p-1 rounded-full hover:bg-white/20 transition-colors"
+                      title="Dispensar aviso"
+                    >
+                      <X size={14} strokeWidth={1.5} />
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <div className="flex items-center gap-1 bg-black/20 px-2.5 py-1 rounded-full text-xs font-bold text-white backdrop-blur-xs">
-                    <Clock size={12} />
-                    <span>{urgentProposal.expiresInMinutes}m</span>
-                  </div>
+                {/* Ações da Proposta na Home: Aceitar ou Recusar */}
+                <div className="flex items-center justify-between pt-2 border-t border-white/20 text-xs">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setIsUrgentAlertDismissed(true);
+                      rejectProposal(urgentProposal.id);
                     }}
-                    className="text-white/70 hover:text-white text-xs p-1 rounded-full hover:bg-white/20 transition-colors"
-                    title="Dispensar aviso"
+                    className="text-white/80 hover:text-white text-xs font-semibold underline bg-transparent border-0 p-0 cursor-pointer transition-colors"
                   >
-                    <X size={14} />
+                    Recusar convite
                   </button>
+
+                  <span className="text-[11px] text-white font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                    Ver detalhes e negociar →
+                  </span>
                 </div>
               </div>
-
-              {/* Ações da Proposta na Home: Aceitar ou Recusar */}
-              <div className="flex items-center justify-between pt-2 border-t border-white/20 text-xs">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    rejectProposal(urgentProposal.id);
-                  }}
-                  className="text-white/80 hover:text-white text-xs font-semibold underline bg-transparent border-0 p-0 cursor-pointer transition-colors"
-                >
-                  Recusar convite
-                </button>
-
-                <span className="text-[11px] text-white font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                  Ver detalhes e aceitar →
-                </span>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 4. Filtros de Modalidade (Linha Completa com Rolagem Suave sem Scrollbar) */}
           <div className="flex gap-1.5 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
@@ -1503,7 +1566,30 @@ export const ProfessorView: React.FC = () => {
             </div>
           </div>
 
-          {/* Sub-Aba: Alternar entre Aulas Confirmadas e Grade de Horários */}
+          {/* Feedback de sucesso do wizard */}
+          {offerSuccessMsg && (
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-xs font-bold rounded-2xl flex items-center gap-2 animate-fade-in shadow-xs">
+              <CheckCircle size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>{offerSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* Botão de Destaque: Quero oferecer um horário (Posicionado logo acima das abas) */}
+          <button
+            type="button"
+            onClick={() => {
+              setOfferHourlyRate(currentInstructor.hourlyRate || 45);
+              setOfferMinHourlyRate((currentInstructor as any).minHourlyRate || Math.max(30, (currentInstructor.hourlyRate || 45) - 10));
+              setOfferModalities(currentInstructor.modalities?.length ? currentInstructor.modalities : ["Musculação"]);
+              setShowOfferSlotWizard(true);
+              setOfferWizardStep(1);
+            }}
+            className="w-full flex items-center justify-center bg-gradient-to-r from-primary to-blue-600 hover:from-primary-hover hover:to-blue-700 text-white text-xs font-black py-3.5 px-4 rounded-2xl shadow-md active:scale-[0.98] transition-all"
+          >
+            Quero oferecer um horário
+          </button>
+
+          {/* Sub-Aba: Alternar entre Aulas Confirmadas e Meus horários semanais */}
           <div className="flex bg-slate-100 dark:bg-navy-800 p-1 rounded-full text-xs font-bold border border-slate-200/60 dark:border-slate-700">
             <button
               onClick={() => setAgendaSubTab("aulas")}
@@ -1525,7 +1611,7 @@ export const ProfessorView: React.FC = () => {
               }`}
             >
               <Clock size={13} />
-              <span>Minha Grade Semanal</span>
+              <span>Meus horários semanais</span>
             </button>
           </div>
 
@@ -1620,23 +1706,22 @@ export const ProfessorView: React.FC = () => {
 
               {/* CALENDÁRIO EM UMA ÚNICA LINHA COM SLIDE HORIZONTAL */}
               <div className="bg-card dark:bg-navy-800 p-3 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-2">
-                <div className="flex justify-between items-center px-1">
-                  <span className="text-[11px] font-bold text-muted dark:text-slate-400 flex items-center gap-1">
-                    <Calendar size={12} className="text-primary" /> Deslize pelos dias do mês:
-                  </span>
-                  {selectedDayNumber !== null ? (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDayNumber(null)}
-                      className="text-[10px] font-black text-primary hover:underline flex items-center gap-1"
-                    >
-                      <RotateCcw size={10} /> Ver Mês Inteiro
-                    </button>
-                  ) : (
-                    <span className="text-[10px] font-extrabold text-primary bg-primary/10 dark:bg-primary/20 px-2 py-0.5 rounded-full">
-                      Mês Inteiro (Padrão)
-                    </span>
-                  )}
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    {selectedDayNumber !== null ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDayNumber(null)}
+                        className="text-xs font-black text-primary hover:underline flex items-center gap-1.5 py-0.5"
+                      >
+                        <RotateCcw size={12} strokeWidth={2} /> Ver mês inteiro
+                      </button>
+                    ) : (
+                      <span className="text-[11px] font-extrabold text-primary bg-primary/10 dark:bg-primary/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                        <Calendar size={12} strokeWidth={2} /> Mês inteiro (Padrão)
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1.5 scroll-smooth">
@@ -2126,6 +2211,56 @@ export const ProfessorView: React.FC = () => {
 
                   const removeSlot = (slotIdx: number) => {
                     setSlotErrorMsg((prev) => ({ ...prev, [weekDay.dayOfWeek]: null }));
+
+                    const targetSlot = dayAvail.slots?.[slotIdx];
+                    if (targetSlot) {
+                      const slotStartMin = timeToMinutes(targetSlot.start);
+                      const slotEndMin = timeToMinutes(targetSlot.end);
+                      const myInstId = currentInstructor.id || activeInstructorId;
+
+                      // Checa se existe aula confirmada nesse dia da semana e horário
+                      const conflictingShift = shifts.find((s) => {
+                        const isMyShift = s.confirmedInstructorId === myInstId || s.confirmedInstructorId === "inst-1";
+                        if (!isMyShift || s.status !== "confirmado") return false;
+                        const [y, m, d] = (s.date || "").split("-").map(Number);
+                        const sDate = new Date(y, m - 1, d);
+                        if (sDate.getDay() !== weekDay.dayOfWeek) return false;
+                        const sStart = timeToMinutes(s.startTime);
+                        const sEnd = timeToMinutes(s.endTime);
+                        return Math.max(slotStartMin, sStart) < Math.min(slotEndMin, sEnd);
+                      });
+
+                      if (conflictingShift) {
+                        setSlotErrorMsg((prev) => ({
+                          ...prev,
+                          [weekDay.dayOfWeek]: `Não é possível excluir: você possui aula contratada (${conflictingShift.title} · ${formatDateDDMMAAAA(conflictingShift.date)} das ${conflictingShift.startTime} às ${conflictingShift.endTime}). Cancele a aula antes de remover o horário.`
+                        }));
+                        return;
+                      }
+
+                      // Checa se existe proposta ativa/pendente para esse horário
+                      const conflictingProposal = proposals.find((p) => {
+                        const isMyProp = p.instructorId === myInstId || p.instructorId === "inst-1";
+                        if (!isMyProp || (p.status !== "pendente" && p.status !== "aceita")) return false;
+                        const targetShift = shifts.find((s) => s.id === p.shiftId);
+                        if (!targetShift) return false;
+                        const [y, m, d] = (targetShift.date || "").split("-").map(Number);
+                        const pDate = new Date(y, m - 1, d);
+                        if (pDate.getDay() !== weekDay.dayOfWeek) return false;
+                        const sStart = timeToMinutes(targetShift.startTime);
+                        const sEnd = timeToMinutes(targetShift.endTime);
+                        return Math.max(slotStartMin, sStart) < Math.min(slotEndMin, sEnd);
+                      });
+
+                      if (conflictingProposal) {
+                        setSlotErrorMsg((prev) => ({
+                          ...prev,
+                          [weekDay.dayOfWeek]: `Não é possível excluir este horário: há uma proposta em andamento para este período. Recuse ou finalize a negociação antes de remover.`
+                        }));
+                        return;
+                      }
+                    }
+
                     setLocalAvailability((prev) => {
                       const updated = prev.map((d) => {
                         if (d.dayOfWeek !== weekDay.dayOfWeek) return d;
@@ -4981,11 +5116,15 @@ export const ProfessorView: React.FC = () => {
             activeTab === "propostas" ? "text-primary font-bold" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           }`}
         >
-          <Send size={18} />
-          Propostas
-          {myProposals.some((p) => p.status === "pendente") && (
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-white dark:ring-navy-900" />
-          )}
+          <div className="relative">
+            <Send size={18} strokeWidth={1.5} />
+            {openProposals.length > 0 && (
+              <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center ring-2 ring-white dark:ring-navy-900 animate-pulse">
+                {openProposals.length}
+              </span>
+            )}
+          </div>
+          <span>Propostas</span>
         </button>
 
         <button
@@ -5643,6 +5782,627 @@ export const ProfessorView: React.FC = () => {
           await cancelShift(shiftToCancel.id, "professor", reason, rawInstructor.name);
         }}
       />
+
+      <AnimatedModal
+        isOpen={showOfferSlotWizard}
+        onClose={() => setShowOfferSlotWizard(false)}
+        maxWidth="max-w-lg"
+        className="p-5 sm:p-6"
+      >
+        {(() => {
+          const parseHours = (start: string, end: string) => {
+            const [sh, sm] = (start || "07:00").split(":").map(Number);
+            const [eh, em] = (end || "12:00").split(":").map(Number);
+            const startMins = (sh || 0) * 60 + (sm || 0);
+            const endMins = (eh || 0) * 60 + (em || 0);
+            const diff = Math.max(30, endMins - startMins);
+            return Math.round((diff / 60) * 10) / 10;
+          };
+
+          const durationHours = parseHours(offerStartTime, offerEndTime);
+          const totalEstimate = Math.round(durationHours * offerHourlyRate);
+
+          // Lógica de cálculo dos dias do mês para deslize horizontal no modal de oferecer horário
+          const offerParts = (offerDate || "").split("-").map(Number);
+          const offerYear = offerParts[0] || 2026;
+          const offerMonth = offerParts[1] || 11;
+          const offerDay = offerParts[2] || 11;
+          const daysInOfferMonth = new Date(offerYear, offerMonth, 0).getDate();
+
+          const weekdayShort = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+          const weekdayFull = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+          const monthNamesPt = [
+            "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+            "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+          ];
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+          const offerMonthLabel = `${monthNamesPt[offerMonth - 1]} de ${offerYear}`;
+
+          const handleOfferPrevMonth = () => {
+            const prevD = new Date(offerYear, offerMonth - 2, 1);
+            const mStr = String(prevD.getMonth() + 1).padStart(2, "0");
+            setOfferDate(`${prevD.getFullYear()}-${mStr}-01`);
+          };
+
+          const handleOfferNextMonth = () => {
+            const nextD = new Date(offerYear, offerMonth, 1);
+            const mStr = String(nextD.getMonth() + 1).padStart(2, "0");
+            setOfferDate(`${nextD.getFullYear()}-${mStr}-01`);
+          };
+
+          const offerMonthDays = Array.from({ length: daysInOfferMonth }, (_, i) => {
+            const dNum = i + 1;
+            const dObj = new Date(offerYear, offerMonth - 1, dNum);
+            const dow = dObj.getDay();
+            const dStr = `${offerYear}-${String(offerMonth).padStart(2, "0")}-${String(dNum).padStart(2, "0")}`;
+            return {
+              dateStr: dStr,
+              dayNum: dNum,
+              dayOfWeek: weekdayShort[dow],
+              dayName: weekdayFull[dow],
+              isToday: dStr === todayStr,
+              isSelected: dStr === offerDate
+            };
+          });
+
+          const selectedOfferDateObj = new Date(offerYear, offerMonth - 1, offerDay);
+          const selectedDow = !isNaN(selectedOfferDateObj.getTime()) ? selectedOfferDateObj.getDay() : 0;
+          const selectedDayMeta = {
+            dayName: weekdayFull[selectedDow] || "Dia Selecionado",
+            dayOfWeek: weekdayShort[selectedDow] || "DIA",
+            formatted: formatDateDDMMAAAA(offerDate)
+          };
+
+          const modalitiesMeta = [
+            { name: "Musculação", icon: Dumbbell },
+            { name: "Spinning", icon: Bike },
+            { name: "Funcional", icon: Zap },
+            { name: "Pilates", icon: Activity },
+            { name: "Alongamento / Yoga", icon: Heart },
+            { name: "Cross Training", icon: Flame },
+            { name: "Natação / Hidro", icon: Waves },
+            { name: "Dança / Ritmos", icon: Music },
+            { name: "Lutas / Boxe", icon: Shield }
+          ];
+
+          return (
+            <div className="h-[520px] max-h-[85vh] flex flex-col justify-between">
+              {/* Header do Wizard (Fixo no Topo) */}
+              <div className="space-y-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-base font-black text-navy-900 dark:text-white">
+                      Quero Oferecer um Horário
+                    </h3>
+                    <p className="text-[11px] text-muted dark:text-slate-400">
+                      Etapa {offerWizardStep} de 4 · {offerWizardStep === 1 ? "Valor da Aula" : offerWizardStep === 2 ? "Modalidades" : offerWizardStep === 3 ? "Data e Horário" : "Revisão e Confirmação"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowOfferSlotWizard(false)}
+                    className="text-slate-400 hover:text-navy-900 dark:hover:text-white p-1 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Barra de Progresso Visual em 4 Etapas */}
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { step: 1, label: "1. Valor" },
+                    { step: 2, label: "2. Modalidades" },
+                    { step: 3, label: "3. Data/Hora" },
+                    { step: 4, label: "4. Revisão" }
+                  ].map((item) => (
+                    <div key={item.step} className="space-y-1">
+                      <div
+                        className={`h-1.5 rounded-full transition-all ${
+                          offerWizardStep >= item.step
+                            ? "bg-primary"
+                            : "bg-slate-200 dark:bg-navy-700"
+                        }`}
+                      />
+                      <span
+                        className={`text-[10px] font-bold block text-center truncate ${
+                          offerWizardStep === item.step
+                            ? "text-primary"
+                            : "text-slate-400 dark:text-slate-500"
+                        }`}
+                      >
+                        {item.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Corpo da Etapa (com scroll se necessário, ocupando a altura constante) */}
+              <div className="flex-1 overflow-y-auto py-3 pr-0.5 no-scrollbar flex flex-col justify-between">
+                {/* ================= ETAPA 1: VALOR E TOGGLE DE NEGOCIAÇÃO ================= */}
+                {offerWizardStep === 1 && (
+                  <div className="space-y-4 animate-fade-in flex-1">
+                    <div className="p-3 bg-blue-50 dark:bg-primary/10 rounded-2xl border border-primary/20 text-slate-700 dark:text-slate-300">
+                      <span className="font-extrabold text-primary text-xs block mb-0.5">
+                        Quanto você cobra pela sua hora-aula?
+                      </span>
+                      <p className="text-[11px] leading-relaxed">
+                        Informe o valor que deseja receber por hora para este horário.
+                      </p>
+                    </div>
+
+                    {/* Campo de Valor Principal (Sem recomendação de valores) */}
+                    <div className="bg-slate-50 dark:bg-navy-900/70 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 text-center space-y-2">
+                      <label className="text-[11px] font-bold text-muted dark:text-slate-400 uppercase tracking-wider block">
+                        Valor por Hora-Aula
+                      </label>
+
+                      <div className="flex items-baseline justify-center gap-1 font-black text-navy-900 dark:text-white">
+                        <span className="text-2xl text-primary font-bold">R$</span>
+                        <input
+                          type="number"
+                          min={20}
+                          value={offerHourlyRate || ""}
+                          onChange={(e) => {
+                            const newRate = Math.max(0, Number(e.target.value));
+                            setOfferHourlyRate(newRate);
+                            if (newRate > 0 && (offerMinHourlyRate >= newRate || !offerMinHourlyRate)) {
+                              setOfferMinHourlyRate(Math.max(15, newRate - 5));
+                            }
+                          }}
+                          placeholder="0,00"
+                          className="w-28 text-center font-black text-3xl sm:text-4xl bg-transparent border-b-2 border-primary focus:outline-none dark:text-white"
+                        />
+                        <span className="text-sm text-slate-400 font-bold">/hora</span>
+                      </div>
+                    </div>
+
+                    {/* Toggle: Permitir negociação? */}
+                    <div className="p-4 bg-card dark:bg-navy-900 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-0.5 pr-2">
+                          <span className="text-xs font-bold text-navy-900 dark:text-white block">
+                            Permitir negociação?
+                          </span>
+                          <p className="text-[11px] text-muted dark:text-slate-400 leading-relaxed">
+                            Se ativado você poderá receber propostas com outros valores, abaixo.
+                          </p>
+                        </div>
+
+                        {/* Switch Toggle */}
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={offerAllowNegotiation}
+                          onClick={() => {
+                            const nextState = !offerAllowNegotiation;
+                            setOfferAllowNegotiation(nextState);
+                            if (nextState && (offerMinHourlyRate >= offerHourlyRate || !offerMinHourlyRate)) {
+                              setOfferMinHourlyRate(Math.max(15, offerHourlyRate - 5));
+                            }
+                          }}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            offerAllowNegotiation ? "bg-primary" : "bg-slate-300 dark:bg-navy-700"
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                              offerAllowNegotiation ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {offerAllowNegotiation && (
+                        <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-1.5 animate-fade-in">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-700 dark:text-slate-300">
+                              Valor mínimo aceitável:
+                            </span>
+                            <div className="flex items-center gap-1 font-black text-primary">
+                              <span>R$</span>
+                              <input
+                                type="number"
+                                min={15}
+                                max={Math.max(15, offerHourlyRate - 1)}
+                                value={offerMinHourlyRate || ""}
+                                onChange={(e) => setOfferMinHourlyRate(Math.max(0, Number(e.target.value)))}
+                                className={`w-16 text-center p-1.5 bg-slate-100 dark:bg-navy-800 border rounded-lg text-xs font-bold dark:text-white focus:outline-primary transition-colors ${
+                                  offerAllowNegotiation && offerHourlyRate > 0 && offerMinHourlyRate >= offerHourlyRate
+                                    ? "border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 ring-1 ring-amber-500"
+                                    : "border-slate-300 dark:border-slate-600"
+                                }`}
+                              />
+                              <span className="text-[10px] text-slate-400">/h</span>
+                            </div>
+                          </div>
+
+                          {offerAllowNegotiation && offerHourlyRate > 0 && offerMinHourlyRate >= offerHourlyRate && (
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 mt-1 animate-shake">
+                              <AlertCircle size={13} className="shrink-0" />
+                              <span>O valor mínimo aceitável deve ser menor que o valor da hora-aula (máx. R$ {Math.max(0, offerHourlyRate - 1)}/h)</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ================= ETAPA 2: MODALIDADES (OUTLINE LIGHT ICONS) ================= */}
+                {offerWizardStep === 2 && (
+                  <div className="space-y-4 animate-fade-in flex-1">
+                    <div className="p-3 bg-blue-50 dark:bg-primary/10 rounded-2xl border border-primary/20 text-slate-700 dark:text-slate-300">
+                      <span className="font-extrabold text-primary text-xs block mb-0.5">
+                        Quais modalidades você irá lecionar?
+                      </span>
+                      <p className="text-[11px] leading-relaxed">
+                        Selecione as modalidades aplicáveis para este horário ou adicione outra digitando.
+                      </p>
+                    </div>
+
+                    {/* Grid com Ícones Outline Light */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[200px] overflow-y-auto pr-1 no-scrollbar">
+                      {modalitiesMeta.map((item) => {
+                        const Icon = item.icon;
+                        const isSelected = offerModalities.includes(item.name);
+                        return (
+                          <button
+                            key={item.name}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                if (offerModalities.length > 1) {
+                                  setOfferModalities(offerModalities.filter((m) => m !== item.name));
+                                }
+                              } else {
+                                setOfferModalities([...offerModalities, item.name]);
+                              }
+                            }}
+                            className={`p-2.5 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between gap-1.5 ${
+                              isSelected
+                                ? "bg-primary text-white border-primary shadow-xs"
+                                : "bg-card dark:bg-navy-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-navy-800"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <Icon size={15} strokeWidth={1.5} className={isSelected ? "text-white" : "text-slate-500"} />
+                              <span className="truncate">{item.name}</span>
+                            </div>
+                            {isSelected && <Check size={13} strokeWidth={2} className="shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Digitar Outra Modalidade */}
+                    <div className="p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                      <label className="text-[11px] font-bold text-navy-900 dark:text-white block">
+                        Adicionar outra modalidade digitando:
+                      </label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={offerCustomModality}
+                          onChange={(e) => setOfferCustomModality(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const val = offerCustomModality.trim();
+                              if (val && !offerModalities.includes(val)) {
+                                setOfferModalities([...offerModalities, val]);
+                                setOfferCustomModality("");
+                              }
+                            }
+                          }}
+                          placeholder="Ex: Muay Thai, Treinamento Suspenso..."
+                          className="flex-1 p-2 bg-card dark:bg-navy-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-navy-900 dark:text-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = offerCustomModality.trim();
+                            if (val && !offerModalities.includes(val)) {
+                              setOfferModalities([...offerModalities, val]);
+                              setOfferCustomModality("");
+                            }
+                          }}
+                          disabled={!offerCustomModality.trim()}
+                          className="px-3 py-2 bg-primary disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all"
+                        >
+                          Adicionar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ================= ETAPA 3: CALENDÁRIO COM DESLIZE DOS DIAS DO MÊS E INTERVALO DE HORÁRIO ================= */}
+                {offerWizardStep === 3 && (
+                  <div className="space-y-3.5 animate-fade-in flex-1">
+                    <div className="p-3 bg-blue-50 dark:bg-primary/10 rounded-2xl border border-primary/20 text-slate-700 dark:text-slate-300">
+                      <span className="font-extrabold text-primary text-xs block mb-0.5">
+                        Escolha o dia e o horário específico
+                      </span>
+                      <p className="text-[11px] leading-relaxed">
+                        Deslize pelos dias do mês para escolher a data, ou selecione qualquer outra data abaixo.
+                      </p>
+                    </div>
+
+                    {/* Linha com Navegação de Mês e Slide Horizontal dos Dias */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center px-1">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={handleOfferPrevMonth}
+                            className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-navy-800 text-slate-500 hover:text-navy-900 dark:hover:text-white transition-colors"
+                            title="Mês anterior"
+                          >
+                            <ChevronLeft size={14} strokeWidth={2} />
+                          </button>
+                          <span className="text-xs font-black text-navy-900 dark:text-white">
+                            {offerMonthLabel}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleOfferNextMonth}
+                            className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-navy-800 text-slate-500 hover:text-navy-900 dark:hover:text-white transition-colors"
+                            title="Próximo mês"
+                          >
+                            <ChevronRight size={14} strokeWidth={2} />
+                          </button>
+                        </div>
+                        <span className="text-[10px] text-primary font-bold">
+                          {selectedDayMeta.dayName}, {selectedDayMeta.formatted}
+                        </span>
+                      </div>
+
+                      {/* Container com scroll horizontal idêntico à Minha Agenda */}
+                      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1.5 scroll-smooth">
+                        {offerMonthDays.map((d) => (
+                          <button
+                            key={d.dateStr}
+                            type="button"
+                            onClick={() => setOfferDate(d.dateStr)}
+                            className={`flex-shrink-0 flex flex-col items-center justify-center w-12 h-14 rounded-2xl transition-all relative ${
+                              d.isSelected
+                                ? "bg-primary text-white shadow-md scale-105 border-2 border-white dark:border-navy-900 ring-2 ring-primary/50"
+                                : d.isToday
+                                ? "bg-primary/10 dark:bg-primary/20 text-primary border-2 border-primary font-black"
+                                : "bg-slate-100 dark:bg-navy-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-navy-800 border border-transparent"
+                            }`}
+                          >
+                            {d.isToday && (
+                              <span className="absolute -top-1.5 px-1.5 py-0.2 rounded-full bg-primary text-white text-[7px] font-black uppercase tracking-tight shadow-2xs">
+                                Hoje
+                              </span>
+                            )}
+                            <span className={`text-[10px] font-bold ${d.isSelected ? "text-white/80" : "text-muted dark:text-slate-400"}`}>
+                              {d.dayOfWeek}
+                            </span>
+                            <span className="text-sm font-black leading-tight">
+                              {String(d.dayNum).padStart(2, "0")}
+                            </span>
+                            {d.isSelected && (
+                              <span className="w-1 h-1 rounded-full bg-white mt-0.5" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Selecionar Outras Datas */}
+                    <div className="p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                      <label className="font-bold text-navy-900 dark:text-white flex items-center gap-1">
+                        <Calendar size={12} strokeWidth={1.5} className="text-primary" />
+                        Outra data:
+                      </label>
+                      <input
+                        type="date"
+                        value={offerDate}
+                        onChange={(e) => setOfferDate(e.target.value)}
+                        className="p-1.5 bg-card dark:bg-navy-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-navy-900 dark:text-white focus:outline-primary"
+                      />
+                    </div>
+
+                    {/* Início e Fim do Horário */}
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-navy-900 dark:text-white flex items-center gap-1">
+                          <Clock size={12} strokeWidth={1.5} className="text-primary" />
+                          Início da Disponibilidade
+                        </label>
+                        <input
+                          type="time"
+                          value={offerStartTime}
+                          onChange={(e) => setOfferStartTime(e.target.value)}
+                          className="w-full p-2 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-navy-900 dark:text-white focus:outline-primary"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-navy-900 dark:text-white flex items-center gap-1">
+                          <Clock size={12} strokeWidth={1.5} className="text-primary" />
+                          Término da Disponibilidade
+                        </label>
+                        <input
+                          type="time"
+                          value={offerEndTime}
+                          onChange={(e) => setOfferEndTime(e.target.value)}
+                          className="w-full p-2 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-navy-900 dark:text-white focus:outline-primary"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 flex justify-between items-center text-xs">
+                      <span className="text-[11px] text-muted dark:text-slate-400">
+                        {durationHours} horas ({offerStartTime} às {offerEndTime})
+                      </span>
+                      <span className="font-black text-emerald-600 dark:text-emerald-400">
+                        R$ {totalEstimate},00 potencial
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* ================= ETAPA 4: REVISÃO E CONFIRMAÇÃO ================= */}
+                {offerWizardStep === 4 && (
+                  <div className="space-y-3.5 animate-fade-in flex-1">
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200/60 dark:border-emerald-800/40 text-slate-700 dark:text-slate-300">
+                      <span className="font-extrabold text-emerald-800 dark:text-emerald-300 text-xs block mb-0.5">
+                        Tudo pronto! Revise seu horário disponível:
+                      </span>
+                      <p className="text-[11px] leading-relaxed">
+                        Ao confirmar, este horário específico ficará ativo e as academias poderão convidar você diretamente.
+                      </p>
+                    </div>
+
+                    {/* Resumo */}
+                    <div className="bg-card dark:bg-navy-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-2.5 shadow-xs">
+                      <div className="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-muted dark:text-slate-400 block tracking-wider">
+                            Data e Horário
+                          </span>
+                          <h4 className="font-black text-sm text-navy-900 dark:text-white flex items-center gap-1.5">
+                            <Calendar size={13} strokeWidth={1.5} className="text-primary" />
+                            {formatDateDDMMAAAA(offerDate)} ({selectedDayMeta.dayName})
+                          </h4>
+                          <p className="text-xs font-bold text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1">
+                            <Clock size={12} strokeWidth={1.5} className="text-primary" />
+                            {offerStartTime} às {offerEndTime} ({durationHours}h)
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="bg-primary/10 text-primary font-black text-xs px-2.5 py-1 rounded-full block">
+                            R$ {offerHourlyRate}/h
+                          </span>
+                          {offerAllowNegotiation && (
+                            <span className="text-[10px] text-muted dark:text-slate-400 block mt-1">
+                              Mín: R$ {offerMinHourlyRate}/h
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1 text-xs">
+                        <span className="text-[10px] text-muted dark:text-slate-400 block">
+                          Modalidades Selecionadas ({offerModalities.length})
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {offerModalities.map((m) => (
+                            <span
+                              key={m}
+                              className="bg-slate-100 dark:bg-navy-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                            >
+                              {m}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Rodapé com Botões de Ação (Posicionados com folga e consistência de altura) */}
+              <div className="pt-3 pb-1 border-t border-slate-100 dark:border-slate-800 flex gap-2">
+                {offerWizardStep === 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowOfferSlotWizard(false)}
+                    className="w-1/3 py-2.5 rounded-full text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setOfferWizardStep((prev) => (prev - 1) as any)}
+                    className="w-1/3 py-2.5 rounded-full text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors flex items-center justify-center gap-1"
+                  >
+                    <ChevronLeft size={14} />
+                    <span>Voltar</span>
+                  </button>
+                )}
+
+                {offerWizardStep < 4 ? (
+                  <button
+                    type="button"
+                    disabled={
+                      (offerWizardStep === 1 && (offerHourlyRate <= 0 || (offerAllowNegotiation && offerMinHourlyRate >= offerHourlyRate))) ||
+                      (offerWizardStep === 2 && offerModalities.length === 0) ||
+                      (offerWizardStep === 3 && (!offerDate || !offerStartTime || !offerEndTime))
+                    }
+                    onClick={() => setOfferWizardStep((prev) => (prev + 1) as any)}
+                    className="w-2/3 py-2.5 rounded-full text-xs font-black bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1"
+                  >
+                    <span>
+                      {offerWizardStep === 1
+                        ? "Avançar: Modalidades"
+                        : offerWizardStep === 2
+                        ? "Avançar: Data e Horário"
+                        : "Avançar para Revisão"}
+                    </span>
+                    <ChevronRight size={14} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentId = currentInstructor.id || activeInstructorId;
+                      updateInstructorProfile(currentId, {
+                        hourlyRate: offerHourlyRate,
+                        minHourlyRate: offerAllowNegotiation ? offerMinHourlyRate : offerHourlyRate,
+                        modalities: offerModalities
+                      });
+
+                      // Mapeia o dia da semana da data escolhida para atualizar a grade
+                      const parts = (offerDate || "").split("-").map(Number);
+                      const dObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
+                      const dayOfWeek = dObj.getDay();
+
+                      const existingAvail = currentInstructor.availability || [];
+                      const updatedAvail = existingAvail.map((a) => {
+                        if (a.dayOfWeek === dayOfWeek) {
+                          return {
+                            ...a,
+                            active: true,
+                            slots: [{ start: offerStartTime, end: offerEndTime }]
+                          };
+                        }
+                        return a;
+                      });
+
+                      if (!updatedAvail.some((a) => a.dayOfWeek === dayOfWeek)) {
+                        updatedAvail.push({
+                          dayOfWeek,
+                          dayName: selectedDayMeta.dayName,
+                          shortDay: selectedDayMeta.dayOfWeek,
+                          active: true,
+                          slots: [{ start: offerStartTime, end: offerEndTime }]
+                        });
+                      }
+
+                      updateInstructorAvailability(currentId, updatedAvail);
+
+                      setShowOfferSlotWizard(false);
+                      setAgendaSubTab("grade");
+                      setOfferSuccessMsg(`Horário para ${formatDateDDMMAAAA(offerDate)} (${offerStartTime} às ${offerEndTime}) disponibilizado com sucesso!`);
+                      setTimeout(() => setOfferSuccessMsg(null), 5000);
+                    }}
+                    className="w-2/3 py-2.5 rounded-full text-xs font-black bg-gradient-to-r from-primary to-blue-600 hover:from-primary-hover hover:to-blue-700 text-white shadow-md transition-all active:scale-95 flex items-center justify-center"
+                  >
+                    Disponibilizar meu Horário
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </AnimatedModal>
 
     </div>
   );

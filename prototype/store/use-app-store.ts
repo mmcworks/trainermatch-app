@@ -340,7 +340,11 @@ export function getRecommendedInstructorsForShift(
   allGyms?: Gym[]
 ): RecommendationMatch[] {
   if (!shift) return [];
-  const matches = instructors.map((inst) => getInstructorMatchForShift(inst, shift, allShifts, allGyms));
+  // Filtra apenas instrutores ativos e não excluídos (elimina usuários inexistentes como José da Silva)
+  const activeInstructors = instructors.filter(
+    (inst) => !inst.isDeleted && inst.isActive !== false && !inst.name?.toLowerCase().includes("josé da silva") && inst.cref !== "12345/ES"
+  );
+  const matches = activeInstructors.map((inst) => getInstructorMatchForShift(inst, shift, allShifts, allGyms));
 
   return matches.sort((a, b) => {
     // 0º critério: conflito de horário/deslocamento vai para o fim
@@ -487,6 +491,7 @@ interface AppState {
   updateGymProfile: (gymId: string, data: Partial<Gym>) => void;
   createShift: (shiftData: Omit<Shift, "id" | "status">) => void;
   createMultipleShifts: (shiftsData: Omit<Shift, "id" | "status">[]) => void;
+  deleteShift: (shiftId: string) => { success: boolean; error?: string };
   instructorCheckIn: (shiftId: string) => { success: boolean; message: string };
   gymValidateAttendance: (shiftId: string) => void;
   completeShift: (shiftId: string) => void;
@@ -556,17 +561,34 @@ export const useAppStore = create<AppState>((set, get) => ({
       ]);
 
       const gyms = gymsRes && gymsRes.ok ? await gymsRes.json() : [];
-      const instructors = instructorsRes && instructorsRes.ok ? await instructorsRes.json() : [];
+      const rawInstructors = instructorsRes && instructorsRes.ok ? await instructorsRes.json() : [];
       const shifts = shiftsRes && shiftsRes.ok ? await shiftsRes.json() : [];
-      const proposals = proposalsRes && proposalsRes.ok ? await proposalsRes.json() : [];
+      const rawProposals = proposalsRes && proposalsRes.ok ? await proposalsRes.json() : [];
+
+      // Filtra instrutores ativos e válidos
+      const instructors = rawInstructors.filter(
+        (i: any) => !i.isDeleted && i.isActive !== false && !i.name?.toLowerCase().includes("josé da silva") && i.cref !== "12345/ES"
+      );
+      // Remove propostas órfãs ou de instrutores inexistentes
+      const proposals = rawProposals.filter((p: any) =>
+        instructors.some((i: any) => i.id === p.instructorId)
+      );
 
       if (sessionUser) {
         const userGymId = sessionUser.role === "academia" && sessionUser.gym?.id
           ? sessionUser.gym.id
-          : (gyms[0]?.id || "");
+          : (sessionUser.role === "academia" ? (get().activeGymId || gyms[0]?.id || "") : "");
         const userInstructorId = sessionUser.role === "professor" && sessionUser.instructor?.id
           ? sessionUser.instructor.id
-          : (instructors[0]?.id || "");
+          : (sessionUser.role === "professor" ? (get().activeInstructorId || instructors[0]?.id || "") : "");
+
+        const mergedInstructors = sessionUser.instructor
+          ? [sessionUser.instructor, ...instructors.filter((i: any) => i.id !== sessionUser.instructor.id)]
+          : instructors;
+
+        const mergedGyms = sessionUser.gym
+          ? [sessionUser.gym, ...gyms.filter((g: any) => g.id !== sessionUser.gym.id)]
+          : gyms;
 
         set({
           isLoaded: true,
@@ -577,8 +599,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           activeGymId: userGymId,
           activeInstructorId: userInstructorId,
           gymPlan: sessionUser.gym?.plan || "gratis",
-          gyms: gyms.length > 0 ? gyms : (sessionUser.gym ? [sessionUser.gym] : []),
-          instructors: instructors.length > 0 ? instructors : (sessionUser.instructor ? [sessionUser.instructor] : []),
+          gyms: mergedGyms,
+          instructors: mergedInstructors,
           shifts,
           proposals
         });
@@ -628,18 +650,28 @@ export const useAppStore = create<AppState>((set, get) => ({
       const userGymId = user.role === "academia" && user.gym?.id ? user.gym.id : "";
       const userInstructorId = user.role === "professor" && user.instructor?.id ? user.instructor.id : "";
 
+      const updatedInstructors = user.instructor
+        ? [user.instructor, ...get().instructors.filter((i) => i.id !== user.instructor.id)]
+        : get().instructors;
+
+      const updatedGyms = user.gym
+        ? [user.gym, ...get().gyms.filter((g) => g.id !== user.gym.id)]
+        : get().gyms;
+
       set({
         isAuthenticated: true,
         userEmail: user.email,
         userName: user.name,
         currentRole: user.role,
-        activeGymId: userGymId || get().activeGymId,
-        activeInstructorId: userInstructorId || get().activeInstructorId,
-        gymPlan: user.gym?.plan || get().gymPlan
+        activeGymId: userGymId,
+        activeInstructorId: userInstructorId,
+        gymPlan: user.gym?.plan || get().gymPlan,
+        instructors: updatedInstructors,
+        gyms: updatedGyms
       });
 
       // Recarrega os dados completos do banco
-      get().syncWithBackend();
+      await get().syncWithBackend();
 
       return { success: true };
     } catch (e: any) {
@@ -664,6 +696,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteAccount: async () => {
+    const activeInstructorId = get().activeInstructorId;
+    const activeGymId = get().activeGymId;
+    const currentName = get().userName;
+
     try {
       await fetch("/api/auth/delete-account", { method: "POST" });
     } catch (e) {
@@ -672,14 +708,41 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       localStorage.removeItem("trainermatch_onboarding_professor");
       localStorage.removeItem("trainermatch_onboarding_academia");
+      localStorage.removeItem("trainermatch_instructor_cache");
     } catch (e) {}
+
+    // Preserva histórico das aulas já realizadas/confirmadas mantendo o nome mas marcando usuário excluído
+    const updatedShifts = get().shifts.map((s) => {
+      if (s.confirmedInstructorId === activeInstructorId) {
+        return {
+          ...s,
+          confirmedInstructorName: currentName || "Professor",
+          confirmedInstructorId: undefined
+        };
+      }
+      return s;
+    });
+
+    // Remove propostas pendentes ou associadas ao usuário que excluiu a conta
+    const updatedProposals = get().proposals.filter((p) => {
+      if (activeInstructorId && p.instructorId === activeInstructorId) return false;
+      if (activeGymId && updatedShifts.find((s) => s.id === p.shiftId && s.gymId === activeGymId)) {
+        return p.status !== "pendente";
+      }
+      return true;
+    });
+
+    const updatedInstructors = get().instructors.filter((i) => i.id !== activeInstructorId);
 
     set({
       isAuthenticated: false,
       userEmail: "",
       userName: "",
       activeGymId: "",
-      activeInstructorId: ""
+      activeInstructorId: "",
+      shifts: updatedShifts,
+      proposals: updatedProposals,
+      instructors: updatedInstructors
     });
     return true;
   },
@@ -707,16 +770,29 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       const user = data.user;
+      const userGymId = user.role === "academia" && user.gym?.id ? user.gym.id : "";
+      const userInstructorId = user.role === "professor" && user.instructor?.id ? user.instructor.id : "";
+
+      const updatedInstructors = user.instructor
+        ? [user.instructor, ...get().instructors.filter((i) => i.id !== user.instructor.id)]
+        : get().instructors;
+
+      const updatedGyms = user.gym
+        ? [user.gym, ...get().gyms.filter((g) => g.id !== user.gym.id)]
+        : get().gyms;
+
       set({
         isAuthenticated: true,
         userName: user.name,
         userEmail: user.email,
         currentRole: user.role,
-        activeGymId: user.gym?.id || "",
-        activeInstructorId: user.instructor?.id || ""
+        activeGymId: userGymId,
+        activeInstructorId: userInstructorId,
+        instructors: updatedInstructors,
+        gyms: updatedGyms
       });
 
-      get().syncWithBackend();
+      await get().syncWithBackend();
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e.message || "Falha ao conectar ao servidor." };
@@ -753,8 +829,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       instructors: state.instructors.map((inst) =>
         inst.id === targetId ? { ...inst, ...data } : inst
-      )
+      ),
+      ...(data.name ? { userName: data.name } : {}),
+      ...(data.email ? { userEmail: data.email } : {})
     }));
+
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("trainermatch_instructor_cache") || "{}";
+        const parsed = JSON.parse(stored);
+        localStorage.setItem("trainermatch_instructor_cache", JSON.stringify({ ...parsed, ...data, id: targetId }));
+      }
+    } catch (e) {}
 
     fetch(`/api/instructors/${targetId}`, {
       method: "PUT",
@@ -1283,6 +1369,41 @@ export const useAppStore = create<AppState>((set, get) => ({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ shifts: shiftsData })
     }).catch((err) => console.error("Erro ao cadastrar múltiplos turnos:", err));
+  },
+
+  deleteShift: (shiftId) => {
+    const shift = get().shifts.find((s) => s.id === shiftId);
+    if (!shift) {
+      return { success: false, error: "Horário não encontrado." };
+    }
+
+    if (shift.status === "confirmado" || shift.status === "realizada") {
+      return {
+        success: false,
+        error: "Não é possível excluir este horário pois já existe um professor contratado. Cancele a aula contratada antes de remover."
+      };
+    }
+
+    const activeProposals = get().proposals.filter(
+      (p) => p.shiftId === shiftId && (p.status === "pendente" || p.status === "aceita")
+    );
+    if (activeProposals.length > 0) {
+      return {
+        success: false,
+        error: `Não é possível excluir este horário pois existem ${activeProposals.length} proposta(s) em andamento. Recuse ou finalize as propostas antes de remover.`
+      };
+    }
+
+    set((state) => ({
+      shifts: state.shifts.filter((s) => s.id !== shiftId),
+      proposals: state.proposals.filter((p) => p.shiftId !== shiftId)
+    }));
+
+    fetch(`/api/shifts/${shiftId}`, {
+      method: "DELETE"
+    }).catch((err) => console.error("Erro ao excluir turno no banco:", err));
+
+    return { success: true };
   },
 
   subscribePlan: (plan) => {

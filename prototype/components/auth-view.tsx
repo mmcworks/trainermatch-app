@@ -33,16 +33,17 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
   const [authError, setAuthError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Campos de Login
-  const [email, setEmail] = useState(selectedRole === "academia" ? "movagym@email.com" : "lucasf@email.com");
-  const [password, setPassword] = useState("12345qwe");
+  // Campos de Login (iniciam vazios com placeholders, preenchíveis pelo botão de teste)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Campos de Cadastro
-  const [name, setName] = useState("");
-  const [cpfOrCnpj, setCpfOrCnpj] = useState("");
-  const [cref, setCref] = useState("");
-  const [phone, setPhone] = useState("");
+  // Campos de Cadastro (SEMPRE iniciam 100% limpos e vazios)
+  const [registerName, setRegisterName] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerCpfOrCnpj, setRegisterCpfOrCnpj] = useState("");
+  const [registerCref, setRegisterCref] = useState("");
+  const [registerPhone, setRegisterPhone] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [uploadedImageSrc, setUploadedImageSrc] = useState<string>("");
@@ -52,7 +53,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
 
   // Campos de Redefinição de Senha
   const [resetStep, setResetStep] = useState<1 | 2 | 3 | 4>(1);
-  const [resetEmail, setResetEmail] = useState(email);
+  const [resetEmail, setResetEmail] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -60,17 +61,29 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
   const [showResetNewPassword, setShowResetNewPassword] = useState(false);
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
 
-  // Sincroniza e-mail padrão ao alternar o papel
+  // Limpa campos ao alternar papel ou modo
   useEffect(() => {
     setAuthError("");
     if (mode === "login") {
-      if (selectedRole === "academia") {
-        setEmail("movagym@email.com");
-        setPassword("12345qwe");
-      } else {
-        setEmail("lucasf@email.com");
-        setPassword("12345qwe");
-      }
+      setEmail("");
+      setPassword("");
+    } else if (mode === "cadastro") {
+      // Garante que a tela de cadastro seja 100% limpa, sem emails de mock
+      setRegisterName("");
+      setRegisterEmail("");
+      setRegisterCpfOrCnpj("");
+      setRegisterCref("");
+      setRegisterPhone("");
+      setRegisterPassword("");
+      setTermsAccepted(false);
+      setDocUploaded(false);
+      setUploadedImageSrc("");
+    } else if (mode === "esqueceu_senha") {
+      setResetEmail("");
+      setVerificationCode("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setResetStep(1);
     }
   }, [selectedRole, mode]);
 
@@ -136,6 +149,16 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
     e.preventDefault();
     setAuthError("");
 
+    if (!registerName.trim()) {
+      setAuthError("Por favor, preencha seu nome.");
+      return;
+    }
+
+    if (!registerEmail.trim()) {
+      setAuthError("Por favor, preencha seu e-mail.");
+      return;
+    }
+
     if (!termsAccepted) {
       alert("Por favor, aceite os termos de pontualidade e ocorrências.");
       return;
@@ -149,13 +172,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
     setIsSubmitting(true);
     try {
       const result = await registerUser({
-        name: name || (selectedRole === "professor" ? "Novo Professor" : "Nova Academia"),
-        email,
+        name: registerName.trim(),
+        email: registerEmail.trim().toLowerCase(),
         password: registerPassword,
         role: selectedRole,
-        doc: cpfOrCnpj,
-        crefOrCnpj: cref,
-        phone,
+        doc: registerCpfOrCnpj.trim(),
+        crefOrCnpj: registerCref.trim(),
+        phone: registerPhone.trim(),
         logoOrAvatar: uploadedImageSrc
       });
 
@@ -169,10 +192,37 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
     }
   };
 
-  const handleSendCode = (e: React.FormEvent) => {
+  const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetEmail) return;
-    setResetStep(2);
+    setAuthError("");
+    setCodeError("");
+
+    const targetEmail = resetEmail.trim().toLowerCase();
+    if (!targetEmail) {
+      setAuthError("Por favor, informe seu e-mail cadastrado.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: targetEmail })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAuthError(data.error || "E-mail não encontrado no sistema. Verifique o endereço digitado ou realize seu cadastro.");
+        return;
+      }
+
+      setResetStep(2);
+    } catch (err: any) {
+      setAuthError("Erro na comunicação com o servidor. Tente novamente.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleVerifyCode = (e: React.FormEvent) => {
@@ -185,10 +235,35 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
     }
   };
 
-  const handleSaveNewPassword = (e: React.FormEvent) => {
+  const handleSaveNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError("");
     if (!isPasswordStrong) return;
-    setResetStep(4);
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: resetEmail.trim().toLowerCase(),
+          code: verificationCode.trim(),
+          newPassword
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAuthError(data.error || "Erro ao salvar a nova senha no banco de dados.");
+        return;
+      }
+
+      setResetStep(4);
+    } catch (err: any) {
+      setAuthError("Falha ao salvar senha no servidor.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -257,6 +332,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
         {mode === "login" && (
           <form onSubmit={handleLogin} className="space-y-4 text-xs">
             {/* Atalho rápido para usuários de teste */}
+            {/* Atalho rápido para usuários de teste */}
             <div className="p-2.5 bg-primary/5 dark:bg-primary/10 rounded-xl border border-primary/20 flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-primary text-[11px] font-bold">
                 <Sparkles size={13} />
@@ -274,9 +350,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                   }
                   setAuthError("");
                 }}
-                className="text-[10px] font-bold text-primary hover:underline bg-white dark:bg-navy-900 px-2 py-1 rounded-md shadow-xs border border-primary/30"
+                className="text-[10px] font-bold text-primary hover:underline bg-white dark:bg-navy-900 px-2.5 py-1 rounded-md shadow-xs border border-primary/30 flex items-center gap-1 active:scale-95 transition-all"
+                title="Clique para preencher os campos com o usuário de teste"
               >
-                {selectedRole === "academia" ? "movagym@email.com" : "lucasf@email.com"} (12345qwe)
+                <span>Preencher: {selectedRole === "academia" ? "movagym@email.com" : "lucasf@email.com"}</span>
               </button>
             </div>
 
@@ -287,7 +364,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium focus:outline-primary dark:text-white"
+                placeholder="Digite seu email"
+                className="w-full p-3 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium focus:outline-primary dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </div>
 
@@ -312,7 +390,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full p-3 pr-10 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium focus:outline-primary dark:text-white"
+                  placeholder="Insira sua senha"
+                  className="w-full p-3 pr-10 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium focus:outline-primary dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
                 <button
                   type="button"
@@ -516,9 +595,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
               <input
                 type="text"
                 required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={selectedRole === "professor" ? "Ex: Lucas Ferreira" : "Ex: Academia Mova"}
+                value={registerName}
+                onChange={(e) => setRegisterName(e.target.value)}
+                placeholder={selectedRole === "professor" ? "Digite seu nome completo" : "Digite o nome da academia"}
                 className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
               />
             </div>
@@ -531,8 +610,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                 <input
                   type="text"
                   required
-                  value={cpfOrCnpj}
-                  onChange={(e) => setCpfOrCnpj(e.target.value)}
+                  value={registerCpfOrCnpj}
+                  onChange={(e) => setRegisterCpfOrCnpj(e.target.value)}
                   placeholder={selectedRole === "professor" ? "000.000.000-00" : "00.000.000/0001-00"}
                   className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
                 />
@@ -545,8 +624,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                 <input
                   type="text"
                   required
-                  value={selectedRole === "professor" ? cref : phone}
-                  onChange={(e) => selectedRole === "professor" ? setCref(e.target.value) : setPhone(e.target.value)}
+                  value={selectedRole === "professor" ? registerCref : registerPhone}
+                  onChange={(e) => selectedRole === "professor" ? setRegisterCref(e.target.value) : setRegisterPhone(e.target.value)}
                   placeholder={selectedRole === "professor" ? "Ex: 012845-G/ES" : "(27) 99881-2233"}
                   className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
                 />
@@ -558,8 +637,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
               <input
                 type="email"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={registerEmail}
+                onChange={(e) => setRegisterEmail(e.target.value)}
                 placeholder="seu.email@exemplo.com"
                 className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
               />

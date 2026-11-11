@@ -88,12 +88,15 @@ export interface PixKeyItem {
 export interface Instructor {
   id: string;
   name: string;
+  isDeleted?: boolean;
+  isActive?: boolean;
   cref: string;
   crefStatus: "ativo" | "provisorio";
   avatar: string;
   rating: number;
   ratingCount: number;
   hourlyRate: number;
+  minHourlyRate?: number;
   occurrences: number; // Max 3
   criteria: CriteriaBreakdown;
   badges?: string[];
@@ -133,6 +136,7 @@ export interface Shift {
   maxRate: number; // Valor fixo da hora-aula (R$/h)
   status: "aberto" | "negociando" | "confirmado" | "concluido" | "realizada" | "cancelado";
   confirmedInstructorId?: string;
+  confirmedInstructorName?: string;
   agreedRate?: number;
   completedAt?: string;
   instructorCheckInAt?: string; // Confirmação de presença feita pelo professor no início da aula
@@ -189,6 +193,11 @@ export interface Proposal {
   reason?: string; // Motivo da recusa ou expiração
 }
 
+const MONTH_SHORT_PT = [
+  "jan", "fev", "mar", "abr", "mai", "jun",
+  "jul", "ago", "set", "out", "nov", "dez"
+];
+
 export function formatDateDDMMAAAA(dateStr: string): string {
   if (!dateStr) return "";
   // Se contiver horário (ex: "2026-11-04 · 18:00 – 21:00" ou "2026-11-04T12:00:00")
@@ -198,24 +207,36 @@ export function formatDateDDMMAAAA(dateStr: string): string {
   const isoMatch = mainDatePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoMatch) {
     const [, y, m, d] = isoMatch;
-    return `${d}-${m}-${y}`;
+    const mIdx = parseInt(m, 10) - 1;
+    const mName = MONTH_SHORT_PT[mIdx] || m;
+    return `${d} ${mName} ${y}`;
   }
   
   // DD/MM/YYYY ou DD/MM
   if (mainDatePart.includes("/")) {
     const parts = mainDatePart.split("/");
     if (parts.length === 3) {
-      return `${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}-${parts[2]}`;
+      const d = parts[0].padStart(2, "0");
+      const mIdx = parseInt(parts[1], 10) - 1;
+      const mName = MONTH_SHORT_PT[mIdx] || parts[1];
+      const y = parts[2];
+      return `${d} ${mName} ${y}`;
     }
     if (parts.length === 2) {
-      return `${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}-2026`;
+      const d = parts[0].padStart(2, "0");
+      const mIdx = parseInt(parts[1], 10) - 1;
+      const mName = MONTH_SHORT_PT[mIdx] || parts[1];
+      return `${d} ${mName} 2026`;
     }
   }
 
   // DD-MM-YYYY
   const brMatch = mainDatePart.match(/^(\d{2})-(\d{2})-(\d{4})$/);
   if (brMatch) {
-    return mainDatePart;
+    const [, d, m, y] = brMatch;
+    const mIdx = parseInt(m, 10) - 1;
+    const mName = MONTH_SHORT_PT[mIdx] || m;
+    return `${d} ${mName} ${y}`;
   }
 
   return dateStr;
@@ -562,7 +583,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Sala de Musculação - Noturno",
     modality: "Musculação",
     date: "2026-11-04",
-    dateFormatted: "04-11-2026 · 18:00 – 21:00",
+    dateFormatted: "04 nov 2026 · 18:00 – 21:00",
     startTime: "18:00",
     endTime: "21:00",
     maxRate: 45,
@@ -574,7 +595,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Aula de Spinning - Manhã",
     modality: "Spinning",
     date: "2026-11-05",
-    dateFormatted: "05-11-2026 · 07:00 – 09:00",
+    dateFormatted: "05 nov 2026 · 07:00 – 09:00",
     startTime: "07:00",
     endTime: "09:00",
     maxRate: 50,
@@ -586,7 +607,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Musculação - Turno Tarde (Hoje)",
     modality: "Musculação",
     date: "2026-11-05",
-    dateFormatted: "05-11-2026 · 17:00 – 20:00",
+    dateFormatted: "05 nov 2026 · 17:00 – 20:00",
     startTime: "17:00",
     endTime: "20:00",
     maxRate: 48,
@@ -600,7 +621,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Treinamento Funcional",
     modality: "Funcional",
     date: "2026-11-06",
-    dateFormatted: "06-11-2026 · 16:00 – 19:00",
+    dateFormatted: "06 nov 2026 · 16:00 – 19:00",
     startTime: "16:00",
     endTime: "19:00",
     maxRate: 45,
@@ -614,7 +635,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Musculação - Tarde",
     modality: "Musculação",
     date: "2026-11-07",
-    dateFormatted: "07-11-2026 · 09:00 – 13:00",
+    dateFormatted: "07 nov 2026 · 09:00 – 13:00",
     startTime: "09:00",
     endTime: "13:00",
     maxRate: 46,
@@ -626,7 +647,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Musculação - Turno Manhã",
     modality: "Musculação",
     date: "2026-11-09",
-    dateFormatted: "09-11-2026 · 07:00 – 11:00",
+    dateFormatted: "09 nov 2026 · 07:00 – 11:00",
     startTime: "07:00",
     endTime: "11:00",
     maxRate: 45,
@@ -640,7 +661,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Aula de Spinning - Noturno",
     modality: "Spinning",
     date: "2026-11-09",
-    dateFormatted: "09-11-2026 · 18:30 – 21:00",
+    dateFormatted: "09 nov 2026 · 18:30 – 21:00",
     startTime: "18:30",
     endTime: "21:00",
     maxRate: 50,
@@ -652,7 +673,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Treinamento Funcional - Tarde",
     modality: "Funcional",
     date: "2026-11-10",
-    dateFormatted: "10-11-2026 · 15:00 – 18:00",
+    dateFormatted: "10 nov 2026 · 15:00 – 18:00",
     startTime: "15:00",
     endTime: "18:00",
     maxRate: 48,
@@ -664,7 +685,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Musculação Geral - Manhã",
     modality: "Musculação",
     date: "2026-11-11",
-    dateFormatted: "11-11-2026 · 08:00 – 12:00",
+    dateFormatted: "11 nov 2026 · 08:00 – 12:00",
     startTime: "08:00",
     endTime: "12:00",
     maxRate: 48,
@@ -678,7 +699,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Aula de Pilates - Tarde",
     modality: "Pilates",
     date: "2026-11-12",
-    dateFormatted: "12-11-2026 · 16:00 – 19:00",
+    dateFormatted: "12 nov 2026 · 16:00 – 19:00",
     startTime: "16:00",
     endTime: "19:00",
     maxRate: 55,
@@ -690,7 +711,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Musculação - Turno Noite",
     modality: "Musculação",
     date: "2026-11-12",
-    dateFormatted: "12-11-2026 · 18:00 – 21:00",
+    dateFormatted: "12 nov 2026 · 18:00 – 21:00",
     startTime: "18:00",
     endTime: "21:00",
     maxRate: 45,
@@ -702,7 +723,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Cross Training - Sexta Tarde",
     modality: "Cross Training",
     date: "2026-11-13",
-    dateFormatted: "13-11-2026 · 17:00 – 20:00",
+    dateFormatted: "13 nov 2026 · 17:00 – 20:00",
     startTime: "17:00",
     endTime: "20:00",
     maxRate: 50,
@@ -714,7 +735,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Musculação - Sábado Especial",
     modality: "Musculação",
     date: "2026-11-14",
-    dateFormatted: "14-11-2026 · 09:00 – 13:00",
+    dateFormatted: "14 nov 2026 · 09:00 – 13:00",
     startTime: "09:00",
     endTime: "13:00",
     maxRate: 50,
@@ -728,7 +749,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Sala de Musculação - Matutino",
     modality: "Musculação",
     date: "2026-10-24",
-    dateFormatted: "24-10-2026 · 07:00 – 11:00",
+    dateFormatted: "24 out 2026 · 07:00 – 11:00",
     startTime: "07:00",
     endTime: "11:00",
     maxRate: 40,
@@ -745,7 +766,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Spinning Power - Noturno",
     modality: "Spinning",
     date: "2026-10-18",
-    dateFormatted: "18-10-2026 · 18:30 – 20:30",
+    dateFormatted: "18 out 2026 · 18:30 – 20:30",
     startTime: "18:30",
     endTime: "20:30",
     maxRate: 50,
@@ -762,7 +783,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Pilates Solo & Postura",
     modality: "Pilates",
     date: "2026-10-10",
-    dateFormatted: "10-10-2026 · 08:00 – 10:00",
+    dateFormatted: "10 out 2026 · 08:00 – 10:00",
     startTime: "08:00",
     endTime: "10:00",
     maxRate: 55,
@@ -779,7 +800,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Circuito Funcional Praia",
     modality: "Funcional",
     date: "2026-09-22",
-    dateFormatted: "22-09-2026 · 07:00 – 10:00",
+    dateFormatted: "22 set 2026 · 07:00 – 10:00",
     startTime: "07:00",
     endTime: "10:00",
     maxRate: 45,
@@ -794,7 +815,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Musculação - Fechamento",
     modality: "Musculação",
     date: "2026-09-15",
-    dateFormatted: "15-09-2026 · 18:00 – 22:00",
+    dateFormatted: "15 set 2026 · 18:00 – 22:00",
     startTime: "18:00",
     endTime: "22:00",
     maxRate: 40,
@@ -809,7 +830,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Musculação - Abertura Especial",
     modality: "Musculação",
     date: "2026-12-04",
-    dateFormatted: "04-12-2026 · 06:00 – 10:00",
+    dateFormatted: "04 dez 2026 · 06:00 – 10:00",
     startTime: "06:00",
     endTime: "10:00",
     maxRate: 50,
@@ -821,7 +842,7 @@ export const INITIAL_SHIFTS: Shift[] = [
     title: "Spinning de Fim de Ano",
     modality: "Spinning",
     date: "2026-12-15",
-    dateFormatted: "15-12-2026 · 18:00 – 21:00",
+    dateFormatted: "15 dez 2026 · 18:00 – 21:00",
     startTime: "18:00",
     endTime: "21:00",
     maxRate: 55,
@@ -834,9 +855,9 @@ export const INITIAL_SHIFTS: Shift[] = [
 export const INITIAL_PROPOSALS: Proposal[] = [
   {
     id: "prop-1",
-    shiftId: "shift-1",
+    shiftId: "shift-cur-2",
     instructorId: "inst-1",
-    proposedRate: 45,
+    proposedRate: 50,
     status: "pendente",
     expiresInMinutes: 48,
     turn: "professor",
@@ -846,9 +867,9 @@ export const INITIAL_PROPOSALS: Proposal[] = [
   },
   {
     id: "prop-2",
-    shiftId: "shift-2",
+    shiftId: "shift-cur-6",
     instructorId: "inst-1",
-    proposedRate: 50,
+    proposedRate: 45,
     status: "pendente",
     expiresInMinutes: 32,
     turn: "academia",
@@ -865,14 +886,14 @@ export const INITIAL_PROPOSALS: Proposal[] = [
     expiresInMinutes: 0,
     turn: "professor",
     type: "convite",
-    month: "2026-11",
+    month: "2026-12",
     createdAt: "2026-11-04T10:00:00Z"
   },
   {
     id: "prop-4",
-    shiftId: "shift-3",
+    shiftId: "shift-cur-5",
     instructorId: "inst-1",
-    proposedRate: 45,
+    proposedRate: 50,
     status: "recusada",
     expiresInMinutes: 0,
     turn: "professor",

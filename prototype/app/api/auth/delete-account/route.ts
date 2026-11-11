@@ -13,7 +13,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
     }
 
-    // Remove do banco de dados SQLite (Cascade remove Gym/Instructor/Shifts/Proposals associados)
+    // Busca o usuário para verificar se é professor ou academia
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      include: { instructor: true, gym: true }
+    });
+
+    if (user?.instructor) {
+      const instructorId = user.instructor.id;
+      // Remove todas as propostas do professor (em especial propostas pendentes)
+      await prisma.proposal.deleteMany({
+        where: { instructorId }
+      }).catch(() => null);
+    }
+
+    if (user?.gym) {
+      const gymId = user.gym.id;
+      // Remove propostas pendentes ligadas aos turnos desta academia
+      await prisma.proposal.deleteMany({
+        where: {
+          shift: { gymId },
+          status: "pendente"
+        }
+      }).catch(() => null);
+    }
+
+    // Remove do banco de dados (Cascade remove Gym/Instructor/Turnos do usuário)
     await prisma.user.delete({
       where: { id: session.userId }
     });
