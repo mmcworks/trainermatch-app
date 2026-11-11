@@ -12,22 +12,43 @@ export function cropAndCompressImage(
       return resolve(imageSrc);
     }
 
+    let resolved = false;
+    const safeResolve = (val: string) => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeoutId);
+        resolve(val);
+      }
+    };
+
+    // Timeout de segurança máximo de 2.5s para evitar travamento da interface
+    const timeoutId = setTimeout(() => {
+      console.warn("Timeout ao comprimir imagem, utilizando imagem original.");
+      safeResolve(imageSrc);
+    }, 2500);
+
     const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
+    // NÃO definir crossOrigin em data: ou blob: para evitar travamentos/CORS no Safari/iOS
+    if (!imageSrc.startsWith("data:") && !imageSrc.startsWith("blob:")) {
+      img.crossOrigin = "anonymous";
+    }
+
+    const processCanvas = () => {
       try {
         const canvas = document.createElement("canvas");
         canvas.width = targetWidth;
         canvas.height = targetHeight;
         const ctx = canvas.getContext("2d");
-        if (!ctx) return resolve(imageSrc);
+        if (!ctx) return safeResolve(imageSrc);
 
         // Fundo branco sólido para JPEGs limpos
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, targetWidth, targetHeight);
 
         // Cálculo de escala preservando proporção
-        const imgAspect = img.width / img.height;
+        const naturalW = img.naturalWidth || img.width || targetWidth;
+        const naturalH = img.naturalHeight || img.height || targetHeight;
+        const imgAspect = naturalW / naturalH;
         const canvasAspect = targetWidth / targetHeight;
 
         let drawW = targetWidth;
@@ -49,13 +70,24 @@ export function cropAndCompressImage(
 
         ctx.drawImage(img, drawX, drawY, drawW, drawH);
         const dataUrl = canvas.toDataURL("image/jpeg", quality);
-        resolve(dataUrl);
+        safeResolve(dataUrl);
       } catch (e) {
         console.warn("Erro ao comprimir imagem via canvas:", e);
-        resolve(imageSrc);
+        safeResolve(imageSrc);
       }
     };
-    img.onerror = () => resolve(imageSrc);
+
+    img.onload = processCanvas;
+    img.onerror = (err) => {
+      console.warn("Falha ao carregar imagem para canvas:", err);
+      safeResolve(imageSrc);
+    };
     img.src = imageSrc;
+
+    // Se já estiver em cache/completa
+    if (img.complete && (img.naturalWidth > 0 || img.width > 0)) {
+      processCanvas();
+    }
   });
 }
+

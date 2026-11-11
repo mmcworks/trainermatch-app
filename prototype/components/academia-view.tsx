@@ -59,7 +59,7 @@ import {
   ThumbsUp,
   XCircle
 } from "lucide-react";
-import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, canCancelShift } from "@/store/mock-data";
+import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, canCancelShift, maskPhone } from "@/store/mock-data";
 import {
   getRecommendedInstructorsForShift,
   calculateSuggestedRate,
@@ -189,20 +189,13 @@ export const AcademiaView: React.FC = () => {
   const [showDeleteShiftModal, setShowDeleteShiftModal] = useState<boolean>(false);
 
   const handleDeleteShiftClick = (shift: Shift) => {
-    // 1. Não pode excluir se estiver confirmado ou realizado
-    if (shift.status === "confirmado" || shift.status === "realizada") {
-      setDeleteShiftError("Não é possível excluir este horário pois já existe um professor contratado. Caso precise desmarcar a aula, utilize a opção 'Cancelar Aula Contratada'.");
-      setShiftToDelete(shift);
-      setShowDeleteShiftModal(true);
-      return;
-    }
+    // 1. Só impede exclusão se houver um professor realmente contratado para aula futura
+    const confirmedInst = instructors.find((i) => i.id === shift.confirmedInstructorId);
+    const hasActiveContract = (shift.status === "confirmado") &&
+      !!confirmedInst && !confirmedInst.isDeleted && (confirmedInst as any).isActive !== false;
 
-    // 2. Não pode excluir se houver propostas pendentes ou aceitas
-    const activeProposals = proposals.filter(
-      (p) => p.shiftId === shift.id && (p.status === "pendente" || p.status === "aceita")
-    );
-    if (activeProposals.length > 0) {
-      setDeleteShiftError(`Não é possível excluir este horário pois existem ${activeProposals.length} proposta(s) em andamento com instrutores. Finalize ou recuse as propostas antes de remover a vaga.`);
+    if (hasActiveContract && canCancelShift(shift).canCancel) {
+      setDeleteShiftError("Não é possível excluir este horário pois já existe um professor contratado. Caso precise desmarcar a aula, utilize a opção 'Cancelar Aula Contratada'.");
       setShiftToDelete(shift);
       setShowDeleteShiftModal(true);
       return;
@@ -1006,7 +999,7 @@ export const AcademiaView: React.FC = () => {
                           {/* Informação adicional do turno */}
                           <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex justify-between items-center text-xs">
                             <span className="text-muted dark:text-slate-400">Valor oferecido:</span>
-                            <span className="font-black text-primary">R$ {shift.maxRate}/hora aula (Fixo)</span>
+                            <span className="font-black text-primary">R$ {shift.maxRate ?? (shift as any).rate ?? 45}/hora aula (Fixo)</span>
                           </div>
 
                           {/* Se cancelado, mostra dados do cancelamento */}
@@ -1381,7 +1374,7 @@ export const AcademiaView: React.FC = () => {
                           <Sparkles size={13} className="text-primary" /> Turno para Recomendações
                         </label>
                         <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                          Fixo R$ {activeTargetShift?.maxRate}/h
+                          Fixo R$ {activeTargetShift?.maxRate ?? (activeTargetShift as any)?.rate ?? 45}/h
                         </span>
                       </div>
 
@@ -1555,7 +1548,7 @@ export const AcademiaView: React.FC = () => {
                             <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex justify-between items-center">
                               <div className="text-[10px]">
                                 <span className="text-muted dark:text-slate-400 block">Valor Fixo da Vaga:</span>
-                                <span className="font-extrabold text-navy-900 dark:text-white">R$ {activeTargetShift.maxRate}/h</span>
+                                <span className="font-extrabold text-navy-900 dark:text-white">R$ {activeTargetShift.maxRate ?? (activeTargetShift as any).rate ?? 45}/h</span>
                               </div>
 
                               {rec.hasConflict ? (
@@ -2575,7 +2568,7 @@ export const AcademiaView: React.FC = () => {
                             return acc + Math.max(1, (eh * 60 + em - (sh * 60 + sm)) / 60);
                           }, 0);
                           const totalInvested = monthCompletedShifts.reduce(
-                            (acc, s) => acc + (s.agreedRate || s.maxRate) * 3,
+                            (acc, s) => acc + (s.agreedRate || s.maxRate || (s as any).rate || 45) * 3,
                             0
                           );
                           const uniqueInstructors = Array.from(
@@ -2690,7 +2683,7 @@ export const AcademiaView: React.FC = () => {
                                                 )}
                                               </td>
                                               <td className="p-3 font-extrabold text-navy-900 dark:text-white">
-                                                R$ {shift.agreedRate || shift.maxRate}/h
+                                                R$ {shift.agreedRate || shift.maxRate || (shift as any).rate || 45}/h
                                               </td>
                                               <td className="p-3">
                                                 <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-200/60">
@@ -2812,7 +2805,7 @@ export const AcademiaView: React.FC = () => {
                                             <div className="truncate font-black">{s.startTime} {s.modality}</div>
                                             <div className="flex justify-between items-center text-[10px] opacity-80 mt-0.5 font-semibold">
                                               <span className="capitalize">{s.status === "realizada" ? "Realizada" : s.status}</span>
-                                              <span className="font-black">R$ {s.agreedRate || s.maxRate}/h</span>
+                                              <span className="font-black">R$ {s.agreedRate || s.maxRate || (s as any).rate || 45}/h</span>
                                             </div>
                                           </div>
                                         ))}
@@ -3037,7 +3030,7 @@ export const AcademiaView: React.FC = () => {
                                                             <div className="truncate font-black">{s.startTime} {s.modality}</div>
                                                             <div className="flex justify-between items-center text-[10px] opacity-80 mt-1 font-semibold">
                                                               <span className="capitalize">{s.status === "realizada" ? "Realizada" : s.status}</span>
-                                                              <span className="font-black">R$ {s.agreedRate || s.maxRate}/h</span>
+                                                              <span className="font-black">R$ {s.agreedRate || s.maxRate || (s as any).rate || 45}/h</span>
                                                             </div>
                                                           </div>
                                                         ))}
@@ -3381,7 +3374,7 @@ export const AcademiaView: React.FC = () => {
                                 <div className="flex justify-between items-center text-xs">
                                   <span className="text-muted dark:text-slate-400">Valor hora-aula:</span>
                                   <span className="font-black text-navy-900 dark:text-white">
-                                    R$ {shift.agreedRate || shift.maxRate}/h (Fixo)
+                                    R$ {shift.agreedRate || shift.maxRate || (shift as any).rate || 45}/h (Fixo)
                                   </span>
                                 </div>
 
@@ -3594,7 +3587,7 @@ export const AcademiaView: React.FC = () => {
                                       </span>
                                     </td>
                                     <td className="p-3 font-extrabold text-navy-900 dark:text-white whitespace-nowrap">
-                                      R$ {shift.agreedRate || shift.maxRate}/h
+                                      R$ {shift.agreedRate || shift.maxRate || (shift as any).rate || 45}/h
                                     </td>
                                     <td className="p-3 whitespace-nowrap">
                                       <span
@@ -3952,7 +3945,7 @@ export const AcademiaView: React.FC = () => {
                         >
                           {gymShifts.map((s) => (
                             <option key={s.id} value={s.id}>
-                              {s.title} ({s.date} · {s.startTime}–{s.endTime} · R$ {s.maxRate}/h)
+                              {s.title} ({s.date} · {s.startTime}–{s.endTime} · R$ {s.maxRate ?? (s as any).rate ?? 45}/h)
                             </option>
                           ))}
                         </select>
@@ -4012,7 +4005,7 @@ export const AcademiaView: React.FC = () => {
                         <span>Professores Recomendados para este Horário ({shiftRecommendations.length})</span>
                       </h3>
                       <span className="text-xs text-primary font-bold bg-primary/10 px-3 py-1 rounded-full">
-                        Valor Fixo Oferecido: R$ {activeTargetShift.maxRate}/h
+                        Valor Fixo Oferecido: R$ {activeTargetShift.maxRate ?? (activeTargetShift as any).rate ?? 45}/h
                       </span>
                     </div>
 
@@ -4138,7 +4131,7 @@ export const AcademiaView: React.FC = () => {
                                 <div className="text-[11px]">
                                   <span className="text-muted dark:text-slate-400 block">Valor Fixo da Vaga:</span>
                                   <span className="font-extrabold text-navy-900 dark:text-white">
-                                    R$ {activeTargetShift.maxRate}/h
+                                    R$ {activeTargetShift.maxRate ?? (activeTargetShift as any).rate ?? 45}/h
                                   </span>
                                 </div>
 
@@ -4488,7 +4481,7 @@ export const AcademiaView: React.FC = () => {
                     <Building size={14} className="text-primary" /> Dados da Unidade & Localização
                   </h3>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                     <div>
                       <label className="font-bold text-navy-800 dark:text-slate-200 block mb-1">Nome Fantasia</label>
                       <input
@@ -4512,7 +4505,19 @@ export const AcademiaView: React.FC = () => {
                       <input
                         type="text"
                         value={profilePhone}
-                        onChange={(e) => setProfilePhone(e.target.value)}
+                        onChange={(e) => setProfilePhone(maskPhone(e.target.value))}
+                        placeholder="(00) 00000-0000"
+                        maxLength={15}
+                        className="w-full p-2.5 bg-white dark:bg-navy-800 text-navy-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700 font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold text-navy-800 dark:text-slate-200 block mb-1">E-mail da Unidade</label>
+                      <input
+                        type="email"
+                        value={profileEmail}
+                        onChange={(e) => setProfileEmail(e.target.value)}
+                        placeholder="contato@suaacademia.com.br"
                         className="w-full p-2.5 bg-white dark:bg-navy-800 text-navy-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700 font-semibold"
                       />
                     </div>
@@ -4721,7 +4726,9 @@ export const AcademiaView: React.FC = () => {
                       <input
                         type="text"
                         value={profileManagerPhone}
-                        onChange={(e) => setProfileManagerPhone(e.target.value)}
+                        onChange={(e) => setProfileManagerPhone(maskPhone(e.target.value))}
+                        placeholder="(00) 00000-0000"
+                        maxLength={15}
                         className="w-full p-2.5 bg-white dark:bg-navy-800 text-navy-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700 font-semibold"
                       />
                     </div>
@@ -6457,7 +6464,7 @@ export const AcademiaView: React.FC = () => {
 
                       <div className="text-right">
                         <span className="text-xs font-black text-navy-900 dark:text-white block">
-                          R$ {s.agreedRate || s.maxRate}/h
+                          R$ {s.agreedRate || s.maxRate || (s as any).rate || 45}/h
                         </span>
                         <span className={`text-[10px] font-bold capitalize ${
                           s.status === "realizada" || s.status === "confirmado"
@@ -6639,7 +6646,7 @@ export const AcademiaView: React.FC = () => {
                   <span>{formatDateDDMMAAAA(shiftToDelete.date)} · {shiftToDelete.startTime} às {shiftToDelete.endTime}</span>
                 </div>
                 <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                  Valor: R$ {shiftToDelete.maxRate}/h
+                  Valor: R$ {shiftToDelete.maxRate ?? (shiftToDelete as any).rate ?? 45}/h
                 </div>
               </div>
             )}

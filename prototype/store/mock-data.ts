@@ -251,6 +251,16 @@ export function formatShiftDateTime(dateStr: string, startTime?: string, endTime
   return d;
 }
 
+export function maskPhone(value: string): string {
+  if (!value) return "";
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+}
+
 export const DEFAULT_WEEK_DAYS = [
   { dayOfWeek: 1, dayName: "Segunda-feira", shortDay: "Seg" },
   { dayOfWeek: 2, dayName: "Terça-feira", shortDay: "Ter" },

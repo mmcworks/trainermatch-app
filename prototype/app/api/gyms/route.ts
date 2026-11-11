@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+function safeJson(val: any, fallback: any) {
+  if (!val) return fallback;
+  if (typeof val !== "string") return val;
+  try {
+    return JSON.parse(val);
+  } catch {
+    return fallback;
+  }
+}
+
 export async function GET() {
   try {
     const gyms = await prisma.gym.findMany({
@@ -9,8 +19,8 @@ export async function GET() {
 
     const parsed = gyms.map((g) => ({
       ...g,
-      modalities: JSON.parse(g.modalities || "[]"),
-      pricingRules: g.pricingRules ? JSON.parse(g.pricingRules) : undefined
+      modalities: safeJson(g.modalities, []),
+      pricingRules: safeJson(g.pricingRules, undefined)
     }));
 
     return NextResponse.json(parsed);
@@ -18,3 +28,4 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

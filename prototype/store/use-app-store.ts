@@ -14,7 +14,8 @@ import {
   MOCK_INSTRUCTORS,
   INITIAL_SHIFTS,
   INITIAL_PROPOSALS,
-  formatDateDDMMAAAA
+  formatDateDDMMAAAA,
+  canCancelShift
 } from "./mock-data";
 
 export const MIN_TRANSIT_MINUTES = 30;
@@ -562,8 +563,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const gyms = gymsRes && gymsRes.ok ? await gymsRes.json() : [];
       const rawInstructors = instructorsRes && instructorsRes.ok ? await instructorsRes.json() : [];
-      const shifts = shiftsRes && shiftsRes.ok ? await shiftsRes.json() : [];
+      const rawShifts = shiftsRes && shiftsRes.ok ? await shiftsRes.json() : [];
       const rawProposals = proposalsRes && proposalsRes.ok ? await proposalsRes.json() : [];
+
+      // Garante que todo turno possui maxRate, rate, title e data formatada válidos
+      const shifts: Shift[] = rawShifts.map((s: any) => {
+        const rateVal = Number(s.maxRate ?? s.rate ?? 45);
+        return {
+          ...s,
+          rate: rateVal,
+          maxRate: rateVal,
+          title: s.title || `${s.modality || "Aula"} - Aula`,
+          dateFormatted: s.dateFormatted || `${formatDateDDMMAAAA(s.date)} · ${s.startTime} – ${s.endTime}`
+        };
+      });
 
       // Filtra instrutores ativos e válidos
       const instructors = rawInstructors.filter(
@@ -574,6 +587,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         instructors.some((i: any) => i.id === p.instructorId)
       );
 
+      // Recupera cache local caso o backend esteja em cold start ou em atualização
+      let cachedGym: any = null;
+      let cachedInstructor: any = null;
+      try {
+        if (typeof window !== "undefined") {
+          const storedG = localStorage.getItem("trainermatch_gym_cache");
+          if (storedG) cachedGym = JSON.parse(storedG);
+          const storedI = localStorage.getItem("trainermatch_instructor_cache");
+          if (storedI) cachedInstructor = JSON.parse(storedI);
+        }
+      } catch (e) {}
+
       if (sessionUser) {
         const userGymId = sessionUser.role === "academia" && sessionUser.gym?.id
           ? sessionUser.gym.id
@@ -582,19 +607,34 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? sessionUser.instructor.id
           : (sessionUser.role === "professor" ? (get().activeInstructorId || instructors[0]?.id || "") : "");
 
-        const mergedInstructors = sessionUser.instructor
+        let mergedInstructors = sessionUser.instructor
           ? [sessionUser.instructor, ...instructors.filter((i: any) => i.id !== sessionUser.instructor.id)]
           : instructors;
 
-        const mergedGyms = sessionUser.gym
+        if (cachedInstructor) {
+          mergedInstructors = mergedInstructors.map((i: any) =>
+            i.id === cachedInstructor.id || i.id === userInstructorId ? { ...i, ...cachedInstructor } : i
+          );
+        }
+
+        let mergedGyms = sessionUser.gym
           ? [sessionUser.gym, ...gyms.filter((g: any) => g.id !== sessionUser.gym.id)]
           : gyms;
+
+        if (cachedGym) {
+          mergedGyms = mergedGyms.map((g: any) =>
+            g.id === cachedGym.id || g.id === userGymId ? { ...g, ...cachedGym } : g
+          );
+        }
+
+        const effectiveEmail = cachedGym?.email || cachedInstructor?.email || sessionUser.email;
+        const effectiveName = cachedGym?.name || cachedInstructor?.name || sessionUser.name;
 
         set({
           isLoaded: true,
           isAuthenticated: true,
-          userEmail: sessionUser.email,
-          userName: sessionUser.name,
+          userEmail: effectiveEmail,
+          userName: effectiveName,
           currentRole: sessionUser.role,
           activeGymId: userGymId,
           activeInstructorId: userInstructorId,
@@ -605,11 +645,20 @@ export const useAppStore = create<AppState>((set, get) => ({
           proposals
         });
       } else {
+        let mergedGyms = gyms;
+        if (cachedGym) {
+          mergedGyms = mergedGyms.map((g: any) => (g.id === cachedGym.id ? { ...g, ...cachedGym } : g));
+        }
+        let mergedInstructors = instructors;
+        if (cachedInstructor) {
+          mergedInstructors = mergedInstructors.map((i: any) => (i.id === cachedInstructor.id ? { ...i, ...cachedInstructor } : i));
+        }
+
         set({
           isLoaded: true,
           isAuthenticated: false,
-          gyms,
-          instructors,
+          gyms: mergedGyms,
+          instructors: mergedInstructors,
           shifts,
           proposals
         });
@@ -1317,8 +1366,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!targetId) return;
 
     set((state) => ({
-      gyms: state.gyms.map((g) => (g.id === targetId ? { ...g, ...data } : g))
+      gyms: state.gyms.map((g) => (g.id === targetId ? { ...g, ...data } : g)),
+      ...(data.name ? { userName: data.name } : {}),
+      ...(data.email ? { userEmail: data.email } : {})
     }));
+
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("trainermatch_gym_cache") || "{}";
+        const parsed = JSON.parse(stored);
+        localStorage.setItem("trainermatch_gym_cache", JSON.stringify({ ...parsed, ...data, id: targetId }));
+      }
+    } catch (e) {}
 
     fetch(`/api/gyms/${targetId}`, {
       method: "PUT",
@@ -1330,7 +1389,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           const json = await res.json();
           if (json.gym) {
             set((state) => ({
-              gyms: state.gyms.map((g) => (g.id === targetId ? { ...g, ...json.gym } : g))
+              gyms: state.gyms.map((g) => (g.id === targetId ? { ...g, ...json.gym } : g)),
+              ...(json.gym.name ? { userName: json.gym.name } : {}),
+              ...(json.gym.email ? { userEmail: json.gym.email } : {})
             }));
           }
         } else {
@@ -1341,8 +1402,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   createShift: (shiftData) => {
+    const rateVal = Number(shiftData.maxRate ?? (shiftData as any).rate ?? 45);
     const newShift: Shift = {
       ...shiftData,
+      rate: rateVal,
+      maxRate: rateVal,
       id: `shift-${Date.now()}`,
       status: "aberto"
     };
@@ -1351,23 +1415,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     fetch("/api/shifts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ shift: shiftData })
+      body: JSON.stringify({ shift: { ...shiftData, rate: rateVal, maxRate: rateVal } })
     }).catch((err) => console.error("Erro ao criar turno no banco:", err));
   },
 
   createMultipleShifts: (shiftsData) => {
     const baseTimestamp = Date.now();
-    const newShifts: Shift[] = shiftsData.map((data, index) => ({
-      ...data,
-      id: `shift-${baseTimestamp}-${index}`,
-      status: "aberto"
-    }));
+    const newShifts: Shift[] = shiftsData.map((data, index) => {
+      const rateVal = Number(data.maxRate ?? (data as any).rate ?? 45);
+      return {
+        ...data,
+        rate: rateVal,
+        maxRate: rateVal,
+        id: `shift-${baseTimestamp}-${index}`,
+        status: "aberto"
+      };
+    });
     set((state) => ({ shifts: [...newShifts, ...state.shifts] }));
 
     fetch("/api/shifts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ shifts: shiftsData })
+      body: JSON.stringify({
+        shifts: shiftsData.map((d) => {
+          const rateVal = Number(d.maxRate ?? (d as any).rate ?? 45);
+          return { ...d, rate: rateVal, maxRate: rateVal };
+        })
+      })
     }).catch((err) => console.error("Erro ao cadastrar múltiplos turnos:", err));
   },
 
@@ -1377,20 +1451,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { success: false, error: "Horário não encontrado." };
     }
 
-    if (shift.status === "confirmado" || shift.status === "realizada") {
-      return {
-        success: false,
-        error: "Não é possível excluir este horário pois já existe um professor contratado. Cancele a aula contratada antes de remover."
-      };
-    }
+    const confirmedInst = get().instructors.find((i) => i.id === shift.confirmedInstructorId);
+    const hasActiveContract = (shift.status === "confirmado") &&
+      !!confirmedInst && !confirmedInst.isDeleted && (confirmedInst as any).isActive !== false;
 
-    const activeProposals = get().proposals.filter(
-      (p) => p.shiftId === shiftId && (p.status === "pendente" || p.status === "aceita")
-    );
-    if (activeProposals.length > 0) {
+    // Apenas impede a exclusão se houver um professor ativo contratado com aula no futuro
+    if (hasActiveContract && canCancelShift(shift).canCancel) {
       return {
         success: false,
-        error: `Não é possível excluir este horário pois existem ${activeProposals.length} proposta(s) em andamento. Recuse ou finalize as propostas antes de remover.`
+        error: "Não é possível excluir este horário pois já existe um professor contratado. Utilize a opção 'Cancelar Aula Contratada' primeiro."
       };
     }
 

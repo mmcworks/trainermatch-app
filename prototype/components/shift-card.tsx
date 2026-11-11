@@ -61,7 +61,7 @@ export const ShiftCard: React.FC<ShiftCardProps & { onOpenDetails?: () => void }
 
             <div>
               <span className="text-base font-black text-navy-900">
-                R$ {shift.maxRate}
+                R$ {shift.maxRate ?? (shift as any).rate ?? 45}
                 <span className="text-[10px] font-normal text-muted">/h</span>
               </span>
             </div>

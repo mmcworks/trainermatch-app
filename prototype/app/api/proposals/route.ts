@@ -29,6 +29,9 @@ export async function GET(req: NextRequest) {
       history: JSON.parse(p.history || "[]"),
       shift: {
         ...p.shift,
+        rate: Number(p.shift.rate || 45),
+        maxRate: Number(p.shift.rate || 45),
+        title: `${p.shift.modality} - Aula`,
         gym: p.shift.gym ? {
           ...p.shift.gym,
           modalities: JSON.parse(p.shift.gym.modalities || "[]"),

@@ -59,7 +59,7 @@ import {
   Smartphone,
   XCircle
 } from "lucide-react";
-import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift } from "@/store/mock-data";
+import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone } from "@/store/mock-data";
 import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility } from "@/store/use-app-store";
 import { TimeStepperInput } from "@/components/time-stepper-input";
 import { AnimatedModal } from "@/components/animated-modal";
@@ -937,7 +937,7 @@ export const ProfessorView: React.FC = () => {
                       <div>
                         <span className="text-[10px] text-muted dark:text-slate-400 block leading-none">Valor da Hora-Aula</span>
                         <span className="text-base font-black text-navy-900 dark:text-white">
-                          R$ {shift.maxRate}
+                          R$ {shift.maxRate ?? (shift as any).rate ?? 45}
                           <span className="text-xs font-normal text-muted dark:text-slate-400">/h fixo</span>
                         </span>
                       </div>
@@ -1047,7 +1047,7 @@ export const ProfessorView: React.FC = () => {
                     <span>{formatShiftDate(detailShift).dayMonth} ({formatShiftDate(detailShift).weekday}) · {formatShiftDate(detailShift).hours}</span>
                   </div>
                   <span className="text-base font-black text-primary">
-                    R$ {detailShift.maxRate}/h fixo
+                    R$ {detailShift.maxRate ?? (detailShift as any).rate ?? 45}/h fixo
                   </span>
                 </div>
               </div>
@@ -1117,7 +1117,7 @@ export const ProfessorView: React.FC = () => {
                       }}
                       className="w-full bg-primary hover:bg-primary-hover text-white font-extrabold py-3.5 rounded-full text-sm shadow-sm transition-all active:scale-[0.99]"
                     >
-                      Candidatar-se pelo Valor Fixo (R$ {detailShift.maxRate}/h)
+                      Candidatar-se pelo Valor Fixo (R$ {detailShift.maxRate ?? (detailShift as any).rate ?? 45}/h)
                     </button>
                   );
                 })()}
@@ -1839,7 +1839,7 @@ export const ProfessorView: React.FC = () => {
                     <div className="bg-white/70 dark:bg-navy-800/80 p-2 rounded-xl">
                       <span className="text-[10px] text-muted dark:text-slate-400 block font-bold">Total Recebido</span>
                       <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
-                        R$ {monthAllConfirmedShifts.reduce((acc, s) => acc + (s.agreedRate || s.maxRate) * 3, 0)},00
+                        R$ {monthAllConfirmedShifts.reduce((acc, s) => acc + (s.agreedRate || s.maxRate || (s as any).rate || 45) * 3, 0)},00
                       </span>
                     </div>
                   </div>
@@ -1982,7 +1982,7 @@ export const ProfessorView: React.FC = () => {
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start">
                               <h3 className="text-sm font-bold text-navy-900 dark:text-white truncate">{gym?.name}</h3>
-                              <span className="text-xs font-extrabold text-navy-900 dark:text-white">R$ {shift.agreedRate || shift.maxRate}/h</span>
+                              <span className="text-xs font-extrabold text-navy-900 dark:text-white">R$ {shift.agreedRate || shift.maxRate || (shift as any).rate || 45}/h</span>
                             </div>
                             <p className="text-xs text-muted dark:text-slate-400 mt-0.5 flex items-center gap-1">
                               <Clock size={11} className="text-primary" />
@@ -2911,7 +2911,7 @@ export const ProfessorView: React.FC = () => {
           const sM = timeToMinutes(shift?.startTime || "18:00");
           const eM = timeToMinutes(shift?.endTime || "21:00");
           const durationHours = Math.max(1, Math.round(((eM - sM) / 60) * 10) / 10);
-          const fixedRate = shift?.maxRate || 45;
+          const fixedRate = shift?.maxRate || (shift as any)?.rate || 45;
           const totalEstimated = durationHours * fixedRate;
 
           return (
@@ -3749,7 +3749,9 @@ export const ProfessorView: React.FC = () => {
                 <input
                   type="text"
                   value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
+                  onChange={(e) => setEditPhone(maskPhone(e.target.value))}
+                  placeholder="(00) 00000-0000"
+                  maxLength={15}
                   required
                   className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary"
                 />

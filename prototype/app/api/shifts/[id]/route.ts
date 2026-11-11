@@ -25,6 +25,9 @@ export async function GET(
 
     return NextResponse.json({
       ...shift,
+      rate: Number(shift.rate || 45),
+      maxRate: Number(shift.rate || 45),
+      title: `${shift.modality} - Aula`,
       gym: shift.gym ? {
         ...shift.gym,
         modalities: JSON.parse(shift.gym.modalities || "[]"),
@@ -56,7 +59,9 @@ export async function PUT(
     const updateData: any = {};
     if (body.status !== undefined) updateData.status = body.status;
     if (body.confirmedInstructorId !== undefined) updateData.confirmedInstructorId = body.confirmedInstructorId;
-    if (body.rate !== undefined) updateData.rate = Number(body.rate);
+    if (body.rate !== undefined || body.maxRate !== undefined) {
+      updateData.rate = Number(body.rate ?? body.maxRate ?? 45);
+    }
     if (body.instructorCheckInAt !== undefined) {
       updateData.instructorCheckInAt = body.instructorCheckInAt ? new Date(body.instructorCheckInAt) : null;
     }
@@ -82,7 +87,15 @@ export async function PUT(
       }
     });
 
-    return NextResponse.json({ success: true, shift: updated });
+    return NextResponse.json({
+      success: true,
+      shift: {
+        ...updated,
+        rate: Number(updated.rate || 45),
+        maxRate: Number(updated.rate || 45),
+        title: `${updated.modality} - Aula`
+      }
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

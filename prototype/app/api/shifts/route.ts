@@ -30,6 +30,9 @@ export async function GET(req: NextRequest) {
 
     const parsedShifts = shifts.map((s) => ({
       ...s,
+      rate: Number(s.rate || 45),
+      maxRate: Number(s.rate || 45),
+      title: `${s.modality} - Aula`,
       gym: s.gym ? {
         ...s.gym,
         modalities: JSON.parse(s.gym.modalities || "[]"),
@@ -68,6 +71,7 @@ export async function POST(req: NextRequest) {
     if (Array.isArray(body.shifts)) {
       const createdShifts = [];
       for (const item of body.shifts) {
+        const itemRate = Number(item.rate ?? item.maxRate ?? 45);
         const created = await prisma.shift.create({
           data: {
             gymId: item.gymId,
@@ -75,11 +79,16 @@ export async function POST(req: NextRequest) {
             startTime: item.startTime,
             endTime: item.endTime,
             modality: item.modality,
-            rate: item.rate,
+            rate: itemRate,
             status: item.status || "aberto"
           }
         });
-        createdShifts.push(created);
+        createdShifts.push({
+          ...created,
+          rate: created.rate,
+          maxRate: created.rate,
+          title: `${created.modality} - Aula`
+        });
       }
       return NextResponse.json({ success: true, count: createdShifts.length, shifts: createdShifts });
     }
@@ -90,6 +99,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Dados incompletos para criação do turno" }, { status: 400 });
     }
 
+    const calculatedRate = Number(shiftData.rate ?? shiftData.maxRate ?? 45);
+
     const created = await prisma.shift.create({
       data: {
         gymId: shiftData.gymId,
@@ -97,7 +108,7 @@ export async function POST(req: NextRequest) {
         startTime: shiftData.startTime,
         endTime: shiftData.endTime,
         modality: shiftData.modality,
-        rate: Number(shiftData.rate) || 45,
+        rate: calculatedRate,
         status: shiftData.status || "aberto"
       },
       include: {
@@ -105,7 +116,15 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    return NextResponse.json({ success: true, shift: created });
+    return NextResponse.json({
+      success: true,
+      shift: {
+        ...created,
+        rate: created.rate,
+        maxRate: created.rate,
+        title: `${created.modality} - Aula`
+      }
+    });
   } catch (error: any) {
     console.error("Erro ao criar turno:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAppStore } from "@/store/use-app-store";
+import { maskPhone } from "@/store/mock-data";
 import {
   Building2,
   User,
@@ -625,8 +626,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                   type="text"
                   required
                   value={selectedRole === "professor" ? registerCref : registerPhone}
-                  onChange={(e) => selectedRole === "professor" ? setRegisterCref(e.target.value) : setRegisterPhone(e.target.value)}
-                  placeholder={selectedRole === "professor" ? "Ex: 012845-G/ES" : "(27) 99881-2233"}
+                  onChange={(e) => selectedRole === "professor" ? setRegisterCref(e.target.value) : setRegisterPhone(maskPhone(e.target.value))}
+                  placeholder={selectedRole === "professor" ? "Ex: 012845-G/ES" : "(00) 00000-0000"}
+                  maxLength={selectedRole === "professor" ? 20 : 15}
                   className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
                 />
               </div>

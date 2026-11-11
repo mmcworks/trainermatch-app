@@ -131,7 +131,7 @@ export const CancelShiftModal: React.FC<CancelShiftModalProps> = ({
                 </span>
               </div>
               <span className="text-xs font-black text-navy-900 dark:text-white bg-white dark:bg-navy-800 px-2 py-0.5 rounded-md border border-slate-200/70 dark:border-slate-700">
-                R$ {shift.agreedRate || shift.maxRate}/h
+                R$ {shift.agreedRate || shift.maxRate || (shift as any).rate || 45}/h
               </span>
             </div>
 
