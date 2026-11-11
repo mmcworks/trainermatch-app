@@ -59,7 +59,7 @@ import {
   Smartphone,
   XCircle
 } from "lucide-react";
-import { Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift } from "@/store/mock-data";
+import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift } from "@/store/mock-data";
 import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility } from "@/store/use-app-store";
 import { TimeStepperInput } from "@/components/time-stepper-input";
 import { AnimatedModal } from "@/components/animated-modal";
@@ -231,9 +231,11 @@ export const ProfessorView: React.FC = () => {
     } catch (e) {}
   }, []);
 
-  const fallbackInstructor = {
+  const fallbackInstructor: Instructor = {
     id: activeInstructorId || "inst-new",
     name: userName || "Professor",
+    crefStatus: "ativo",
+    occurrences: 0,
     email: userEmail || "",
     phone: "",
     cpf: "",
@@ -253,7 +255,7 @@ export const ProfessorView: React.FC = () => {
     }
   };
 
-  const rawInstructor = instructors.find((i) => i.id === activeInstructorId) || (activeInstructorId ? fallbackInstructor : instructors[0]) || fallbackInstructor;
+  const rawInstructor: Instructor = (instructors.find((i) => i.id === activeInstructorId) || (activeInstructorId ? fallbackInstructor : instructors[0]) || fallbackInstructor) as Instructor;
   const currentInstructor = useMemo(() => ({
     ...rawInstructor,
     criteria: rawInstructor.criteria || {

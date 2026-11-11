@@ -39,7 +39,7 @@ export async function GET(
         tecnica: instructor.rating,
         postura: instructor.rating
       },
-      badges: instructor.ratingCount > 0 ? ["Pontualidade Britânica", "Super Atencioso", "Excelente Técnica"] : [],
+      badges: instructor.ratingCount > 0 ? ["Pontual", "Atencioso(a)", "Excelente Técnica"] : [],
       wouldHireAgainRate: instructor.ratingCount > 0 ? 98 : undefined
     });
   } catch (error: any) {
@@ -133,7 +133,7 @@ export async function PUT(
           tecnica: updated.rating,
           postura: updated.rating
         },
-        badges: updated.ratingCount > 0 ? ["Pontualidade Britânica", "Super Atencioso", "Excelente Técnica"] : [],
+        badges: updated.ratingCount > 0 ? ["Pontual", "Atencioso(a)", "Excelente Técnica"] : [],
         wouldHireAgainRate: updated.ratingCount > 0 ? 98 : undefined
       }
     });

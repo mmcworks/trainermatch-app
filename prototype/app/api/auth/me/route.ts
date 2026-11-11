@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
             tecnica: user.instructor.rating,
             postura: user.instructor.rating
           },
-          badges: user.instructor.ratingCount > 0 ? ["Pontualidade Britânica", "Super Atencioso", "Excelente Técnica"] : [],
+          badges: user.instructor.ratingCount > 0 ? ["Pontual", "Atencioso(a)", "Excelente Técnica"] : [],
           wouldHireAgainRate: user.instructor.ratingCount > 0 ? 98 : undefined
         } : null
       }

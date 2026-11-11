@@ -57,7 +57,7 @@ export async function GET() {
         tecnica: i.rating,
         postura: i.rating
       },
-      badges: i.ratingCount > 0 ? ["Pontualidade Britânica", "Super Atencioso", "Excelente Técnica"] : [],
+      badges: i.ratingCount > 0 ? ["Pontual", "Atencioso(a)", "Excelente Técnica"] : [],
       wouldHireAgainRate: i.ratingCount > 0 ? 98 : undefined
     }));
 

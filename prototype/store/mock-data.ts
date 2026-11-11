@@ -47,12 +47,12 @@ export interface QualityBadge {
 }
 
 export const PROFESSOR_QUALITY_BADGES: QualityBadge[] = [
-  { id: "pontualidade", label: "Pontualidade Britânica", iconName: "Clock" },
-  { id: "atencioso", label: "Super Atencioso", iconName: "Heart" },
+  { id: "pontual", label: "Pontual", iconName: "Clock" },
+  { id: "atencioso", label: "Atencioso(a)", iconName: "Heart" },
   { id: "tecnica", label: "Excelente Técnica", iconName: "Award" },
-  { id: "postura", label: "Postura Exemplar", iconName: "ShieldCheck" },
-  { id: "uniforme", label: "Uniforme 10/10", iconName: "Sparkles" },
-  { id: "energia", label: "Energia & Motivação", iconName: "Zap" },
+  { id: "postura", label: "Postura exemplar", iconName: "ShieldCheck" },
+  { id: "energia", label: "Motivação e Energia", iconName: "Zap" },
+  { id: "apresentacao", label: "Boa apresentação", iconName: "Sparkles" },
 ];
 
 export const GYM_QUALITY_BADGES: QualityBadge[] = [
@@ -93,6 +93,7 @@ export interface Instructor {
   cref: string;
   crefStatus: "ativo" | "provisorio";
   avatar: string;
+  bio?: string;
   rating: number;
   ratingCount: number;
   hourlyRate: number;
@@ -389,8 +390,8 @@ export const MOCK_INSTRUCTORS: Instructor[] = [
       postura: 5.0
     },
     badges: [
-      "Pontualidade Britânica",
-      "Super Atencioso",
+      "Pontual",
+      "Atencioso(a)",
       "Excelente Técnica"
     ],
     phone: "(27) 99933-8822",
@@ -437,10 +438,10 @@ export const MOCK_INSTRUCTORS: Instructor[] = [
       postura: 4.9
     },
     badges: [
-      "Pontualidade Britânica",
+      "Pontual",
       "Excelente Técnica",
-      "Postura Exemplar",
-      "Uniforme 10/10"
+      "Postura exemplar",
+      "Boa apresentação"
     ],
     phone: "(27) 99881-2233",
     email: "mariana.costa.personal@gmail.com",
@@ -515,7 +516,7 @@ export const MOCK_INSTRUCTORS: Instructor[] = [
       postura: 4.7
     },
     badges: [
-      "Energia & Motivação",
+      "Motivação e Energia",
       "Excelente Técnica"
     ],
     phone: "(27) 99772-5566",
