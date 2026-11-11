@@ -135,6 +135,7 @@ export interface Shift {
   startTime: string; // '18:00'
   endTime: string; // '21:00'
   maxRate: number; // Valor fixo da hora-aula (R$/h)
+  rate?: number; // Compatibilidade com Prisma schema
   status: "aberto" | "negociando" | "confirmado" | "concluido" | "realizada" | "cancelado";
   confirmedInstructorId?: string;
   confirmedInstructorName?: string;

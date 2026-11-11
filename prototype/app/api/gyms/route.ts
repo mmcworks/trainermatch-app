@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 function safeJson(val: any, fallback: any) {
   if (!val) return fallback;
   if (typeof val !== "string") return val;

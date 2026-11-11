@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     // 1. Limpeza garantida de usuários de teste / inexistentes (ex: José da Silva / CREF 12345/ES)
