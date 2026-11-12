@@ -59,7 +59,7 @@ import {
   Smartphone,
   XCircle
 } from "lucide-react";
-import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
+import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
 import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility } from "@/store/use-app-store";
 import { TimeStepperInput } from "@/components/time-stepper-input";
 import { AnimatedModal } from "@/components/animated-modal";
@@ -3294,7 +3294,9 @@ export const ProfessorView: React.FC = () => {
                       <div className="space-y-1">
                         <label className="text-xs font-bold text-navy-900 dark:text-white block">Código de 6 Dígitos</label>
                         <input
-                          type="text"
+                          type="tel"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           maxLength={6}
                           value={pwdCodeInput}
                           onChange={(e) => {
@@ -3774,7 +3776,9 @@ export const ProfessorView: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-navy-900 dark:text-white">Celular / WhatsApp</label>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={editPhone}
                   onChange={(e) => setEditPhone(maskPhone(e.target.value))}
                   placeholder="(00) 00000-0000"
@@ -3893,9 +3897,21 @@ export const ProfessorView: React.FC = () => {
                   2. Digite a Chave ({editPixType.toUpperCase()})
                 </label>
                 <input
-                  type="text"
+                  type={editPixType === "cpf" || editPixType === "phone" ? "tel" : editPixType === "email" ? "email" : "text"}
+                  inputMode={editPixType === "cpf" || editPixType === "phone" ? "numeric" : undefined}
+                  pattern={editPixType === "cpf" || editPixType === "phone" ? "[0-9]*" : undefined}
+                  maxLength={editPixType === "cpf" ? 14 : editPixType === "phone" ? 15 : undefined}
                   value={editPixKey}
-                  onChange={(e) => setEditPixKey(e.target.value)}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (editPixType === "cpf") {
+                      setEditPixKey(maskCpf(raw));
+                    } else if (editPixType === "phone") {
+                      setEditPixKey(maskPhone(raw));
+                    } else {
+                      setEditPixKey(raw);
+                    }
+                  }}
                   placeholder={
                     editPixType === "cpf"
                       ? "000.000.000-00"
@@ -4483,9 +4499,12 @@ export const ProfessorView: React.FC = () => {
               <div className="space-y-1.5 pt-1">
                 <label className="text-xs font-bold text-navy-900 dark:text-white">Número do CPF</label>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={14}
                   value={editCpf}
-                  onChange={(e) => setEditCpf(e.target.value)}
+                  onChange={(e) => setEditCpf(maskCpf(e.target.value))}
                   placeholder="000.000.000-00"
                   className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary"
                 />
@@ -5974,8 +5993,11 @@ export const ProfessorView: React.FC = () => {
                         <span className="text-2xl text-primary font-bold">R$</span>
                         <input
                           type="number"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           min={20}
                           value={offerHourlyRate || ""}
+                          onKeyDown={blockNonNumericKeyDown}
                           onChange={(e) => {
                             const newRate = Math.max(0, Number(e.target.value));
                             setOfferHourlyRate(newRate);
@@ -6036,9 +6058,12 @@ export const ProfessorView: React.FC = () => {
                               <span>R$</span>
                               <input
                                 type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 min={15}
                                 max={Math.max(15, offerHourlyRate - 1)}
                                 value={offerMinHourlyRate || ""}
+                                onKeyDown={blockNonNumericKeyDown}
                                 onChange={(e) => setOfferMinHourlyRate(Math.max(0, Number(e.target.value)))}
                                 className={`w-16 text-center p-1.5 bg-slate-100 dark:bg-navy-800 border rounded-lg text-xs font-bold dark:text-white focus:outline-primary transition-colors ${
                                   offerAllowNegotiation && offerHourlyRate > 0 && offerMinHourlyRate >= offerHourlyRate

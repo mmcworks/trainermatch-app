@@ -127,6 +127,7 @@ export function TimeStepperInput({
       <input
         type="text"
         inputMode="numeric"
+        pattern="[0-9:]*"
         aria-label={ariaLabel}
         disabled={disabled}
         value={text}

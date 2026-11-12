@@ -59,7 +59,7 @@ import {
   ThumbsUp,
   XCircle
 } from "lucide-react";
-import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, canCancelShift, maskPhone, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
+import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
 import {
   getRecommendedInstructorsForShift,
   calculateSuggestedRate,
@@ -1771,10 +1771,14 @@ export const AcademiaView: React.FC = () => {
                             <span className="text-[10px] text-slate-400">R$</span>
                             <input
                               type="number"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              min={0}
                               value={rate}
+                              onKeyDown={blockNonNumericKeyDown}
                               onChange={(e) => setPricingModalityRates({
                                 ...pricingModalityRates,
-                                [mod]: Number(e.target.value)
+                                [mod]: Math.max(0, Number(e.target.value))
                               })}
                               className="w-12 p-1 text-right font-black text-xs bg-white dark:bg-navy-800 text-navy-900 dark:text-white rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-primary"
                             />
@@ -1798,8 +1802,12 @@ export const AcademiaView: React.FC = () => {
                           <span className="text-xs font-bold text-primary">+ R$</span>
                           <input
                             type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min={0}
                             value={pricingPeakHourAddition}
-                            onChange={(e) => setPricingPeakHourAddition(Number(e.target.value))}
+                            onKeyDown={blockNonNumericKeyDown}
+                            onChange={(e) => setPricingPeakHourAddition(Math.max(0, Number(e.target.value)))}
                             className="w-12 p-1 text-right font-black text-xs bg-white dark:bg-navy-800 text-navy-900 dark:text-white rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-primary"
                           />
                           <span className="text-[10px] text-slate-400">/h</span>
@@ -1815,8 +1823,12 @@ export const AcademiaView: React.FC = () => {
                           <span className="text-xs font-bold text-primary">+ R$</span>
                           <input
                             type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min={0}
                             value={pricingWeekendAddition}
-                            onChange={(e) => setPricingWeekendAddition(Number(e.target.value))}
+                            onKeyDown={blockNonNumericKeyDown}
+                            onChange={(e) => setPricingWeekendAddition(Math.max(0, Number(e.target.value)))}
                             className="w-12 p-1 text-right font-black text-xs bg-white dark:bg-navy-800 text-navy-900 dark:text-white rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-primary"
                           />
                           <span className="text-[10px] text-slate-400">/h</span>
@@ -4507,16 +4519,22 @@ export const AcademiaView: React.FC = () => {
                     <div>
                       <label className="font-bold text-navy-800 dark:text-slate-200 block mb-1">CNPJ</label>
                       <input
-                        type="text"
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={18}
                         value={profileCnpj}
-                        onChange={(e) => setProfileCnpj(e.target.value)}
+                        onChange={(e) => setProfileCnpj(maskCnpj(e.target.value))}
+                        placeholder="00.000.000/0001-00"
                         className="w-full p-2.5 bg-white dark:bg-navy-800 text-navy-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700 font-semibold"
                       />
                     </div>
                     <div>
                       <label className="font-bold text-navy-800 dark:text-slate-200 block mb-1">Telefone da Recepção</label>
                       <input
-                        type="text"
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={profilePhone}
                         onChange={(e) => setProfilePhone(maskPhone(e.target.value))}
                         placeholder="(00) 00000-0000"
@@ -4642,11 +4660,15 @@ export const AcademiaView: React.FC = () => {
                             <span className="text-xs font-bold text-slate-400">R$</span>
                             <input
                               type="number"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              min={0}
                               value={rate}
+                              onKeyDown={blockNonNumericKeyDown}
                               onChange={(e) =>
                                 setPricingModalityRates({
                                   ...pricingModalityRates,
-                                  [mod]: Number(e.target.value)
+                                  [mod]: Math.max(0, Number(e.target.value))
                                 })
                               }
                               className="w-full p-1.5 text-right font-extrabold text-sm bg-slate-50 dark:bg-navy-900 text-navy-900 dark:text-white rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-primary"
@@ -4677,8 +4699,12 @@ export const AcademiaView: React.FC = () => {
                           <span className="text-xs font-bold text-primary">+ R$</span>
                           <input
                             type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min={0}
                             value={pricingPeakHourAddition}
-                            onChange={(e) => setPricingPeakHourAddition(Number(e.target.value))}
+                            onKeyDown={blockNonNumericKeyDown}
+                            onChange={(e) => setPricingPeakHourAddition(Math.max(0, Number(e.target.value)))}
                             className="w-16 p-1.5 text-right font-extrabold text-sm bg-slate-50 dark:bg-navy-900 text-navy-900 dark:text-white rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-primary"
                           />
                           <span className="text-xs text-muted dark:text-slate-400">/h</span>
@@ -4698,8 +4724,12 @@ export const AcademiaView: React.FC = () => {
                           <span className="text-xs font-bold text-primary">+ R$</span>
                           <input
                             type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            min={0}
                             value={pricingWeekendAddition}
-                            onChange={(e) => setPricingWeekendAddition(Number(e.target.value))}
+                            onKeyDown={blockNonNumericKeyDown}
+                            onChange={(e) => setPricingWeekendAddition(Math.max(0, Number(e.target.value)))}
                             className="w-16 p-1.5 text-right font-extrabold text-sm bg-slate-50 dark:bg-navy-900 text-navy-900 dark:text-white rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-primary"
                           />
                           <span className="text-xs text-muted dark:text-slate-400">/h</span>
@@ -4737,7 +4767,9 @@ export const AcademiaView: React.FC = () => {
                     <div>
                       <label className="font-bold text-navy-800 dark:text-slate-200 block mb-1">Celular / WhatsApp Direto</label>
                       <input
-                        type="text"
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={profileManagerPhone}
                         onChange={(e) => setProfileManagerPhone(maskPhone(e.target.value))}
                         placeholder="(00) 00000-0000"
@@ -5007,8 +5039,12 @@ export const AcademiaView: React.FC = () => {
                       <span className="text-sm font-extrabold text-slate-400">R$</span>
                       <input
                         type="number"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        min={0}
                         value={newMaxRate}
-                        onChange={(e) => setNewMaxRate(Number(e.target.value))}
+                        onKeyDown={blockNonNumericKeyDown}
+                        onChange={(e) => setNewMaxRate(Math.max(0, Number(e.target.value)))}
                         className="flex-1 p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-extrabold text-navy-900 dark:text-white text-base focus:outline-primary"
                       />
                       <span className="text-xs text-muted dark:text-slate-400">/ hora (Fixo)</span>
@@ -5288,8 +5324,12 @@ export const AcademiaView: React.FC = () => {
                       <span className="text-sm font-extrabold text-slate-400">R$</span>
                       <input
                         type="number"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        min={0}
                         value={newMaxRate}
-                        onChange={(e) => setNewMaxRate(Number(e.target.value))}
+                        onKeyDown={blockNonNumericKeyDown}
+                        onChange={(e) => setNewMaxRate(Math.max(0, Number(e.target.value)))}
                         className="flex-1 p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-extrabold text-navy-900 dark:text-white text-base focus:outline-primary"
                       />
                       <span className="text-xs text-muted dark:text-slate-400">/ hora (Fixo para toda a grade)</span>
@@ -5542,8 +5582,11 @@ export const AcademiaView: React.FC = () => {
                         <span className="text-2xl text-primary font-bold">R$</span>
                         <input
                           type="number"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           min={20}
                           value={hireRate || ""}
+                          onKeyDown={blockNonNumericKeyDown}
                           onChange={(e) => {
                             const newRate = Math.max(0, Number(e.target.value));
                             setHireRate(newRate);
@@ -5604,9 +5647,12 @@ export const AcademiaView: React.FC = () => {
                               <span>R$</span>
                               <input
                                 type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 min={15}
                                 max={Math.max(15, hireRate - 1)}
                                 value={hireMinNegotiableRate || ""}
+                                onKeyDown={blockNonNumericKeyDown}
                                 onChange={(e) => setHireMinNegotiableRate(Math.max(0, Number(e.target.value)))}
                                 className={`w-16 text-center p-1.5 bg-slate-100 dark:bg-navy-800 border rounded-lg text-xs font-bold dark:text-white focus:outline-primary transition-colors ${
                                   hireAllowNegotiation && hireRate > 0 && hireMinNegotiableRate >= hireRate

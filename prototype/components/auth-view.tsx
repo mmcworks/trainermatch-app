@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAppStore } from "@/store/use-app-store";
-import { maskPhone } from "@/store/mock-data";
+import { maskPhone, maskCpf, maskCnpj } from "@/store/mock-data";
 import {
   Building2,
   User,
@@ -470,11 +470,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                 <div>
                   <label className="text-navy-900 dark:text-white font-bold block mb-1">Código de 6 Dígitos</label>
                   <input
-                    type="text"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     required
                     maxLength={6}
                     value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value)}
+                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     placeholder="Ex: 849201"
                     className="w-full p-3 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-mono text-center text-sm font-bold tracking-widest focus:outline-primary dark:text-white"
                   />
@@ -609,11 +611,18 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                   {selectedRole === "professor" ? "CPF" : "CNPJ"}
                 </label>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   required
                   value={registerCpfOrCnpj}
-                  onChange={(e) => setRegisterCpfOrCnpj(e.target.value)}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const masked = selectedRole === "professor" ? maskCpf(raw) : maskCnpj(raw);
+                    setRegisterCpfOrCnpj(masked);
+                  }}
                   placeholder={selectedRole === "professor" ? "000.000.000-00" : "00.000.000/0001-00"}
+                  maxLength={selectedRole === "professor" ? 14 : 18}
                   className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
                 />
               </div>
@@ -623,7 +632,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                   {selectedRole === "professor" ? "Registro CREF" : "Telefone / WhatsApp"}
                 </label>
                 <input
-                  type="text"
+                  type={selectedRole === "professor" ? "text" : "tel"}
+                  inputMode={selectedRole === "professor" ? undefined : "numeric"}
+                  pattern={selectedRole === "professor" ? undefined : "[0-9]*"}
                   required
                   value={selectedRole === "professor" ? registerCref : registerPhone}
                   onChange={(e) => selectedRole === "professor" ? setRegisterCref(e.target.value) : setRegisterPhone(maskPhone(e.target.value))}
