@@ -5,31 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    // 1. Limpeza garantida de usuários de teste / inexistentes (ex: José da Silva / CREF 12345/ES)
-    const allUsers = await prisma.user.findMany().catch(() => []);
-    const testUsers = allUsers.filter(
-      (u) =>
-        u.name.toLowerCase().includes("silva") ||
-        u.name.toLowerCase().includes("josé") ||
-        u.email.toLowerCase().includes("josedasilva")
-    );
-    for (const u of testUsers) {
-      await prisma.user.delete({ where: { id: u.id } }).catch(() => null);
-    }
-
-    const allInstructors = await prisma.instructor.findMany().catch(() => []);
-    const testInstructors = allInstructors.filter(
-      (i) =>
-        i.name.toLowerCase().includes("silva") ||
-        i.name.toLowerCase().includes("josé") ||
-        (i.cref && i.cref.includes("12345"))
-    );
-    for (const i of testInstructors) {
-      await prisma.proposal.deleteMany({ where: { instructorId: i.id } }).catch(() => null);
-      await prisma.instructor.delete({ where: { id: i.id } }).catch(() => null);
-    }
-
-    // 2. Busca apenas instrutores ativos que possuem usuário válido vinculado
+    // Busca apenas instrutores válidos que possuem usuário vinculado
     const instructors = await prisma.instructor.findMany({
       include: {
         user: true
@@ -37,13 +13,9 @@ export async function GET() {
       orderBy: { rating: "desc" }
     });
 
-    // Filtra para garantir que apenas instrutores reais e ativos sejam recomendados
+    // Filtra instrutores ativos (não exclui usuários reais que tenham nomes legítimos)
     const activeInstructors = instructors.filter(
-      (i) =>
-        i.user &&
-        !i.name.toLowerCase().includes("silva") &&
-        !i.name.toLowerCase().includes("josé") &&
-        i.cref !== "12345/ES"
+      (i) => i.user && !i.name.includes("MOCK_DELETE")
     );
 
     const parsed = activeInstructors.map((i) => ({

@@ -59,7 +59,7 @@ import {
   Smartphone,
   XCircle
 } from "lucide-react";
-import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone } from "@/store/mock-data";
+import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
 import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility } from "@/store/use-app-store";
 import { TimeStepperInput } from "@/components/time-stepper-input";
 import { AnimatedModal } from "@/components/animated-modal";
@@ -2287,6 +2287,17 @@ export const ProfessorView: React.FC = () => {
                       setSlotErrorMsg((prev) => ({
                         ...prev,
                         [weekDay.dayOfWeek]: "O horário de término deve ser posterior ao horário de início."
+                      }));
+                      return;
+                    }
+
+                    // Checa se o horário de início já passou para o dia de hoje
+                    const now = new Date();
+                    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                    if (weekDay.dayOfWeek === now.getDay() && startMin <= currentMinutes) {
+                      setSlotErrorMsg((prev) => ({
+                        ...prev,
+                        [weekDay.dayOfWeek]: "O horário de início já passou para o dia de hoje. Escolha um horário futuro."
                       }));
                       return;
                     }
@@ -6248,6 +6259,16 @@ export const ProfessorView: React.FC = () => {
                         R$ {totalEstimate},00 potencial
                       </span>
                     </div>
+
+                    {offerDate && offerStartTime && isTimeInPastForDate(offerDate, offerStartTime) && (
+                      <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl flex items-start gap-2 text-amber-800 dark:text-amber-200 text-xs">
+                        <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                        <div>
+                          <strong className="block font-bold">Horário no passado não permitido</strong>
+                          O horário de início ({offerStartTime}) já passou para o dia de hoje ({formatDateDDMMAAAA(offerDate)}). Escolha um horário futuro para disponibilizar.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -6338,7 +6359,7 @@ export const ProfessorView: React.FC = () => {
                     disabled={
                       (offerWizardStep === 1 && (offerHourlyRate <= 0 || (offerAllowNegotiation && offerMinHourlyRate >= offerHourlyRate))) ||
                       (offerWizardStep === 2 && offerModalities.length === 0) ||
-                      (offerWizardStep === 3 && (!offerDate || !offerStartTime || !offerEndTime))
+                      (offerWizardStep === 3 && (!offerDate || !offerStartTime || !offerEndTime || isTimeInPastForDate(offerDate, offerStartTime)))
                     }
                     onClick={() => setOfferWizardStep((prev) => (prev + 1) as any)}
                     className="w-2/3 py-2.5 rounded-full text-xs font-black bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1"

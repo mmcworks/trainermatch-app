@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -34,6 +36,7 @@ export async function GET(
       modalities: JSON.parse(instructor.modalities || "[]"),
       pixKeys: JSON.parse(instructor.pixKeys || "[]"),
       availability: JSON.parse(instructor.availability || "[]"),
+      blockedDates: JSON.parse((instructor as any).blockedDates || "[]"),
       criteria: {
         pontualidade: instructor.rating,
         tecnica: instructor.rating,

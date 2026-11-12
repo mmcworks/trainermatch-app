@@ -59,7 +59,7 @@ import {
   ThumbsUp,
   XCircle
 } from "lucide-react";
-import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, canCancelShift, maskPhone } from "@/store/mock-data";
+import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, canCancelShift, maskPhone, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
 import {
   getRecommendedInstructorsForShift,
   calculateSuggestedRate,
@@ -1470,7 +1470,7 @@ export const AcademiaView: React.FC = () => {
                                 <div className="flex items-center justify-between">
                                   <h4 className="text-xs font-black text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">{inst.name}</h4>
                                   <div className="flex items-center gap-1">
-                                    <span className="text-xs font-black text-navy-900 dark:text-white">R$ {inst.hourlyRate}/h</span>
+                                    <span className="text-xs font-black text-navy-900 dark:text-white">R$ {inst.hourlyRate || 45}/h</span>
                                     <ChevronRight size={13} className="text-slate-400 opacity-60 group-hover:opacity-100 transition-opacity" />
                                   </div>
                                 </div>
@@ -1615,7 +1615,7 @@ export const AcademiaView: React.FC = () => {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between">
                                 <h4 className="text-xs font-black text-navy-900 dark:text-white truncate">{inst.name}</h4>
-                                <span className="text-xs font-black text-navy-900 dark:text-white">R$ {inst.hourlyRate}/h</span>
+                                <span className="text-xs font-black text-navy-900 dark:text-white">R$ {inst.hourlyRate || 45}/h</span>
                               </div>
                               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">{inst.cref} (Ativo)</span>
                               {(inst.ratingCount || 0) > 0 ? (
@@ -4045,7 +4045,7 @@ export const AcademiaView: React.FC = () => {
                                         {inst.name}
                                       </h3>
                                       <span className="text-xs font-black text-navy-900 dark:text-white">
-                                        R$ {inst.hourlyRate}/h
+                                        R$ {inst.hourlyRate || 45}/h
                                       </span>
                                     </div>
                                     <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold block">
@@ -4187,7 +4187,7 @@ export const AcademiaView: React.FC = () => {
 
                           <div className="flex justify-between items-center text-xs">
                             <span className="text-muted dark:text-slate-400">Valor base:</span>
-                            <span className="font-extrabold text-navy-900 dark:text-white">R$ {inst.hourlyRate}/h</span>
+                            <span className="font-extrabold text-navy-900 dark:text-white">R$ {inst.hourlyRate || 45}/h</span>
                           </div>
 
                           <div className="flex flex-wrap gap-1">
@@ -5011,6 +5011,16 @@ export const AcademiaView: React.FC = () => {
                         )}/h
                       </span>
                     </div>
+
+                    {newDate && newStartTime && isTimeInPastForDate(newDate, newStartTime) && (
+                      <div className="mt-2.5 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl flex items-start gap-2 text-amber-800 dark:text-amber-200 text-xs">
+                        <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                        <div>
+                          <strong className="block font-bold">Horário no passado não permitido</strong>
+                          O horário de início ({newStartTime}) já passou para o dia de hoje ({formatDateDDMMAAAA(newDate)}). Escolha um horário futuro para cadastrar.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -5324,7 +5334,8 @@ export const AcademiaView: React.FC = () => {
                       setGridCreationFeedback("Horário de aula cadastrado com sucesso!");
                       setTimeout(() => setGridCreationFeedback(null), 4000);
                     }}
-                    className="flex-1 py-2.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary-hover shadow-sm transition-all active:scale-95"
+                    disabled={isTimeInPastForDate(newDate, newStartTime)}
+                    className="flex-1 py-2.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all active:scale-95"
                   >
                     Salvar Horário de Aula
                   </button>
@@ -5807,6 +5818,16 @@ export const AcademiaView: React.FC = () => {
                         R$ {totalEstimate},00 total
                       </span>
                     </div>
+
+                    {hireDate && hireStartTime && isTimeInPastForDate(hireDate, hireStartTime) && (
+                      <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl flex items-start gap-2 text-amber-800 dark:text-amber-200 text-xs">
+                        <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                        <div>
+                          <strong className="block font-bold">Horário no passado não permitido</strong>
+                          O horário de início selecionado ({hireStartTime}) já passou para o dia de hoje ({formatDateDDMMAAAA(hireDate)}). Escolha um horário futuro para continuar.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -5905,7 +5926,7 @@ export const AcademiaView: React.FC = () => {
                     disabled={
                       (hireWizardStep === 1 && (hireRate <= 0 || (hireAllowNegotiation && hireMinNegotiableRate >= hireRate))) ||
                       (hireWizardStep === 2 && !modalityToUse) ||
-                      (hireWizardStep === 3 && (!hireDate || !hireStartTime || !hireEndTime))
+                      (hireWizardStep === 3 && (!hireDate || !hireStartTime || !hireEndTime || isTimeInPastForDate(hireDate, hireStartTime)))
                     }
                     onClick={() => setHireWizardStep((prev) => (prev + 1) as any)}
                     className="w-2/3 py-2.5 rounded-full text-xs font-black bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1"
@@ -6604,7 +6625,25 @@ export const AcademiaView: React.FC = () => {
                 {deleteShiftError}
               </p>
             </div>
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (shiftToDelete) {
+                    await cancelShift(shiftToDelete.id, "academia", "Cancelado para exclusão do horário da agenda", currentGym?.name || "Academia");
+                    deleteShift(shiftToDelete.id, true);
+                    setShowDeleteShiftModal(false);
+                    setShiftToDelete(null);
+                    setDeleteShiftError(null);
+                    setProfileSuccessMsg("Aula cancelada e horário excluído com sucesso!");
+                    setTimeout(() => setProfileSuccessMsg(null), 3000);
+                  }
+                }}
+                className="w-full py-2.5 rounded-full text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition-all flex items-center justify-center gap-1.5"
+              >
+                <Trash2 size={13} />
+                <span>Cancelar Aula Contratada e Excluir</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -6612,9 +6651,9 @@ export const AcademiaView: React.FC = () => {
                   setShiftToDelete(null);
                   setDeleteShiftError(null);
                 }}
-                className="w-full py-2.5 rounded-full text-xs font-black bg-primary text-white hover:bg-primary-hover shadow-sm transition-all"
+                className="w-full py-2.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-navy-600 transition-colors"
               >
-                Entendi
+                Voltar
               </button>
             </div>
           </div>
@@ -6837,7 +6876,7 @@ export const AcademiaView: React.FC = () => {
                     CREF {instructorDetailModal.cref}
                   </span>
                   <span className="text-[10px] bg-slate-100 dark:bg-navy-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold">
-                    R$ {instructorDetailModal.hourlyRate}/h
+                    R$ {instructorDetailModal.hourlyRate || 45}/h
                   </span>
                 </div>
               </div>

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const sessionCookie = req.cookies.get("trainer_session")?.value;
@@ -46,6 +48,7 @@ export async function GET(req: NextRequest) {
           modalities: JSON.parse(user.instructor.modalities || "[]"),
           pixKeys: JSON.parse(user.instructor.pixKeys || "[]"),
           availability: JSON.parse(user.instructor.availability || "[]"),
+          blockedDates: JSON.parse((user.instructor as any).blockedDates || "[]"),
           criteria: {
             pontualidade: user.instructor.rating,
             tecnica: user.instructor.rating,

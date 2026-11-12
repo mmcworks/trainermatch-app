@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import {
   Gym,
   Instructor,
@@ -492,7 +493,7 @@ interface AppState {
   updateGymProfile: (gymId: string, data: Partial<Gym>) => void;
   createShift: (shiftData: Omit<Shift, "id" | "status">) => void;
   createMultipleShifts: (shiftsData: Omit<Shift, "id" | "status">[]) => void;
-  deleteShift: (shiftId: string) => { success: boolean; error?: string };
+  deleteShift: (shiftId: string, force?: boolean) => { success: boolean; error?: string };
   instructorCheckIn: (shiftId: string) => { success: boolean; message: string };
   gymValidateAttendance: (shiftId: string) => void;
   completeShift: (shiftId: string) => void;
@@ -523,151 +524,194 @@ interface AppState {
   tickSimulationTime: (minutes: number) => void;
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
-  isLoaded: false,
-  gyms: [],
-  instructors: [],
-  shifts: [],
-  proposals: [],
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      isLoaded: false,
+      gyms: [],
+      instructors: [],
+      shifts: [],
+      proposals: [],
 
-  isAuthenticated: false,
-  userEmail: "",
-  userName: "",
-  currentRole: "professor",
-  activeInstructorId: "",
-  activeGymId: "",
+      isAuthenticated: false,
+      userEmail: "",
+      userName: "",
+      currentRole: "professor",
+      activeInstructorId: "",
+      activeGymId: "",
 
-  syncWithBackend: async () => {
-    try {
-      // 1. Checa sessão do usuário
-      let sessionUser: any = null;
-      try {
-        const meRes = await fetch("/api/auth/me");
-        if (meRes.ok) {
-          const meData = await meRes.json();
-          if (meData.authenticated && meData.user) {
-            sessionUser = meData.user;
+      syncWithBackend: async () => {
+        try {
+          // 1. Checa sessão do usuário
+          let sessionUser: any = null;
+          try {
+            const meRes = await fetch("/api/auth/me");
+            if (meRes.ok) {
+              const meData = await meRes.json();
+              if (meData.authenticated && meData.user) {
+                sessionUser = meData.user;
+              }
+            }
+          } catch (e) {
+            console.warn("Sessão não recuperada:", e);
           }
-        }
-      } catch (e) {
-        console.warn("Sessão não recuperada:", e);
-      }
 
-      // 2. Busca academias, professores, turnos e propostas do banco
-      const [gymsRes, instructorsRes, shiftsRes, proposalsRes] = await Promise.all([
-        fetch("/api/gyms").catch(() => null),
-        fetch("/api/instructors").catch(() => null),
-        fetch("/api/shifts").catch(() => null),
-        fetch("/api/proposals").catch(() => null)
-      ]);
+          // 2. Busca academias, professores, turnos e propostas do banco
+          const [gymsRes, instructorsRes, shiftsRes, proposalsRes] = await Promise.all([
+            fetch("/api/gyms").catch(() => null),
+            fetch("/api/instructors").catch(() => null),
+            fetch("/api/shifts").catch(() => null),
+            fetch("/api/proposals").catch(() => null)
+          ]);
 
-      const gyms = gymsRes && gymsRes.ok ? await gymsRes.json() : [];
-      const rawInstructors = instructorsRes && instructorsRes.ok ? await instructorsRes.json() : [];
-      const rawShifts = shiftsRes && shiftsRes.ok ? await shiftsRes.json() : [];
-      const rawProposals = proposalsRes && proposalsRes.ok ? await proposalsRes.json() : [];
+          const rawGyms = gymsRes && gymsRes.ok ? await gymsRes.json() : [];
+          const rawInstructors = instructorsRes && instructorsRes.ok ? await instructorsRes.json() : [];
+          const rawShifts = shiftsRes && shiftsRes.ok ? await shiftsRes.json() : [];
+          const rawProposals = proposalsRes && proposalsRes.ok ? await proposalsRes.json() : [];
 
-      // Garante que todo turno possui maxRate, rate, title e data formatada válidos
-      const shifts: Shift[] = rawShifts.map((s: any) => {
-        const rateVal = Number(s.maxRate ?? s.rate ?? 45);
-        return {
-          ...s,
-          rate: rateVal,
-          maxRate: rateVal,
-          title: s.title || `${s.modality || "Aula"} - Aula`,
-          dateFormatted: s.dateFormatted || `${formatDateDDMMAAAA(s.date)} · ${s.startTime} – ${s.endTime}`
-        };
-      });
+          const localInstructors = get().instructors || [];
+          const localGyms = get().gyms || [];
+          const localShifts = get().shifts || [];
+          const localProposals = get().proposals || [];
 
-      // Filtra instrutores ativos e válidos
-      const instructors = rawInstructors.filter(
-        (i: any) => !i.isDeleted && i.isActive !== false && !i.name?.toLowerCase().includes("josé da silva") && i.cref !== "12345/ES"
-      );
-      // Remove propostas órfãs ou de instrutores inexistentes
-      const proposals = rawProposals.filter((p: any) =>
-        instructors.some((i: any) => i.id === p.instructorId)
-      );
+          // Garante que todo turno possui maxRate, rate, title e data formatada válidos
+          const fetchedShifts: Shift[] = rawShifts.map((s: any) => {
+            const rateVal = Number(s.maxRate ?? s.rate ?? 45);
+            return {
+              ...s,
+              rate: rateVal,
+              maxRate: rateVal,
+              title: s.title || `${s.modality || "Aula"} - Aula`,
+              dateFormatted: s.dateFormatted || `${formatDateDDMMAAAA(s.date)} · ${s.startTime} – ${s.endTime}`
+            };
+          });
 
-      // Recupera cache local caso o backend esteja em cold start ou em atualização
-      let cachedGym: any = null;
-      let cachedInstructor: any = null;
-      try {
-        if (typeof window !== "undefined") {
-          const storedG = localStorage.getItem("trainermatch_gym_cache");
-          if (storedG) cachedGym = JSON.parse(storedG);
-          const storedI = localStorage.getItem("trainermatch_instructor_cache");
-          if (storedI) cachedInstructor = JSON.parse(storedI);
-        }
-      } catch (e) {}
+          // Resiliência de turnos e propostas (nunca substitui por vazio se o backend falhar)
+          const shifts = fetchedShifts.length > 0 ? fetchedShifts : (localShifts.length > 0 ? localShifts : INITIAL_SHIFTS);
+          const proposals = rawProposals.length > 0 ? rawProposals : (localProposals.length > 0 ? localProposals : INITIAL_PROPOSALS);
 
-      if (sessionUser) {
-        const userGymId = sessionUser.role === "academia" && sessionUser.gym?.id
-          ? sessionUser.gym.id
-          : (sessionUser.role === "academia" ? (get().activeGymId || gyms[0]?.id || "") : "");
-        const userInstructorId = sessionUser.role === "professor" && sessionUser.instructor?.id
-          ? sessionUser.instructor.id
-          : (sessionUser.role === "professor" ? (get().activeInstructorId || instructors[0]?.id || "") : "");
-
-        let mergedInstructors = sessionUser.instructor
-          ? [sessionUser.instructor, ...instructors.filter((i: any) => i.id !== sessionUser.instructor.id)]
-          : instructors;
-
-        if (cachedInstructor) {
-          mergedInstructors = mergedInstructors.map((i: any) =>
-            i.id === cachedInstructor.id || i.id === userInstructorId ? { ...i, ...cachedInstructor } : i
+          // Filtra instrutores ativos do banco
+          const apiInstructors = rawInstructors.filter(
+            (i: any) => !i.isDeleted && i.isActive !== false
           );
+
+          // Mescla instrutores: API + local (preservando edições locais de perfil, foto e disponibilidade)
+          let mergedInstructors = apiInstructors.length > 0 ? apiInstructors : (localInstructors.length > 0 ? localInstructors : MOCK_INSTRUCTORS);
+          if (localInstructors.length > 0 && apiInstructors.length > 0) {
+            mergedInstructors = apiInstructors.map((apiInst: any) => {
+              const loc = localInstructors.find((li) => li.id === apiInst.id);
+              if (!loc) return apiInst;
+              return {
+                ...apiInst,
+                ...loc,
+                // Prioriza disponibilidade e modalidades que foram salvas localmente
+                availability: loc.availability && loc.availability.length > 0 ? loc.availability : apiInst.availability,
+                modalities: loc.modalities && loc.modalities.length > 0 ? loc.modalities : apiInst.modalities,
+                avatar: loc.avatar || apiInst.avatar,
+                phone: loc.phone || apiInst.phone,
+                email: loc.email || apiInst.email,
+                name: loc.name || apiInst.name,
+                hourlyRate: loc.hourlyRate || apiInst.hourlyRate || 45
+              };
+            });
+            for (const loc of localInstructors) {
+              if (!mergedInstructors.some((m: any) => m.id === loc.id)) {
+                mergedInstructors.push(loc);
+              }
+            }
+          }
+
+          // Mescla academias
+          const apiGyms = rawGyms.filter((g: any) => !g.isDeleted);
+          let mergedGyms = apiGyms.length > 0 ? apiGyms : (localGyms.length > 0 ? localGyms : MOCK_GYMS);
+          if (localGyms.length > 0 && apiGyms.length > 0) {
+            mergedGyms = apiGyms.map((apiG: any) => {
+              const loc = localGyms.find((lg) => lg.id === apiG.id);
+              return loc ? { ...apiG, ...loc } : apiG;
+            });
+            for (const loc of localGyms) {
+              if (!mergedGyms.some((m: any) => m.id === loc.id)) {
+                mergedGyms.push(loc);
+              }
+            }
+          }
+
+          // Recupera cache local de emergência
+          let cachedGym: any = null;
+          let cachedInstructor: any = null;
+          try {
+            if (typeof window !== "undefined") {
+              const storedG = localStorage.getItem("trainermatch_gym_cache");
+              if (storedG) cachedGym = JSON.parse(storedG);
+              const storedI = localStorage.getItem("trainermatch_instructor_cache");
+              if (storedI) cachedInstructor = JSON.parse(storedI);
+            }
+          } catch (e) {}
+
+          if (cachedInstructor) {
+            mergedInstructors = mergedInstructors.map((i: any) =>
+              i.id === cachedInstructor.id || i.id === get().activeInstructorId ? { ...i, ...cachedInstructor } : i
+            );
+          }
+          if (cachedGym) {
+            mergedGyms = mergedGyms.map((g: any) =>
+              g.id === cachedGym.id || g.id === get().activeGymId ? { ...g, ...cachedGym } : g
+            );
+          }
+
+          if (sessionUser) {
+            const userGymId = sessionUser.role === "academia" && sessionUser.gym?.id
+              ? sessionUser.gym.id
+              : (sessionUser.role === "academia" ? (get().activeGymId || mergedGyms[0]?.id || "") : "");
+            const userInstructorId = sessionUser.role === "professor" && sessionUser.instructor?.id
+              ? sessionUser.instructor.id
+              : (sessionUser.role === "professor" ? (get().activeInstructorId || mergedInstructors[0]?.id || "") : "");
+
+            if (sessionUser.instructor) {
+              mergedInstructors = [
+                sessionUser.instructor,
+                ...mergedInstructors.filter((i: any) => i.id !== sessionUser.instructor.id)
+              ];
+            }
+            if (sessionUser.gym) {
+              mergedGyms = [
+                sessionUser.gym,
+                ...mergedGyms.filter((g: any) => g.id !== sessionUser.gym.id)
+              ];
+            }
+
+            const effectiveEmail = cachedGym?.email || cachedInstructor?.email || sessionUser.email || get().userEmail;
+            const effectiveName = cachedGym?.name || cachedInstructor?.name || sessionUser.name || get().userName;
+
+            set({
+              isLoaded: true,
+              isAuthenticated: true,
+              userEmail: effectiveEmail,
+              userName: effectiveName,
+              currentRole: sessionUser.role,
+              activeGymId: userGymId || get().activeGymId,
+              activeInstructorId: userInstructorId || get().activeInstructorId,
+              gymPlan: sessionUser.gym?.plan || get().gymPlan || "gratis",
+              gyms: mergedGyms,
+              instructors: mergedInstructors,
+              shifts,
+              proposals
+            });
+          } else {
+            // Usuário sem sessão ativa no banco, preserva credenciais locais salvas no persist
+            set({
+              isLoaded: true,
+              gyms: mergedGyms,
+              instructors: mergedInstructors,
+              shifts,
+              proposals
+            });
+          }
+        } catch (err) {
+          console.error("Erro ao sincronizar com backend:", err);
+          set({ isLoaded: true });
         }
-
-        let mergedGyms = sessionUser.gym
-          ? [sessionUser.gym, ...gyms.filter((g: any) => g.id !== sessionUser.gym.id)]
-          : gyms;
-
-        if (cachedGym) {
-          mergedGyms = mergedGyms.map((g: any) =>
-            g.id === cachedGym.id || g.id === userGymId ? { ...g, ...cachedGym } : g
-          );
-        }
-
-        const effectiveEmail = cachedGym?.email || cachedInstructor?.email || sessionUser.email;
-        const effectiveName = cachedGym?.name || cachedInstructor?.name || sessionUser.name;
-
-        set({
-          isLoaded: true,
-          isAuthenticated: true,
-          userEmail: effectiveEmail,
-          userName: effectiveName,
-          currentRole: sessionUser.role,
-          activeGymId: userGymId,
-          activeInstructorId: userInstructorId,
-          gymPlan: sessionUser.gym?.plan || "gratis",
-          gyms: mergedGyms,
-          instructors: mergedInstructors,
-          shifts,
-          proposals
-        });
-      } else {
-        let mergedGyms = gyms;
-        if (cachedGym) {
-          mergedGyms = mergedGyms.map((g: any) => (g.id === cachedGym.id ? { ...g, ...cachedGym } : g));
-        }
-        let mergedInstructors = instructors;
-        if (cachedInstructor) {
-          mergedInstructors = mergedInstructors.map((i: any) => (i.id === cachedInstructor.id ? { ...i, ...cachedInstructor } : i));
-        }
-
-        set({
-          isLoaded: true,
-          isAuthenticated: false,
-          gyms: mergedGyms,
-          instructors: mergedInstructors,
-          shifts,
-          proposals
-        });
-      }
-    } catch (err) {
-      console.error("Erro ao sincronizar com backend:", err);
-      set({ isLoaded: true });
-    }
-  },
+      },
 
   login: async (email, passwordOrRole, maybeRole) => {
     try {
@@ -858,17 +902,47 @@ export const useAppStore = create<AppState>((set, get) => ({
   setRole: (role) => set({ currentRole: role }),
 
   updateInstructorAvailability: (instructorId, availability) => {
+    const targetId = instructorId || get().activeInstructorId || get().instructors[0]?.id;
+    if (!targetId) return;
+
     set((state) => ({
       instructors: state.instructors.map((inst) =>
-        inst.id === instructorId ? { ...inst, availability } : inst
+        inst.id === targetId || inst.id === get().activeInstructorId ? { ...inst, availability } : inst
       )
     }));
 
-    fetch(`/api/instructors/${instructorId}`, {
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("trainermatch_instructor_cache") || "{}";
+        const parsed = JSON.parse(stored);
+        localStorage.setItem(
+          "trainermatch_instructor_cache",
+          JSON.stringify({ ...parsed, availability, id: targetId })
+        );
+      }
+    } catch (e) {}
+
+    fetch(`/api/instructors/${targetId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ availability })
-    }).catch((err) => console.error("Erro ao persistir disponibilidade:", err));
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const json = await res.json();
+          if (json.instructor?.id) {
+            set((state) => ({
+              activeInstructorId: json.instructor.id,
+              instructors: state.instructors.map((inst) =>
+                inst.id === targetId || inst.id === json.instructor.id
+                  ? { ...inst, ...json.instructor }
+                  : inst
+              )
+            }));
+          }
+        }
+      })
+      .catch((err) => console.error("Erro ao persistir disponibilidade:", err));
   },
 
   updateInstructorProfile: (instructorId, data) => {
@@ -877,7 +951,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set((state) => ({
       instructors: state.instructors.map((inst) =>
-        inst.id === targetId ? { ...inst, ...data } : inst
+        inst.id === targetId || inst.id === get().activeInstructorId ? { ...inst, ...data } : inst
       ),
       ...(data.name ? { userName: data.name } : {}),
       ...(data.email ? { userEmail: data.email } : {})
@@ -901,8 +975,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           const json = await res.json();
           if (json.instructor) {
             set((state) => ({
+              activeInstructorId: json.instructor.id,
               instructors: state.instructors.map((inst) =>
-                inst.id === targetId ? { ...inst, ...json.instructor } : inst
+                inst.id === targetId || inst.id === json.instructor.id ? { ...inst, ...json.instructor } : inst
               )
             }));
           }
@@ -1445,7 +1520,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }).catch((err) => console.error("Erro ao cadastrar múltiplos turnos:", err));
   },
 
-  deleteShift: (shiftId) => {
+  deleteShift: (shiftId, force) => {
     const shift = get().shifts.find((s) => s.id === shiftId);
     if (!shift) {
       return { success: false, error: "Horário não encontrado." };
@@ -1455,8 +1530,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const hasActiveContract = (shift.status === "confirmado") &&
       !!confirmedInst && !confirmedInst.isDeleted && (confirmedInst as any).isActive !== false;
 
-    // Apenas impede a exclusão se houver um professor ativo contratado com aula no futuro
-    if (hasActiveContract && canCancelShift(shift).canCancel) {
+    // Apenas impede a exclusão se houver um professor ativo contratado com aula no futuro e não for force
+    if (!force && hasActiveContract && canCancelShift(shift).canCancel) {
       return {
         success: false,
         error: "Não é possível excluir este horário pois já existe um professor contratado. Utilize a opção 'Cancelar Aula Contratada' primeiro."
@@ -1504,4 +1579,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       })
     }));
   }
-}));
+}),
+    {
+      name: "trainermatch-app-storage",
+      partialize: (state) => ({
+        instructors: state.instructors,
+        gyms: state.gyms,
+        shifts: state.shifts,
+        proposals: state.proposals,
+        activeInstructorId: state.activeInstructorId,
+        activeGymId: state.activeGymId,
+        userEmail: state.userEmail,
+        userName: state.userName,
+        isAuthenticated: state.isAuthenticated,
+        currentRole: state.currentRole,
+        gymPlan: state.gymPlan,
+        isDarkMode: state.isDarkMode
+      })
+    }
+  )
+);
+

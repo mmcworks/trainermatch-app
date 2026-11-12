@@ -56,12 +56,12 @@ export const PROFESSOR_QUALITY_BADGES: QualityBadge[] = [
 ];
 
 export const GYM_QUALITY_BADGES: QualityBadge[] = [
-  { id: "equipe", label: "Equipe Acolhedora", iconName: "Smile" },
-  { id: "aparelhos", label: "Aparelhos Conservados", iconName: "Dumbbell" },
-  { id: "pix_rapido", label: "Pagamento Imediato no PIX", iconName: "Zap" },
-  { id: "organizacao", label: "Rotina Organizada", iconName: "ClipboardCheck" },
-  { id: "limpeza", label: "Ambiente Limpo", iconName: "Sparkles" },
-  { id: "clima", label: "Clima Excelente", iconName: "Sun" },
+  { id: "pontual", label: "Pontual", iconName: "Clock" },
+  { id: "atencioso", label: "Atencioso(a)", iconName: "Heart" },
+  { id: "tecnica", label: "Excelente Técnica", iconName: "Award" },
+  { id: "postura", label: "Postura exemplar", iconName: "ShieldCheck" },
+  { id: "energia", label: "Motivação e Energia", iconName: "Zap" },
+  { id: "apresentacao", label: "Boa apresentação", iconName: "Sparkles" },
 ];
 
 export interface TimeInterval {
@@ -262,6 +262,32 @@ export function maskPhone(value: string): string {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
 }
 
+export function getTodayDateString(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function isTimeInPastForDate(dateStr: string, timeStr: string): boolean {
+  if (!dateStr || !timeStr) return false;
+  const todayStr = getTodayDateString();
+
+  // Se a data selecionada for anterior a hoje
+  if (dateStr < todayStr) return true;
+  // Se for uma data futura após hoje, o horário é válido
+  if (dateStr > todayStr) return false;
+
+  // Se for o dia de hoje, valida se o horário já passou
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const [h, m] = timeStr.split(":").map(Number);
+  const targetMinutes = (h || 0) * 60 + (m || 0);
+
+  return targetMinutes <= currentMinutes;
+}
+
 export const DEFAULT_WEEK_DAYS = [
   { dayOfWeek: 1, dayName: "Segunda-feira", shortDay: "Seg" },
   { dayOfWeek: 2, dayName: "Terça-feira", shortDay: "Ter" },
@@ -290,9 +316,9 @@ export const MOCK_GYMS: Gym[] = [
       pagamento: 5.0
     },
     badges: [
-      "Pagamento Imediato no PIX",
-      "Equipe Acolhedora",
-      "Ambiente Limpo"
+      "Pontual",
+      "Atencioso(a)",
+      "Boa apresentação"
     ],
     phone: "(27) 99812-4455",
     email: "contato@movafit.com.br",
@@ -332,9 +358,9 @@ export const MOCK_GYMS: Gym[] = [
       pagamento: 5.0
     },
     badges: [
-      "Aparelhos Conservados",
-      "Clima Excelente",
-      "Pagamento Imediato no PIX"
+      "Excelente Técnica",
+      "Postura exemplar",
+      "Motivação e Energia"
     ],
     phone: "(27) 99771-3322",
     email: "gerencia@ponto1.com.br",
@@ -366,8 +392,8 @@ export const MOCK_GYMS: Gym[] = [
       pagamento: 4.8
     },
     badges: [
-      "Rotina Organizada",
-      "Equipe Acolhedora"
+      "Pontual",
+      "Atencioso(a)"
     ],
     phone: "(27) 99655-1100",
     email: "contato@topfitnessvv.com.br",
