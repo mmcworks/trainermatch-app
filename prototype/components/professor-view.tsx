@@ -621,8 +621,14 @@ export const ProfessorView: React.FC = () => {
         <main className="p-5 space-y-4 animate-fade-in">
           {/* 1. Topo: Saudação, Avatar e Localização */}
           <div className="flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full overflow-hidden bg-slate-100 dark:bg-navy-800 shadow-xs border-2 border-white dark:border-navy-700 flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => setActiveTab("perfil")}
+              className="flex items-center gap-3 text-left group hover:opacity-85 active:scale-[0.98] transition-all cursor-pointer focus:outline-none"
+              title="Ver meu perfil"
+              aria-label="Ir para a tela de perfil"
+            >
+              <div className="w-11 h-11 rounded-full overflow-hidden bg-slate-100 dark:bg-navy-800 shadow-xs border-2 border-white dark:border-navy-700 flex items-center justify-center group-hover:ring-2 group-hover:ring-primary/50 transition-all">
                 {currentInstructor.avatar ? (
                   <img src={currentInstructor.avatar} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
@@ -631,9 +637,11 @@ export const ProfessorView: React.FC = () => {
               </div>
               <div>
                 <span className="text-[11px] text-muted dark:text-slate-400 block leading-none">Olá, bem-vindo!</span>
-                <h1 className="text-base font-black text-navy-900 dark:text-white mt-0.5">{currentInstructor.name}</h1>
+                <h1 className="text-base font-black text-navy-900 dark:text-white mt-0.5 group-hover:text-primary transition-colors">
+                  {currentInstructor.displayName || currentInstructor.name}
+                </h1>
               </div>
-            </div>
+            </button>
 
             {/* Seletor de Raio Interativo no Topo (10km a 100km) */}
             <div className="flex items-center gap-1 bg-card dark:bg-navy-800 p-1 rounded-full shadow-soft border border-slate-100 dark:border-slate-700/60">

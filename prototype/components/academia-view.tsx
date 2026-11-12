@@ -677,8 +677,14 @@ export const AcademiaView: React.FC = () => {
         
         {/* Header Mobile da Academia */}
         <header className="p-4 bg-card/95 dark:bg-navy-800/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-700/60 flex justify-between items-center z-10 flex-shrink-0 sticky top-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-navy-900 p-0.5 border border-slate-200 dark:border-slate-700 flex-shrink-0 overflow-hidden shadow-xs flex items-center justify-center">
+          <button
+            type="button"
+            onClick={() => setActiveMenu("perfil")}
+            className="flex items-center gap-2.5 min-w-0 text-left group hover:opacity-85 active:scale-[0.98] transition-all cursor-pointer focus:outline-none"
+            title="Ver perfil da academia"
+            aria-label="Ir para a tela de perfil da academia"
+          >
+            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-navy-900 p-0.5 border border-slate-200 dark:border-slate-700 flex-shrink-0 overflow-hidden shadow-xs flex items-center justify-center group-hover:ring-2 group-hover:ring-primary/50 transition-all">
               {profileLogo ? (
                 <img src={profileLogo} alt="Logo" className="w-full h-full object-cover rounded-full" />
               ) : (
@@ -687,9 +693,9 @@ export const AcademiaView: React.FC = () => {
             </div>
             <div className="truncate">
               <span className="text-[10px] text-muted dark:text-slate-400 font-bold block leading-none">Academia</span>
-              <h2 className="font-black text-sm text-navy-900 dark:text-white truncate mt-0.5">{profileName}</h2>
+              <h2 className="font-black text-sm text-navy-900 dark:text-white truncate mt-0.5 group-hover:text-primary transition-colors">{profileName}</h2>
             </div>
-          </div>
+          </button>
 
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
@@ -2240,10 +2246,17 @@ export const AcademiaView: React.FC = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-extrabold text-navy-900 dark:text-white">{currentGym.name}</h1>
-                  <span className="bg-primary/10 text-primary text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                    Unidade Ativa
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMenu("perfil")}
+                    className="text-left group flex items-center gap-2 hover:opacity-85 active:scale-[0.98] transition-all cursor-pointer focus:outline-none"
+                    title="Editar dados da academia"
+                  >
+                    <h1 className="text-2xl font-extrabold text-navy-900 dark:text-white group-hover:text-primary transition-colors">{currentGym.name}</h1>
+                    <span className="bg-primary/10 text-primary text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                      Unidade Ativa
+                    </span>
+                  </button>
                 </div>
                 <p className="text-xs text-muted dark:text-slate-400 mt-0.5">
                   {currentGym.neighborhood} · {currentGym.city} — Gestão de Escala, Vagas e Contratações

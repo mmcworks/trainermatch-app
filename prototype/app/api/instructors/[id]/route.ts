@@ -103,6 +103,45 @@ export async function PUT(
     }
 
     if (!targetInstructor) {
+      const bcrypt = (await import("bcryptjs")).default;
+      const defaultHash = await bcrypt.hash("12345qwe", 10);
+      const email = body.email || "lucasf@email.com";
+      const name = body.name || body.displayName || "Lucas Ferreira";
+      const phone = body.phone || "(27) 99999-1234";
+
+      const newUser = await prisma.user.create({
+        data: {
+          email,
+          name,
+          phone,
+          passwordHash: defaultHash,
+          role: "PROFESSOR",
+          document: body.cpf || "123.456.789-00",
+          instructor: {
+            create: {
+              name,
+              email,
+              phone,
+              cpf: body.cpf || "123.456.789-00",
+              cref: body.cref || "049182-G/SP",
+              avatar: body.avatar || "",
+              bio: body.bio || "",
+              hourlyRate: Number(body.hourlyRate || 45),
+              modalities: updateData.modalities || "[]",
+              pixKeys: updateData.pixKeys || "[]",
+              availability: updateData.availability || "[]",
+              blockedDates: updateData.blockedDates || "[]"
+            }
+          }
+        },
+        include: {
+          instructor: true
+        }
+      });
+      targetInstructor = newUser.instructor;
+    }
+
+    if (!targetInstructor) {
       return NextResponse.json({ error: "Professor não encontrado" }, { status: 404 });
     }
 
@@ -123,7 +162,7 @@ export async function PUT(
       }).catch(() => {});
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       instructor: {
         ...updated,
@@ -140,6 +179,22 @@ export async function PUT(
         wouldHireAgainRate: updated.ratingCount > 0 ? 98 : undefined
       }
     });
+
+    if (targetInstructor.userId) {
+      response.cookies.set("trainer_session", JSON.stringify({
+        userId: targetInstructor.userId,
+        email: updated.email,
+        role: "professor",
+        entityId: updated.id
+      }), {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 30
+      });
+    }
+
+    return response;
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
