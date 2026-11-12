@@ -472,7 +472,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                   <input
                     type="tel"
                     inputMode="numeric"
-                    pattern="[0-9]*"
                     required
                     maxLength={6}
                     value={verificationCode}
@@ -613,7 +612,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                 <input
                   type="tel"
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   required
                   value={registerCpfOrCnpj}
                   onChange={(e) => {
@@ -634,7 +632,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                 <input
                   type={selectedRole === "professor" ? "text" : "tel"}
                   inputMode={selectedRole === "professor" ? undefined : "numeric"}
-                  pattern={selectedRole === "professor" ? undefined : "[0-9]*"}
                   required
                   value={selectedRole === "professor" ? registerCref : registerPhone}
                   onChange={(e) => selectedRole === "professor" ? setRegisterCref(e.target.value) : setRegisterPhone(maskPhone(e.target.value))}

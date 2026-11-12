@@ -3296,7 +3296,6 @@ export const ProfessorView: React.FC = () => {
                         <input
                           type="tel"
                           inputMode="numeric"
-                          pattern="[0-9]*"
                           maxLength={6}
                           value={pwdCodeInput}
                           onChange={(e) => {
@@ -3778,7 +3777,6 @@ export const ProfessorView: React.FC = () => {
                 <input
                   type="tel"
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   value={editPhone}
                   onChange={(e) => setEditPhone(maskPhone(e.target.value))}
                   placeholder="(00) 00000-0000"
@@ -3899,7 +3897,6 @@ export const ProfessorView: React.FC = () => {
                 <input
                   type={editPixType === "cpf" || editPixType === "phone" ? "tel" : editPixType === "email" ? "email" : "text"}
                   inputMode={editPixType === "cpf" || editPixType === "phone" ? "numeric" : undefined}
-                  pattern={editPixType === "cpf" || editPixType === "phone" ? "[0-9]*" : undefined}
                   maxLength={editPixType === "cpf" ? 14 : editPixType === "phone" ? 15 : undefined}
                   value={editPixKey}
                   onChange={(e) => {
@@ -4501,7 +4498,6 @@ export const ProfessorView: React.FC = () => {
                 <input
                   type="tel"
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   maxLength={14}
                   value={editCpf}
                   onChange={(e) => setEditCpf(maskCpf(e.target.value))}
@@ -5994,7 +5990,6 @@ export const ProfessorView: React.FC = () => {
                         <input
                           type="number"
                           inputMode="numeric"
-                          pattern="[0-9]*"
                           min={20}
                           value={offerHourlyRate || ""}
                           onKeyDown={blockNonNumericKeyDown}
@@ -6059,7 +6054,6 @@ export const ProfessorView: React.FC = () => {
                               <input
                                 type="number"
                                 inputMode="numeric"
-                                pattern="[0-9]*"
                                 min={15}
                                 max={Math.max(15, offerHourlyRate - 1)}
                                 value={offerMinHourlyRate || ""}

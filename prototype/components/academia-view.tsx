@@ -1772,7 +1772,6 @@ export const AcademiaView: React.FC = () => {
                             <input
                               type="number"
                               inputMode="numeric"
-                              pattern="[0-9]*"
                               min={0}
                               value={rate}
                               onKeyDown={blockNonNumericKeyDown}
@@ -1803,7 +1802,6 @@ export const AcademiaView: React.FC = () => {
                           <input
                             type="number"
                             inputMode="numeric"
-                            pattern="[0-9]*"
                             min={0}
                             value={pricingPeakHourAddition}
                             onKeyDown={blockNonNumericKeyDown}
@@ -1824,7 +1822,6 @@ export const AcademiaView: React.FC = () => {
                           <input
                             type="number"
                             inputMode="numeric"
-                            pattern="[0-9]*"
                             min={0}
                             value={pricingWeekendAddition}
                             onKeyDown={blockNonNumericKeyDown}
@@ -4521,7 +4518,6 @@ export const AcademiaView: React.FC = () => {
                       <input
                         type="tel"
                         inputMode="numeric"
-                        pattern="[0-9]*"
                         maxLength={18}
                         value={profileCnpj}
                         onChange={(e) => setProfileCnpj(maskCnpj(e.target.value))}
@@ -4534,7 +4530,6 @@ export const AcademiaView: React.FC = () => {
                       <input
                         type="tel"
                         inputMode="numeric"
-                        pattern="[0-9]*"
                         value={profilePhone}
                         onChange={(e) => setProfilePhone(maskPhone(e.target.value))}
                         placeholder="(00) 00000-0000"
@@ -4661,7 +4656,6 @@ export const AcademiaView: React.FC = () => {
                             <input
                               type="number"
                               inputMode="numeric"
-                              pattern="[0-9]*"
                               min={0}
                               value={rate}
                               onKeyDown={blockNonNumericKeyDown}
@@ -4700,7 +4694,6 @@ export const AcademiaView: React.FC = () => {
                           <input
                             type="number"
                             inputMode="numeric"
-                            pattern="[0-9]*"
                             min={0}
                             value={pricingPeakHourAddition}
                             onKeyDown={blockNonNumericKeyDown}
@@ -4725,7 +4718,6 @@ export const AcademiaView: React.FC = () => {
                           <input
                             type="number"
                             inputMode="numeric"
-                            pattern="[0-9]*"
                             min={0}
                             value={pricingWeekendAddition}
                             onKeyDown={blockNonNumericKeyDown}
@@ -4769,7 +4761,6 @@ export const AcademiaView: React.FC = () => {
                       <input
                         type="tel"
                         inputMode="numeric"
-                        pattern="[0-9]*"
                         value={profileManagerPhone}
                         onChange={(e) => setProfileManagerPhone(maskPhone(e.target.value))}
                         placeholder="(00) 00000-0000"
@@ -5040,7 +5031,6 @@ export const AcademiaView: React.FC = () => {
                       <input
                         type="number"
                         inputMode="numeric"
-                        pattern="[0-9]*"
                         min={0}
                         value={newMaxRate}
                         onKeyDown={blockNonNumericKeyDown}
@@ -5325,7 +5315,6 @@ export const AcademiaView: React.FC = () => {
                       <input
                         type="number"
                         inputMode="numeric"
-                        pattern="[0-9]*"
                         min={0}
                         value={newMaxRate}
                         onKeyDown={blockNonNumericKeyDown}
@@ -5583,7 +5572,6 @@ export const AcademiaView: React.FC = () => {
                         <input
                           type="number"
                           inputMode="numeric"
-                          pattern="[0-9]*"
                           min={20}
                           value={hireRate || ""}
                           onKeyDown={blockNonNumericKeyDown}
@@ -5648,7 +5636,6 @@ export const AcademiaView: React.FC = () => {
                               <input
                                 type="number"
                                 inputMode="numeric"
-                                pattern="[0-9]*"
                                 min={15}
                                 max={Math.max(15, hireRate - 1)}
                                 value={hireMinNegotiableRate || ""}
