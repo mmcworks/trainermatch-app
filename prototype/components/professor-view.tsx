@@ -5122,7 +5122,7 @@ export const ProfessorView: React.FC = () => {
       </AnimatedModal>
 
       {/* ===================== BARRA DE NAVEGAÇÃO INFERIOR ===================== */}
-      <nav aria-label="Navegação do Professor" className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 px-6 py-3 flex justify-between items-center z-40 transition-colors duration-200">
+      <nav aria-label="Navegação do Professor" className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] flex justify-between items-center z-40 transition-colors duration-200">
         <button
           onClick={() => setActiveTab("inicio")}
           className={`flex flex-col items-center gap-1 text-xs font-semibold transition-colors ${

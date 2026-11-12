@@ -2019,7 +2019,7 @@ export const AcademiaView: React.FC = () => {
           {/* Bottom Bar Mobile Fixa (Somente Celular: < 768px) */}
           <nav
             aria-label="Navegação da Academia Mobile"
-            className="fixed bottom-0 left-0 right-0 max-w-md mx-auto md:hidden z-40 bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-700/60 px-4 py-3 flex justify-around items-center transition-colors duration-200"
+            className="fixed bottom-0 left-0 right-0 max-w-md mx-auto md:hidden z-40 bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-700/60 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] flex justify-around items-center transition-colors duration-200"
           >
             <button
               onClick={() => setActiveMenu("turnos")}
