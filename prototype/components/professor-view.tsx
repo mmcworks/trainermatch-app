@@ -869,10 +869,10 @@ export const ProfessorView: React.FC = () => {
                     >
                       {/* Logotipo da Academia ou Ícone Fallback com Fundo Redondo */}
                       <div className="w-14 h-14 rounded-full bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-slate-700 p-0.5 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-xs">
-                        {gym.logo ? (
+                        {gym?.logo ? (
                           <img
                             src={gym.logo}
-                            alt={gym.name}
+                            alt={gym.name || "Academia"}
                             className="w-full h-full object-cover rounded-full"
                             onError={(e) => {
                               // Se der erro de imagem, oculta e exibe ícone
@@ -889,23 +889,23 @@ export const ProfessorView: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start">
                           <h3 className="text-sm font-black text-navy-900 dark:text-white truncate">
-                            {gym.name}
+                            {gym?.name || "Academia"}
                           </h3>
                           <div
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedGymDetail(gym);
+                              if (gym) setSelectedGymDetail(gym);
                             }}
                             className="flex items-center gap-1 bg-slate-50 dark:bg-navy-900 px-2 py-0.5 rounded-full text-xs font-bold text-navy-900 dark:text-slate-200 border border-slate-100 dark:border-slate-700 cursor-pointer hover:border-amber-400 transition-colors"
                             title="Ver avaliações e pilares da academia"
                           >
                             <Star size={11} className="text-amber-400 fill-amber-400" strokeWidth={1.5} />
-                            <span>{gym.rating.toFixed(1)}</span>
+                            <span>{gym?.rating ? gym.rating.toFixed(1) : "5.0"}</span>
                           </div>
                         </div>
 
                         <p className="text-xs text-muted dark:text-slate-400 mt-0.5">
-                          {gym.neighborhood} · <span className="text-navy-900 dark:text-slate-200 font-medium">{shift.modality}</span>
+                          {gym?.neighborhood || gym?.city || "Unidade"} · <span className="text-navy-900 dark:text-slate-200 font-medium">{shift.modality}</span>
                         </p>
 
                         {/* Destaque do Horário */}
@@ -1014,11 +1014,15 @@ export const ProfessorView: React.FC = () => {
               {/* Logo + Título + Nota */}
               <div className="flex gap-3.5 items-center">
                 <div className="w-14 h-14 rounded-full bg-white dark:bg-navy-900 p-0.5 border border-slate-100 dark:border-slate-700 shadow-sm flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  <img
-                    src={detailGym.logo}
-                    alt={detailGym.name}
-                    className="w-full h-full object-cover rounded-full"
-                  />
+                  {detailGym?.logo ? (
+                    <img
+                      src={detailGym.logo}
+                      alt={detailGym.name || "Academia"}
+                      className="w-full h-full object-cover rounded-full"
+                    />
+                  ) : (
+                    <Building2 className="w-7 h-7 text-primary" strokeWidth={1.5} />
+                  )}
                 </div>
                 <div className="flex-1">
                   <h2 className="text-lg font-black text-navy-900 dark:text-white leading-tight">
@@ -1417,11 +1421,15 @@ export const ProfessorView: React.FC = () => {
                     {/* Cabeçalho do Turno: Logo, Nome da Academia e Destaque ao Dia */}
                     <div className="flex gap-3 items-center pb-3 border-b border-slate-100 dark:border-slate-700/60">
                       <div className="w-12 h-12 rounded-full bg-slate-50 dark:bg-navy-900 p-0.5 border border-slate-100 dark:border-slate-700 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-xs">
-                        <img src={gym?.logo} alt="Gym" className="w-full h-full object-cover rounded-full" />
+                        {gym?.logo ? (
+                          <img src={gym.logo} alt={gym.name || "Academia"} className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <Building2 className="w-6 h-6 text-primary" strokeWidth={1.5} />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-bold text-navy-900 dark:text-white truncate">{gym?.name}</h3>
-                        <p className="text-xs text-muted dark:text-slate-400">{shift?.modality} · {gym?.neighborhood}</p>
+                        <h3 className="text-sm font-bold text-navy-900 dark:text-white truncate">{gym?.name || "Academia"}</h3>
+                        <p className="text-xs text-muted dark:text-slate-400">{shift?.modality || "Aula"} · {gym?.neighborhood || gym?.city || "Unidade"}</p>
                       </div>
                     </div>
 

@@ -13,8 +13,6 @@ import {
   GymCriteriaBreakdown,
   MOCK_GYMS,
   MOCK_INSTRUCTORS,
-  INITIAL_SHIFTS,
-  INITIAL_PROPOSALS,
   formatDateDDMMAAAA,
   canCancelShift
 } from "./mock-data";
@@ -586,9 +584,55 @@ export const useAppStore = create<AppState>()(
             };
           });
 
-          // Resiliência de turnos e propostas (nunca substitui por vazio se o backend falhar)
-          const shifts = fetchedShifts.length > 0 ? fetchedShifts : (localShifts.length > 0 ? localShifts : INITIAL_SHIFTS);
-          const proposals = rawProposals.length > 0 ? rawProposals : (localProposals.length > 0 ? localProposals : INITIAL_PROPOSALS);
+          // Filtra e limpa turnos e propostas vindos do banco e do storage local
+          const isMockShift = (s: any) => {
+            if (!s || !s.id) return true;
+            const idStr = String(s.id);
+            if (/^shift-(cur|hist|fut|today|\d{1,2})(-.+)?$/.test(idStr)) return true;
+            if (s.gymId === "gym-1" || s.gymId === "gym-2" || s.gymId === "gym-3") return true;
+            return false;
+          };
+
+          const isMockProposal = (p: any) => {
+            if (!p || !p.id) return true;
+            const idStr = String(p.id);
+            if (/^prop-\d{1,2}$/.test(idStr)) return true;
+            if (p.shiftId && /^shift-(cur|hist|fut|today|\d{1,2})(-.+)?$/.test(String(p.shiftId))) return true;
+            return false;
+          };
+
+          const validFetchedShifts = fetchedShifts.filter((s) => !isMockShift(s));
+          const validRawProposals = rawProposals.filter((p: any) => !isMockProposal(p));
+
+          // Purga do storage local quaisquer turnos ou propostas mockadas legadas
+          const validLocalShifts = localShifts.filter((s) => !isMockShift(s));
+          const validLocalProposals = localProposals.filter((p) => !isMockProposal(p));
+
+          // Sincronização estrita de turnos (sem fallbacks para dados fictícios)
+          let shifts: Shift[] = [];
+          if (shiftsRes && shiftsRes.ok) {
+            shifts = validFetchedShifts;
+            for (const loc of validLocalShifts) {
+              if (!shifts.some((s) => s.id === loc.id)) {
+                shifts.push(loc);
+              }
+            }
+          } else {
+            shifts = validLocalShifts;
+          }
+
+          // Sincronização estrita de propostas (sem fallbacks para dados fictícios)
+          let proposals: Proposal[] = [];
+          if (proposalsRes && proposalsRes.ok) {
+            proposals = validRawProposals;
+            for (const loc of validLocalProposals) {
+              if (!proposals.some((p) => p.id === loc.id)) {
+                proposals.push(loc);
+              }
+            }
+          } else {
+            proposals = validLocalProposals;
+          }
 
           // Filtra instrutores ativos do banco
           const apiInstructors = rawInstructors.filter(

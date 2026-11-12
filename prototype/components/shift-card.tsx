@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Shift, Gym, formatDateDDMMAAAA } from "@/store/mock-data";
-import { Star, Clock, CheckCircle2 } from "lucide-react";
+import { Star, Clock, CheckCircle2, Building2 } from "lucide-react";
 
 interface ShiftCardProps {
   shift: Shift;
@@ -26,11 +26,15 @@ export const ShiftCard: React.FC<ShiftCardProps & { onOpenDetails?: () => void }
       <div className="flex gap-3.5 items-center">
         {/* Somente o Logotipo da Academia (Estilo Circular) */}
         <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 bg-slate-50 dark:bg-navy-900 border border-slate-100 dark:border-slate-700 p-0.5 flex items-center justify-center shadow-xs">
-          <img
-            src={gym.logo}
-            alt={gym.name}
-            className="w-full h-full object-cover rounded-full"
-          />
+          {gym?.logo ? (
+            <img
+              src={gym.logo}
+              alt={gym.name || "Academia"}
+              className="w-full h-full object-cover rounded-full"
+            />
+          ) : (
+            <Building2 className="w-7 h-7 text-primary" strokeWidth={1.5} />
+          )}
         </div>
 
         {/* Informações Centrais */}
