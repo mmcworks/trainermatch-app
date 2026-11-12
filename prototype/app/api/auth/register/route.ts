@@ -91,13 +91,13 @@ export async function POST(req: NextRequest) {
               email: cleanEmail,
               phone: phone || "",
               cpf: document || "",
-              cref: crefOrCnpj || "000000-G/ES",
+              cref: crefOrCnpj || "",
               avatar: logoOrAvatar || "",
-              bio: "Profissional de Educação Física registrado no CREF.",
+              bio: "",
               rating: 5.0,
               ratingCount: 0,
               hourlyRate: 45,
-              modalities: JSON.stringify(["Musculação", "Funcional"]),
+              modalities: JSON.stringify([]),
               pixKeys: JSON.stringify(document ? [{ id: "pix-1", type: "cpf", key: document, isDefault: true }] : []),
               availability: JSON.stringify([]) // 0 horários na grade!
             }

@@ -281,7 +281,7 @@ export const ProfessorView: React.FC = () => {
       }
       setEditFullName(rawInstructor.name || "");
       setEditDisplayName(rawInstructor.displayName || rawInstructor.name || "");
-      setEditBirthDate(rawInstructor.birthDate || "1994-08-15");
+      setEditBirthDate(rawInstructor.birthDate || "");
       setEditEmail(rawInstructor.email || "");
       setEditPhone(rawInstructor.phone || "");
       if (rawInstructor.pixKeys && rawInstructor.pixKeys.length > 0) {
@@ -302,7 +302,7 @@ export const ProfessorView: React.FC = () => {
       setEditPixKey("");
       setEditBank("");
       setEditModalities(rawInstructor.modalities || []);
-      setEditCpf(rawInstructor.cpf || "128.492.387-50");
+      setEditCpf(rawInstructor.cpf || "");
       if (rawInstructor.notificationsEnabled) {
         setNotifications(rawInstructor.notificationsEnabled);
       }
@@ -321,12 +321,24 @@ export const ProfessorView: React.FC = () => {
     diploma: { name: string; size: string; status: string } | null;
     certificates: Array<{ id: string; name: string; size: string; status: string }>;
   }>({
-    diploma: { name: "Diploma_Bacharelado_Educacao_Fisica.pdf", size: "1.8 MB", status: "Auditado ✓" },
-    certificates: [
-      { id: "cert-1", name: "Certificado_Ciclismo_Indoor_Spinning.pdf", size: "1.2 MB", status: "Auditado ✓" },
-      { id: "cert-2", name: "Certificado_Primeiros_Socorros_BLS.pdf", size: "850 KB", status: "Auditado ✓" }
-    ]
+    diploma: null,
+    certificates: []
   });
+
+  // Carrega e sincroniza documentos por ID de instrutor garantindo estado limpo para novos usuários
+  useEffect(() => {
+    if (!activeInstructorId) return;
+    try {
+      const stored = localStorage.getItem(`trainermatch_docs_${activeInstructorId}`);
+      if (stored) {
+        setProfessorDocuments(JSON.parse(stored));
+      } else {
+        setProfessorDocuments({ diploma: null, certificates: [] });
+      }
+    } catch (e) {
+      setProfessorDocuments({ diploma: null, certificates: [] });
+    }
+  }, [activeInstructorId]);
 
   const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>, type: "diploma" | "certificate") => {
     const file = e.target.files?.[0];
@@ -344,20 +356,24 @@ export const ProfessorView: React.FC = () => {
       : `${Math.round(file.size / 1024)} KB`;
 
     if (type === "diploma") {
-      setProfessorDocuments((prev) => ({
-        ...prev,
+      const nextState = {
+        ...professorDocuments,
         diploma: {
           name: file.name,
           size: fileSizeFormatted,
           status: "Em Análise pela Plataforma"
         }
-      }));
+      };
+      setProfessorDocuments(nextState);
+      if (activeInstructorId) {
+        try { localStorage.setItem(`trainermatch_docs_${activeInstructorId}`, JSON.stringify(nextState)); } catch (err) {}
+      }
       setProfileSuccessMsg("Diploma enviado com sucesso! Em análise pela equipe.");
     } else {
-      setProfessorDocuments((prev) => ({
-        ...prev,
+      const nextState = {
+        ...professorDocuments,
         certificates: [
-          ...prev.certificates,
+          ...professorDocuments.certificates,
           {
             id: `cert-${Date.now()}`,
             name: file.name,
@@ -365,7 +381,11 @@ export const ProfessorView: React.FC = () => {
             status: "Em Análise pela Plataforma"
           }
         ]
-      }));
+      };
+      setProfessorDocuments(nextState);
+      if (activeInstructorId) {
+        try { localStorage.setItem(`trainermatch_docs_${activeInstructorId}`, JSON.stringify(nextState)); } catch (err) {}
+      }
       setProfileSuccessMsg("Certificado adicionado com sucesso! Em análise.");
     }
     setTimeout(() => setProfileSuccessMsg(null), 3500);
@@ -2688,7 +2708,7 @@ export const ProfessorView: React.FC = () => {
                 <div className="min-w-0">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">Meus Dados</span>
                   <span className="text-[11px] text-muted dark:text-slate-400 block truncate">
-                    Nome completo, nome no app, nascimento, contato
+                    Nome completo, CPF, nascimento, contato
                   </span>
                 </div>
               </div>
@@ -2774,7 +2794,7 @@ export const ProfessorView: React.FC = () => {
               <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
             </button>
 
-            {/* Opção 4: Documentos */}
+            {/* Opção 4: Documentos Profissionais */}
             <button
               type="button"
               onClick={() => setShowDocumentsModal(true)}
@@ -2783,9 +2803,9 @@ export const ProfessorView: React.FC = () => {
               <div className="flex items-center gap-3.5 min-w-0">
                 <FileText size={20} strokeWidth={1.5} className="text-slate-800 dark:text-slate-200 shrink-0" />
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">Documentos</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">Documentos Profissionais</span>
                   <span className="text-[11px] text-muted dark:text-slate-400 block truncate">
-                    Certificado validado, CREF {currentInstructor.cref}, CPF
+                    Certificados, diplomas e registro profissional CREF
                   </span>
                 </div>
               </div>
@@ -3720,6 +3740,7 @@ export const ProfessorView: React.FC = () => {
                   name: editFullName,
                   displayName: editDisplayName,
                   birthDate: editBirthDate,
+                  cpf: editCpf,
                   email: editEmail,
                   phone: editPhone
                 });
@@ -3747,6 +3768,19 @@ export const ProfessorView: React.FC = () => {
                   value={editDisplayName}
                   onChange={(e) => setEditDisplayName(e.target.value)}
                   required
+                  className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-navy-900 dark:text-white">CPF</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={14}
+                  value={editCpf}
+                  onChange={(e) => setEditCpf(maskCpf(e.target.value))}
+                  placeholder="000.000.000-00"
                   className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary"
                 />
               </div>
@@ -4352,8 +4386,8 @@ export const ProfessorView: React.FC = () => {
                   <FileText size={16} strokeWidth={1.5} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-navy-900 dark:text-white">Documentos Cadastrados</h3>
-                  <p className="text-[11px] text-muted dark:text-slate-400">Certificados e identificação profissional</p>
+                  <h3 className="text-sm font-bold text-navy-900 dark:text-white">Documentos Profissionais</h3>
+                  <p className="text-[11px] text-muted dark:text-slate-400">Certificados, diplomas e identificação profissional</p>
                 </div>
               </div>
               <button
@@ -4366,18 +4400,28 @@ export const ProfessorView: React.FC = () => {
             </div>
 
             <div className="space-y-3.5 max-h-[75vh] overflow-y-auto pr-1">
-              {/* Card de CREF Validado */}
-              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/60 space-y-1.5">
+              {/* Card de CREF */}
+              <div className={`p-3.5 rounded-2xl border space-y-1.5 ${
+                currentInstructor.cref
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200/60 dark:border-emerald-800/60"
+                  : "bg-slate-50 dark:bg-navy-900/60 border-slate-200 dark:border-slate-800"
+              }`}>
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     Registro Profissional CREF
                   </span>
-                  <span className="text-[10px] bg-emerald-600 text-white font-black px-2 py-0.5 rounded-full">
-                    Ativo & Validado ✓
+                  <span className={`text-[10px] text-white font-black px-2 py-0.5 rounded-full ${
+                    currentInstructor.cref ? "bg-emerald-600" : "bg-amber-500"
+                  }`}>
+                    {currentInstructor.cref ? "Ativo & Validado ✓" : "Pendente"}
                   </span>
                 </div>
-                <p className="text-xs font-black text-navy-900 dark:text-white">{currentInstructor.cref}</p>
-                <p className="text-[10px] text-muted dark:text-slate-400">Conselho Regional de Educação Física verificado</p>
+                <p className="text-xs font-black text-navy-900 dark:text-white">
+                  {currentInstructor.cref || "Nenhum registro informado"}
+                </p>
+                <p className="text-[10px] text-muted dark:text-slate-400">
+                  {currentInstructor.cref ? "Conselho Regional de Educação Física verificado" : "Informe seu CREF no cadastro para validação"}
+                </p>
               </div>
 
               {/* Card de Diploma de Graduação com Upload */}
@@ -4461,10 +4505,14 @@ export const ProfessorView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          setProfessorDocuments((prev) => ({
-                            ...prev,
-                            certificates: prev.certificates.filter((c) => c.id !== cert.id)
-                          }));
+                          const nextState = {
+                            ...professorDocuments,
+                            certificates: professorDocuments.certificates.filter((c) => c.id !== cert.id)
+                          };
+                          setProfessorDocuments(nextState);
+                          if (activeInstructorId) {
+                            try { localStorage.setItem(`trainermatch_docs_${activeInstructorId}`, JSON.stringify(nextState)); } catch (err) {}
+                          }
                         }}
                         className="p-1 text-slate-400 hover:text-red-600 transition-colors ml-2"
                         title="Remover Certificado"
@@ -4492,40 +4540,13 @@ export const ProfessorView: React.FC = () => {
                 </div>
               </div>
 
-              {/* CPF Editável */}
-              <div className="space-y-1.5 pt-1">
-                <label className="text-xs font-bold text-navy-900 dark:text-white">Número do CPF</label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={14}
-                  value={editCpf}
-                  onChange={(e) => setEditCpf(maskCpf(e.target.value))}
-                  placeholder="000.000.000-00"
-                  className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary"
-                />
-                <p className="text-[10px] text-muted">Contratação direta como profissional autônomo (Pessoa Física).</p>
-              </div>
-
-              <div className="pt-2 flex gap-2">
+              <div className="pt-2 flex">
                 <button
                   type="button"
                   onClick={() => setShowDocumentsModal(false)}
-                  className="flex-1 py-2.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-navy-600 transition-colors"
+                  className="w-full py-2.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-navy-600 transition-colors"
                 >
                   Fechar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    updateInstructorProfile(activeInstructorId, { cpf: editCpf });
-                    setShowDocumentsModal(false);
-                    setProfileSuccessMsg("Documentos e dados salvos com sucesso!");
-                    setTimeout(() => setProfileSuccessMsg(null), 3000);
-                  }}
-                  className="flex-1 py-2.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary-hover shadow-sm transition-all"
-                >
-                  Salvar
                 </button>
               </div>
             </div>
