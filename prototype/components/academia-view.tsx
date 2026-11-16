@@ -119,6 +119,7 @@ export const AcademiaView: React.FC = () => {
   const [instructorDetailModal, setInstructorDetailModal] = useState<Instructor | null>(null);
 
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState<boolean>(false);
+  const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
   const [deleteConfirmChecked, setDeleteConfirmChecked] = useState<boolean>(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState<boolean>(false);
 
@@ -680,7 +681,7 @@ export const AcademiaView: React.FC = () => {
     <div className="min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 transition-colors duration-200">
       
       {/* ===================== VERSÃO MOBILE DEDICADA DA ACADEMIA (SOMENTE EM CELULARES: < 768px) ===================== */}
-      <div className="block md:hidden w-full max-w-md mx-auto min-h-screen pb-24 shadow-2xl relative font-sans transition-colors duration-200 flex flex-col overflow-x-hidden">
+      <div className="block md:hidden w-full max-w-md mx-auto min-h-screen pb-28 shadow-2xl relative font-sans transition-colors duration-200 flex flex-col overflow-x-hidden">
         
         {/* Header Mobile da Academia */}
         <header className="p-4 bg-card/95 dark:bg-navy-800/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-700/60 flex justify-between items-center z-10 flex-shrink-0 sticky top-0">
@@ -1916,7 +1917,7 @@ export const AcademiaView: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => logout()}
+                    onClick={() => setShowLogoutModal(true)}
                     className="w-full py-2.5 px-4 rounded-full border border-red-200 dark:border-red-900/60 bg-red-50/60 dark:bg-red-950/30 text-red-600 dark:text-red-400 font-extrabold text-xs flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors active:scale-95"
                   >
                     <LogOut size={14} />
@@ -2041,7 +2042,7 @@ export const AcademiaView: React.FC = () => {
           {/* Bottom Bar Mobile Fixa (Somente Celular: < 768px) */}
           <nav
             aria-label="Navegação da Academia Mobile"
-            className="fixed bottom-0 left-0 right-0 max-w-md mx-auto md:hidden z-40 bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-700/60 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] flex justify-around items-center transition-colors duration-200"
+            className="fixed bottom-0 left-0 right-0 max-w-md mx-auto md:hidden z-40 bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-700/60 px-4 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] flex justify-around items-center transition-colors duration-200"
           >
             <button
               onClick={() => setActiveMenu("turnos")}
@@ -2246,7 +2247,7 @@ export const AcademiaView: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => logout()}
+                  onClick={() => setShowLogoutModal(true)}
                   title="Sair da Conta (Log off)"
                   className="p-1.5 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 dark:hover:text-red-400 transition-all shrink-0 active:scale-95 border border-transparent hover:border-red-200 dark:hover:border-red-900/50"
                 >
@@ -4877,7 +4878,7 @@ export const AcademiaView: React.FC = () => {
 
                     <button
                       type="button"
-                      onClick={() => logout()}
+                      onClick={() => setShowLogoutModal(true)}
                       className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-full shadow-xs transition-all active:scale-95"
                     >
                       <LogOut size={13} />
@@ -6811,11 +6812,17 @@ export const AcademiaView: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL DE ONBOARDING DA ACADEMIA */}
+      {/* MODAL DE ONBOARDING DA ACADEMIA (5 Passos) */}
       <OnboardingModal
         role="academia"
         isOpen={showOnboarding}
         onClose={() => setShowOnboarding(false)}
+        onNavigateTab={(tab) => {
+          if (tab === "home" || tab === "agenda") setActiveMenu("turnos");
+          else if (tab === "propostas") setActiveMenu("propostas");
+          else if (tab === "professores") setActiveMenu("professores");
+          else if (tab === "perfil") setActiveMenu("perfil");
+        }}
       />
 
       {/* ===================== MODAL DE EXCLUIR CONTA DEFINITIVAMENTE ===================== */}
@@ -6894,6 +6901,47 @@ export const AcademiaView: React.FC = () => {
                 <span>Sim, Excluir Conta</span>
               </>
             )}
+          </button>
+        </div>
+      </AnimatedModal>
+
+      {/* ===================== MODAL: CONFIRMAR SAIR DO APP ===================== */}
+      <AnimatedModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        maxWidth="max-w-sm"
+        className="p-6 text-center space-y-4"
+      >
+        <div className="w-14 h-14 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 flex items-center justify-center mx-auto">
+          <LogOut size={26} />
+        </div>
+
+        <div className="space-y-1.5">
+          <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
+            Tem certeza que deseja sair?
+          </h3>
+          <p className="text-xs text-muted dark:text-slate-400">
+            Você precisará entrar novamente com seu e-mail e senha para acessar sua conta.
+          </p>
+        </div>
+
+        <div className="pt-2 flex flex-col gap-2.5">
+          <button
+            type="button"
+            onClick={() => setShowLogoutModal(false)}
+            className="w-full py-3 px-4 bg-primary hover:bg-primary-hover text-white text-xs font-extrabold rounded-full transition-all active:scale-95 shadow-sm"
+          >
+            Ficar no app
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowLogoutModal(false);
+              logout();
+            }}
+            className="w-full py-2.5 px-4 rounded-full border border-slate-200 dark:border-slate-700 bg-transparent hover:bg-red-50 dark:hover:bg-red-950/20 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 text-xs font-bold transition-all active:scale-95"
+          >
+            Sim, sair
           </button>
         </div>
       </AnimatedModal>

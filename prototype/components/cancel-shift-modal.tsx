@@ -11,7 +11,8 @@ import {
   User,
   CheckCircle2,
   Lock,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck
 } from "lucide-react";
 
 interface CancelShiftModalProps {
@@ -26,16 +27,19 @@ interface CancelShiftModalProps {
 
 const PROFESSOR_REASONS = [
   "Imprevisto de saúde / Atestado médico",
-  "Conflito emergencial de agenda / Questão familiar",
-  "Problema de transporte / Deslocamento",
-  "Outro motivo justificado"
+  "Problema de transporte / Deslocamento ou trânsito",
+  "Conflito emergencial de escala / Compromisso pessoal",
+  "Cancelamento solicitado pela academia",
+  "Problemas pessoais urgentes",
+  "Outro motivo (especificar)"
 ];
 
 const GYM_REASONS = [
   "Mudança na grade de aulas / Cronograma alterado",
-  "Fechamento temporário / Manutenção de equipamento ou espaço",
+  "Fechamento temporário / Manutenção da unidade",
   "Professor titular reassumiu o horário",
   "Baixa adesão de alunos para a turma",
+  "Cancelamento solicitado pelo professor",
   "Outro motivo operacional"
 ];
 
@@ -94,7 +98,7 @@ export const CancelShiftModal: React.FC<CancelShiftModalProps> = ({
                 Cancelar Aula Contratada
               </h3>
               <p className="text-[11px] text-muted dark:text-slate-400">
-                Aviso prévio e auditoria mútua
+                Cancelamento e aviso prévio
               </p>
             </div>
           </div>
@@ -160,61 +164,63 @@ export const CancelShiftModal: React.FC<CancelShiftModalProps> = ({
             </div>
           ) : (
             <>
-              {/* Alerta de Auditoria */}
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-2xl flex items-start gap-2 text-amber-800 dark:text-amber-300">
-                <AlertTriangle size={15} strokeWidth={1.5} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                <p className="text-[11px] leading-relaxed">
-                  O cancelamento ficará registrado no histórico da aula com a indicação de quem partiu (
-                  <strong className="font-extrabold">{role === "professor" ? "Professor" : "Academia"}</strong>) e o motivo escolhido.
-                </p>
-              </div>
+              {/* Alerta de Regra de Faltas / Antecedência de 30 minutos */}
+              {cancelEligibility.isWithinGracePeriod !== false ? (
+                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl flex items-start gap-2.5 text-emerald-900 dark:text-emerald-200 shadow-2xs">
+                  <ShieldCheck size={18} strokeWidth={2} className="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                  <div>
+                    <p className="font-extrabold text-xs">
+                      Cancelamento com antecedência: não será considerado falta
+                    </p>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5 leading-relaxed">
+                      Como você está cancelando com mais de 30 minutos de antecedência do início da aula, nenhuma penalidade ou falta será registrada em seu histórico.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl flex items-start gap-2.5 text-amber-900 dark:text-amber-200 shadow-2xs">
+                  <AlertTriangle size={18} strokeWidth={2} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <p className="font-extrabold text-xs">
+                      Atenção: Menos de 30 minutos para o início
+                    </p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5 leading-relaxed">
+                      Faltam menos de 30 minutos para a aula. O cancelamento tardio ficará registrado no relatório da unidade com a justificativa apresentada.
+                    </p>
+                  </div>
+                </div>
+              )}
 
-              {/* Seletor de Motivos Obrigatórios */}
-              <div className="space-y-2">
-                <label className="block text-xs font-black text-navy-900 dark:text-white">
+              {/* Combobox de Motivos Obrigatórios */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-navy-900 dark:text-white">
                   Selecione o motivo do cancelamento <span className="text-rose-500">*</span>
                 </label>
-                <div className="space-y-1.5">
-                  {reasonsList.map((reason) => {
-                    const isSelected = selectedReason === reason;
-                    return (
-                      <button
-                        key={reason}
-                        type="button"
-                        onClick={() => setSelectedReason(reason)}
-                        className={`w-full text-left p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all ${
-                          isSelected
-                            ? "bg-rose-50/70 dark:bg-rose-950/30 border-rose-300 dark:border-rose-700 text-rose-900 dark:text-rose-200 shadow-xs"
-                            : "bg-white dark:bg-navy-900 border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-300 hover:border-slate-300"
-                        }`}
-                      >
-                        <span className="pr-2">{reason}</span>
-                        <div
-                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                            isSelected
-                              ? "border-rose-500 bg-rose-500 text-white"
-                              : "border-slate-300 dark:border-slate-600"
-                          }`}
-                        >
-                          {isSelected && <CheckCircle2 size={12} strokeWidth={2.5} />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                <select
+                  value={selectedReason}
+                  onChange={(e) => setSelectedReason(e.target.value)}
+                  className="w-full text-xs p-3 rounded-xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-slate-700 font-semibold text-navy-900 dark:text-white focus:outline-primary cursor-pointer"
+                >
+                  <option value="">Selecione um motivo...</option>
+                  {reasonsList.map((reason) => (
+                    <option key={reason} value={reason}>
+                      {reason}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Observação Adicional */}
               <div className="space-y-1.5">
                 <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                  Observações adicionais (opcional)
+                  Descrição adicional (opcional)
                 </label>
                 <textarea
                   value={customNotes}
                   onChange={(e) => setCustomNotes(e.target.value)}
                   placeholder="Detalhes ou justificativa adicional para o cancelamento..."
                   rows={2}
-                  className="w-full text-xs p-2.5 rounded-xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-slate-700 text-navy-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 resize-none"
+                  className="w-full text-xs p-2.5 rounded-xl bg-white dark:bg-navy-900 border border-slate-200 dark:border-slate-700 text-navy-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 resize-none font-medium"
                 />
               </div>
             </>
@@ -235,7 +241,7 @@ export const CancelShiftModal: React.FC<CancelShiftModalProps> = ({
               type="button"
               disabled={!selectedReason || isSubmitting}
               onClick={handleSubmit}
-              className="flex-1 py-2.5 px-4 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-2.5 px-4 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               <span>{isSubmitting ? "Cancelando..." : "Confirmar Cancelamento"}</span>
               <ArrowRight size={13} strokeWidth={1.5} />

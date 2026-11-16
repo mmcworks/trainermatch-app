@@ -38,6 +38,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Campos de Cadastro (SEMPRE iniciam 100% limpos e vazios)
   const [registerName, setRegisterName] = useState("");
@@ -62,11 +63,32 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
   const [showResetNewPassword, setShowResetNewPassword] = useState(false);
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
 
+  // Carrega e-mail salvo se "Lembrar de mim" estiver ativo
+  useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem("trainermatch_remembered_email");
+      if (savedEmail) {
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
+    } catch (e) {}
+  }, []);
+
   // Limpa campos ao alternar papel ou modo
   useEffect(() => {
     setAuthError("");
     if (mode === "login") {
-      setEmail("");
+      try {
+        const savedEmail = localStorage.getItem("trainermatch_remembered_email");
+        if (savedEmail) {
+          setEmail(savedEmail);
+          setRememberMe(true);
+        } else {
+          setEmail("");
+        }
+      } catch (e) {
+        setEmail("");
+      }
       setPassword("");
     } else if (mode === "cadastro") {
       // Garante que a tela de cadastro seja 100% limpa, sem emails de mock
@@ -103,7 +125,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
     setIsSubmitting(true);
     try {
       const result = await login(email, password, selectedRole);
-      if (!result?.success) {
+      if (result?.success) {
+        try {
+          if (rememberMe) {
+            localStorage.setItem("trainermatch_remembered_email", email.trim().toLowerCase());
+          } else {
+            localStorage.removeItem("trainermatch_remembered_email");
+          }
+        } catch (e) {}
+      } else {
         setAuthError(result?.error || "E-mail ou senha incorretos.");
       }
     } catch (err: any) {
@@ -403,6 +433,22 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                   {showLoginPassword ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
                 </button>
               </div>
+            </div>
+
+            {/* Checkbox Lembrar de mim */}
+            <div className="flex items-center justify-between py-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded text-primary focus:ring-primary border-slate-300 dark:border-slate-600 dark:bg-navy-900 cursor-pointer"
+                />
+                <span className="text-xs font-semibold">Lembrar de mim</span>
+              </label>
+              <span className="text-[10px] text-muted dark:text-slate-400">
+                Salvar e-mail neste aparelho
+              </span>
             </div>
 
             <button

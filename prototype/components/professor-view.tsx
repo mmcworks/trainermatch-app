@@ -58,9 +58,10 @@ import {
   ThumbsUp,
   Smartphone,
   XCircle,
-  Database
+  Database,
+  Edit3
 } from "lucide-react";
-import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
+import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, maskDate, formatToDDMMAAAA, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
 import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility } from "@/store/use-app-store";
 import { TimeStepperInput } from "@/components/time-stepper-input";
 import { AnimatedModal } from "@/components/animated-modal";
@@ -102,6 +103,7 @@ export const ProfessorView: React.FC = () => {
   const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
 
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState<boolean>(false);
+  const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
   const [deleteConfirmChecked, setDeleteConfirmChecked] = useState<boolean>(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState<boolean>(false);
 
@@ -198,6 +200,9 @@ export const ProfessorView: React.FC = () => {
   const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
   const [showThemeModal, setShowThemeModal] = useState<boolean>(false);
   const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
+  const [showEditCrefModal, setShowEditCrefModal] = useState<boolean>(false);
+  const [editCrefValue, setEditCrefValue] = useState<string>("");
+  const [crefError, setCrefError] = useState<string>("");
 
   // Estados locais para formulários de perfil
   const [editFullName, setEditFullName] = useState<string>("");
@@ -285,7 +290,7 @@ export const ProfessorView: React.FC = () => {
       }
       setEditFullName(rawInstructor.name || "");
       setEditDisplayName(rawInstructor.displayName || rawInstructor.name || "");
-      setEditBirthDate(rawInstructor.birthDate || "");
+      setEditBirthDate(formatToDDMMAAAA(rawInstructor.birthDate || ""));
       setEditEmail(rawInstructor.email || "");
       setEditPhone(rawInstructor.phone || "");
       if (rawInstructor.pixKeys && rawInstructor.pixKeys.length > 0) {
@@ -646,7 +651,7 @@ export const ProfessorView: React.FC = () => {
     : null;
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 pb-24 shadow-2xl overflow-hidden relative font-sans transition-colors duration-200">
+    <div className="max-w-md mx-auto min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 pb-28 shadow-2xl overflow-hidden relative font-sans transition-colors duration-200">
       
       {/* ===================== TAB: INÍCIO ===================== */}
       {activeTab === "inicio" && (
@@ -2959,7 +2964,7 @@ export const ProfessorView: React.FC = () => {
             {/* Opção 8: Botão de Sair do App */}
             <button
               type="button"
-              onClick={logout}
+              onClick={() => setShowLogoutModal(true)}
               className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-colors group"
             >
               <div className="flex items-center gap-3.5 min-w-0">
@@ -3822,10 +3827,21 @@ export const ProfessorView: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-navy-900 dark:text-white">Data de Nascimento</label>
                 <input
-                  type="date"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={10}
                   value={editBirthDate}
-                  onChange={(e) => setEditBirthDate(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary"
+                  onChange={(e) => setEditBirthDate(maskDate(e.target.value))}
+                  onKeyDown={(e) => {
+                    if (
+                      !/^[0-9]$/.test(e.key) &&
+                      !["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab"].includes(e.key)
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
+                  placeholder="DD/MM/AAAA"
+                  className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary font-medium"
                 />
               </div>
 
@@ -4435,7 +4451,7 @@ export const ProfessorView: React.FC = () => {
 
             <div className="space-y-3.5 max-h-[75vh] overflow-y-auto pr-1">
               {/* Card de CREF */}
-              <div className={`p-3.5 rounded-2xl border space-y-1.5 ${
+              <div className={`p-3.5 rounded-2xl border space-y-2 ${
                 currentInstructor.cref
                   ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200/60 dark:border-emerald-800/60"
                   : "bg-slate-50 dark:bg-navy-900/60 border-slate-200 dark:border-slate-800"
@@ -4453,9 +4469,23 @@ export const ProfessorView: React.FC = () => {
                 <p className="text-xs font-black text-navy-900 dark:text-white">
                   {currentInstructor.cref || "Nenhum registro informado"}
                 </p>
-                <p className="text-[10px] text-muted dark:text-slate-400">
-                  {currentInstructor.cref ? "Conselho Regional de Educação Física verificado" : "Informe seu CREF no cadastro para validação"}
-                </p>
+                <div className="flex items-center justify-between pt-1 gap-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                  <p className="text-[10px] text-muted dark:text-slate-400">
+                    {currentInstructor.cref ? "Conselho Regional de Educação Física verificado" : "Informe seu CREF para validação"}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditCrefValue(currentInstructor.cref || "");
+                      setCrefError("");
+                      setShowEditCrefModal(true);
+                    }}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-navy-800 hover:bg-slate-100 dark:hover:bg-navy-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold rounded-full border border-slate-300 dark:border-slate-600 shadow-2xs transition-all active:scale-95"
+                  >
+                    <Edit3 size={11} className="text-primary" />
+                    <span>Editar Dado</span>
+                  </button>
+                </div>
               </div>
 
               {/* Card de Diploma de Graduação com Upload */}
@@ -4584,6 +4614,93 @@ export const ProfessorView: React.FC = () => {
                 </button>
               </div>
             </div>
+      </AnimatedModal>
+
+      {/* ===================== MODAL DE EDIÇÃO SEGURA DO CREF ===================== */}
+      <AnimatedModal
+        isOpen={showEditCrefModal}
+        onClose={() => setShowEditCrefModal(false)}
+        maxWidth="max-w-md"
+        className="p-6 space-y-4"
+      >
+        <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+              <ShieldCheck size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-navy-900 dark:text-white">
+                Editar Registro CREF
+              </h3>
+              <p className="text-[11px] text-muted dark:text-slate-400">
+                Altere seu número de registro profissional com segurança
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowEditCrefModal(false)}
+            className="w-7 h-7 rounded-full bg-slate-100 dark:bg-navy-700 flex items-center justify-center text-slate-500 hover:text-navy-900 dark:hover:text-white transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const trimmed = editCrefValue.trim().toUpperCase();
+            if (!trimmed) {
+              setCrefError("Informe o número do seu CREF.");
+              return;
+            }
+            updateInstructorProfile(activeInstructorId, {
+              cref: trimmed
+            });
+            setShowEditCrefModal(false);
+            setProfileSuccessMsg("CREF atualizado com sucesso!");
+            setTimeout(() => setProfileSuccessMsg(null), 3000);
+          }}
+          className="space-y-4"
+        >
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-navy-900 dark:text-white">
+              Número do CREF
+            </label>
+            <input
+              type="text"
+              value={editCrefValue}
+              onChange={(e) => {
+                setEditCrefValue(e.target.value.toUpperCase());
+                setCrefError("");
+              }}
+              placeholder="Ex: 012345-G/SP"
+              className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary font-bold uppercase tracking-wide"
+            />
+            {crefError && (
+              <p className="text-[11px] text-red-600 font-semibold">{crefError}</p>
+            )}
+            <p className="text-[10px] text-muted dark:text-slate-400 leading-tight">
+              Formato recomendado: 6 dígitos, categoria (G ou P) e UF (Ex: 123456-G/SP).
+            </p>
+          </div>
+
+          <div className="flex gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowEditCrefModal(false)}
+              className="flex-1 py-2.5 px-4 rounded-full text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-navy-700 dark:hover:bg-navy-600 text-slate-700 dark:text-slate-200 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-2.5 px-4 rounded-full text-xs font-black bg-primary hover:bg-primary-hover text-white shadow-md transition-all active:scale-95"
+            >
+              Salvar Alteração
+            </button>
+          </div>
+        </form>
       </AnimatedModal>
 
       {/* ===================== MODAL DE NOTIFICAÇÕES GERAIS ===================== */}
@@ -5200,7 +5317,7 @@ export const ProfessorView: React.FC = () => {
       </AnimatedModal>
 
       {/* ===================== BARRA DE NAVEGAÇÃO INFERIOR ===================== */}
-      <nav aria-label="Navegação do Professor" className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] flex justify-between items-center z-40 transition-colors duration-200">
+      <nav aria-label="Navegação do Professor" className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 px-6 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] flex justify-between items-center z-40 transition-colors duration-200">
         <button
           onClick={() => setActiveTab("inicio")}
           className={`flex flex-col items-center gap-1 text-xs font-semibold transition-colors ${
@@ -5249,11 +5366,12 @@ export const ProfessorView: React.FC = () => {
         </button>
       </nav>
 
-      {/* Modal de Onboarding em Tela Cheia (3 Passos) */}
+      {/* Modal de Onboarding em Tela Cheia (4 Passos) */}
       <OnboardingModal
         role="professor"
         isOpen={showOnboarding}
         onClose={() => setShowOnboarding(false)}
+        onNavigateTab={(tab) => setActiveTab(tab as any)}
       />
 
       {/* ===================== MODAL DE EXCLUIR CONTA DEFINITIVAMENTE ===================== */}
@@ -5332,6 +5450,47 @@ export const ProfessorView: React.FC = () => {
                 <span>Sim, Excluir Conta</span>
               </>
             )}
+          </button>
+        </div>
+      </AnimatedModal>
+
+      {/* ===================== MODAL: CONFIRMAR SAIR DO APP ===================== */}
+      <AnimatedModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        maxWidth="max-w-sm"
+        className="p-6 text-center space-y-4"
+      >
+        <div className="w-14 h-14 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 flex items-center justify-center mx-auto">
+          <LogOut size={26} />
+        </div>
+
+        <div className="space-y-1.5">
+          <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
+            Tem certeza que deseja sair?
+          </h3>
+          <p className="text-xs text-muted dark:text-slate-400">
+            Você precisará entrar novamente com seu e-mail e senha para acessar sua conta.
+          </p>
+        </div>
+
+        <div className="pt-2 flex flex-col gap-2.5">
+          <button
+            type="button"
+            onClick={() => setShowLogoutModal(false)}
+            className="w-full py-3 px-4 bg-primary hover:bg-primary-hover text-white text-xs font-extrabold rounded-full transition-all active:scale-95 shadow-sm"
+          >
+            Ficar no app
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowLogoutModal(false);
+              logout();
+            }}
+            className="w-full py-2.5 px-4 rounded-full border border-slate-200 dark:border-slate-700 bg-transparent hover:bg-red-50 dark:hover:bg-red-950/20 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 text-xs font-bold transition-all active:scale-95"
+          >
+            Sim, sair
           </button>
         </div>
       </AnimatedModal>
@@ -6313,18 +6472,17 @@ export const ProfessorView: React.FC = () => {
                       />
                     </div>
 
-                    {/* Início e Fim do Horário */}
+                    {/* Início e Fim do Horário com TimeStepperInput */}
                     <div className="grid grid-cols-2 gap-2.5">
                       <div className="space-y-1">
                         <label className="text-[11px] font-bold text-navy-900 dark:text-white flex items-center gap-1">
                           <Clock size={12} strokeWidth={1.5} className="text-primary" />
                           Início da Disponibilidade
                         </label>
-                        <input
-                          type="time"
+                        <TimeStepperInput
                           value={offerStartTime}
-                          onChange={(e) => setOfferStartTime(e.target.value)}
-                          className="w-full p-2 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-navy-900 dark:text-white focus:outline-primary"
+                          onChange={(val) => setOfferStartTime(val)}
+                          ariaLabel="Início da Disponibilidade"
                         />
                       </div>
                       <div className="space-y-1">
@@ -6332,11 +6490,10 @@ export const ProfessorView: React.FC = () => {
                           <Clock size={12} strokeWidth={1.5} className="text-primary" />
                           Término da Disponibilidade
                         </label>
-                        <input
-                          type="time"
+                        <TimeStepperInput
                           value={offerEndTime}
-                          onChange={(e) => setOfferEndTime(e.target.value)}
-                          className="w-full p-2 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-navy-900 dark:text-white focus:outline-primary"
+                          onChange={(val) => setOfferEndTime(val)}
+                          ariaLabel="Término da Disponibilidade"
                         />
                       </div>
                     </div>

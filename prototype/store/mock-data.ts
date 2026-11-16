@@ -151,7 +151,12 @@ export interface Shift {
   cancelledAt?: string;
 }
 
-export function canCancelShift(shift: Shift): { canCancel: boolean; reason?: string } {
+export function canCancelShift(shift: Shift): {
+  canCancel: boolean;
+  reason?: string;
+  minutesUntilStart?: number;
+  isWithinGracePeriod?: boolean;
+} {
   if (shift.status !== "confirmado") {
     return { canCancel: false, reason: "Apenas aulas contratadas podem ser canceladas." };
   }
@@ -169,15 +174,26 @@ export function canCancelShift(shift: Shift): { canCancel: boolean; reason?: str
     if (year && month && day) {
       const shiftStart = new Date(year, month - 1, day, startH || 0, startM || 0, 0);
       const now = new Date();
-      if (now >= shiftStart) {
+      const diffMs = shiftStart.getTime() - now.getTime();
+      const minutesUntilStart = Math.round(diffMs / (1000 * 60));
+
+      if (minutesUntilStart <= 0) {
         return { canCancel: false, reason: "O horário de início da aula já passou." };
       }
+
+      // Regra dos 30 minutos: 30 minutos ou mais de antecedência não é considerado falta
+      const isWithinGracePeriod = minutesUntilStart >= 30;
+      return {
+        canCancel: true,
+        minutesUntilStart,
+        isWithinGracePeriod
+      };
     }
   } catch {
     // fallback
   }
 
-  return { canCancel: true };
+  return { canCancel: true, isWithinGracePeriod: true };
 }
 
 export interface Proposal {
@@ -282,6 +298,33 @@ export function maskCnpj(value: string): string {
   if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
   return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
 }
+
+export function maskDate(value: string): string {
+  if (!value) return "";
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+export function formatToDDMMAAAA(value: string): string {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const [y, m, d] = value.split("-");
+    return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+  }
+  return maskDate(value);
+}
+
+export const CANCELLATION_REASONS = [
+  "Imprevisto de saúde / emergência médica",
+  "Problema de transporte ou trânsito excessivo",
+  "Conflito de escala de trabalho / faculdade",
+  "Cancelamento solicitado pela academia",
+  "Problemas pessoais urgentes",
+  "Outro motivo (especificar)"
+];
 
 export function blockNonNumericKeyDown(e: { key: string; preventDefault: () => void }) {
   if (["e", "E", "+", "-"].includes(e.key)) {
