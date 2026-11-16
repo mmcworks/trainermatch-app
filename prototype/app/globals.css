@@ -20,9 +20,9 @@ body.dark {
   color: #F8FAFC !important;
 }
 
-/* Previne o auto-zoom persistente do iOS Safari ao focar em inputs, selects e textareas */
+/* Previne o auto-zoom persistente do iOS Safari ao focar em inputs comuns, preservando inputs de destaque */
 @media screen and (max-width: 768px) {
-  input:not([type="checkbox"]):not([type="radio"]),
+  input:not([type="checkbox"]):not([type="radio"]):not(.text-2xl):not(.text-3xl):not(.text-4xl):not(.text-5xl),
   select,
   textarea {
     font-size: 16px !important;

@@ -6047,6 +6047,7 @@ export const ProfessorView: React.FC = () => {
         isOpen={showOfferSlotWizard}
         onClose={() => setShowOfferSlotWizard(false)}
         maxWidth="max-w-lg"
+        defaultExpanded={true}
         className="p-5 sm:p-6"
       >
         {(() => {
@@ -6128,7 +6129,7 @@ export const ProfessorView: React.FC = () => {
           ];
 
           return (
-            <div className="h-[520px] max-h-[85vh] flex flex-col justify-between">
+            <div className="h-[84dvh] sm:h-[660px] flex flex-col justify-between">
               {/* Header do Wizard (Fixo no Topo) */}
               <div className="space-y-3 pb-2 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex justify-between items-center">
@@ -6215,7 +6216,8 @@ export const ProfessorView: React.FC = () => {
                             }
                           }}
                           placeholder="0,00"
-                          className="w-28 text-center font-black text-3xl sm:text-4xl bg-transparent border-b-2 border-primary focus:outline-none dark:text-white"
+                          className="w-32 text-center font-black text-4xl sm:text-5xl bg-transparent border-b-2 border-primary focus:outline-none dark:text-white"
+                          style={{ fontSize: "2.25rem", minHeight: "48px" }}
                         />
                         <span className="text-sm text-slate-400 font-bold">/hora</span>
                       </div>
@@ -6308,7 +6310,7 @@ export const ProfessorView: React.FC = () => {
                     </div>
 
                     {/* Grid com Ícones Outline Light */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[200px] overflow-y-auto pr-1 no-scrollbar">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[360px] sm:max-h-none overflow-y-auto pr-1 no-scrollbar">
                       {modalitiesMeta.map((item) => {
                         const Icon = item.icon;
                         const isSelected = offerModalities.includes(item.name);
