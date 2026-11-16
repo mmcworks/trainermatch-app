@@ -134,7 +134,7 @@ export function TimeStepperInput({
         onBlur={handleBlur}
         placeholder="00:00"
         maxLength={5}
-        className="w-16 px-1.5 py-1.5 text-sm font-semibold text-center text-slate-800 dark:text-white bg-transparent outline-none tracking-wider placeholder:text-slate-300 dark:placeholder:text-navy-500"
+        className="w-20 sm:w-16 px-1 py-1.5 text-base sm:text-sm font-bold text-center text-slate-800 dark:text-white bg-transparent outline-none tracking-wider placeholder:text-slate-300 dark:placeholder:text-navy-500"
       />
 
       {/* Stepper buttons (▲ / ▼) */}
