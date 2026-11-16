@@ -2042,12 +2042,22 @@ export const AcademiaView: React.FC = () => {
           {/* Bottom Bar Mobile Fixa (Somente Celular: < 768px) */}
           <nav
             aria-label="Navegação da Academia Mobile"
-            className="fixed bottom-0 left-0 right-0 max-w-md mx-auto md:hidden z-40 bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-700/60 px-4 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] flex justify-around items-center transition-colors duration-200"
+            className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto md:hidden ${
+              showOnboarding
+                ? "z-50 shadow-2xl ring-2 ring-primary/40 bg-card dark:bg-navy-900 border-primary/30"
+                : "z-40 bg-card/95 dark:bg-navy-900/95 border-slate-100 dark:border-slate-700/60"
+            } backdrop-blur-md border-t px-4 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] flex justify-around items-center transition-all duration-300`}
           >
             <button
               onClick={() => setActiveMenu("turnos")}
-              className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
-                activeMenu === "turnos" ? "text-primary" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-all duration-300 ${
+                showOnboarding
+                  ? activeMenu === "turnos"
+                    ? "bg-primary text-white scale-110 -translate-y-1 shadow-lg shadow-primary/60 ring-4 ring-primary/40 rounded-2xl px-3 py-1.5 font-black"
+                    : "text-slate-400 opacity-25 blur-[0.3px]"
+                  : activeMenu === "turnos"
+                  ? "text-primary"
+                  : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               }`}
             >
               <CalendarIcon size={18} />
@@ -2055,8 +2065,14 @@ export const AcademiaView: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveMenu("propostas")}
-              className={`flex flex-col items-center gap-1 text-[11px] font-bold relative transition-colors ${
-                activeMenu === "propostas" ? "text-primary" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              className={`flex flex-col items-center gap-1 text-[11px] font-bold relative transition-all duration-300 ${
+                showOnboarding
+                  ? activeMenu === "propostas"
+                    ? "bg-primary text-white scale-110 -translate-y-1 shadow-lg shadow-primary/60 ring-4 ring-primary/40 rounded-2xl px-3 py-1.5 font-black"
+                    : "text-slate-400 opacity-25 blur-[0.3px]"
+                  : activeMenu === "propostas"
+                  ? "text-primary"
+                  : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               }`}
             >
               <Clock size={18} />
@@ -2067,8 +2083,14 @@ export const AcademiaView: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveMenu("professores")}
-              className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
-                activeMenu === "professores" ? "text-primary" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-all duration-300 ${
+                showOnboarding
+                  ? activeMenu === "professores"
+                    ? "bg-primary text-white scale-110 -translate-y-1 shadow-lg shadow-primary/60 ring-4 ring-primary/40 rounded-2xl px-3 py-1.5 font-black"
+                    : "text-slate-400 opacity-25 blur-[0.3px]"
+                  : activeMenu === "professores"
+                  ? "text-primary"
+                  : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               }`}
             >
               <Users size={18} />
@@ -2076,8 +2098,14 @@ export const AcademiaView: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveMenu("perfil")}
-              className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-colors ${
-                activeMenu === "perfil" ? "text-primary" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              className={`flex flex-col items-center gap-1 text-[11px] font-bold transition-all duration-300 ${
+                showOnboarding
+                  ? activeMenu === "perfil"
+                    ? "bg-primary text-white scale-110 -translate-y-1 shadow-lg shadow-primary/60 ring-4 ring-primary/40 rounded-2xl px-3 py-1.5 font-black"
+                    : "text-slate-400 opacity-25 blur-[0.3px]"
+                  : activeMenu === "perfil"
+                  ? "text-primary"
+                  : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               }`}
             >
               <Building size={18} />

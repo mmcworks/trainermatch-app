@@ -7,7 +7,6 @@ import {
   Briefcase,
   User,
   Users,
-  Search,
   Building2,
   ArrowRight,
   ArrowLeft,
@@ -39,6 +38,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       section: "Início",
       badge: "Passo 1 de 4 · Área Inicial",
       icon: Home,
+      pointerOffset: "12.5%",
       title: "Boas-vindas ao TrainerMatch",
       description:
         "Boas-vindas, esta é sua área inicial onde poderá navegar por atualizações e informações do app.",
@@ -47,10 +47,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       color: "from-blue-600 to-indigo-700"
     },
     {
-      tab: "negociacoes",
+      tab: "propostas",
       section: "Propostas",
       badge: "Passo 2 de 4 · Oportunidades",
       icon: Briefcase,
+      pointerOffset: "37.5%",
       title: "Acompanhe Propostas e Convites",
       description:
         "Em Propostas você acompanha convites recebidos de academias, negocia contrapropostas e visualiza oportunidades abertas.",
@@ -63,6 +64,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       section: "Agenda",
       badge: "Passo 3 de 4 · Seus Horários",
       icon: Calendar,
+      pointerOffset: "62.5%",
       title: "Configure sua Grade e Horários",
       description:
         "Na Agenda você configura seus horários disponíveis, cadastra sua grade semanal e gerencia seus plantões confirmados.",
@@ -75,6 +77,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       section: "Perfil",
       badge: "Passo 4 de 4 · Seus Dados e Avaliação",
       icon: User,
+      pointerOffset: "87.5%",
       title: "Gerencie seu Perfil e Reputação",
       description:
         "No Perfil você cadastra e atualiza seus dados pessoais, experiências, configurações e verifica sua avaliação.",
@@ -86,34 +89,24 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
   const academiaSteps = [
     {
-      tab: "home",
-      section: "Início",
-      badge: "Passo 1 de 5 · Visão Geral",
-      icon: Home,
-      title: "Boas-vindas à Gestão da Unidade",
-      description:
-        "Esta é sua área inicial onde você acompanha o resumo dos plantões do dia, solicitações urgentes e avisos importantes da sua unidade.",
-      highlight:
-        "Visão imediata dos turnos com professores alocados e horários pendentes de cobertura.",
-      color: "from-blue-600 to-indigo-700"
-    },
-    {
-      tab: "agenda",
+      tab: "turnos",
       section: "Agenda",
-      badge: "Passo 2 de 5 · Grade de Turnos",
+      badge: "Passo 1 de 4 · Grade de Turnos",
       icon: Calendar,
+      pointerOffset: "12.5%",
       title: "Gerencie a Grade de Turnos",
       description:
         "Na Agenda você cadastra turnos avulsos ou cria escalas recorrentes para o mês inteiro, controlando a cobertura da unidade.",
       highlight:
-        "Defina valores máximos por hora, modalidade e acompanhe a confirmação dos professores em tempo real.",
+        "Defina valores por hora, modalidade e acompanhe a confirmação dos professores em tempo real.",
       color: "from-indigo-600 to-purple-700"
     },
     {
       tab: "propostas",
       section: "Propostas",
-      badge: "Passo 3 de 5 · Negociações",
+      badge: "Passo 2 de 4 · Negociações",
       icon: Briefcase,
+      pointerOffset: "37.5%",
       title: "Acompanhe Propostas e Convites",
       description:
         "Em Propostas você acompanha convites enviados a professores, responde a contrapropostas e avalia candidaturas recebidas.",
@@ -124,8 +117,9 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     {
       tab: "professores",
       section: "Buscar Professores",
-      badge: "Passo 4 de 5 · Match de Profissionais",
+      badge: "Passo 3 de 4 · Match de Profissionais",
       icon: Users,
+      pointerOffset: "62.5%",
       title: "Encontre Professores Qualificados",
       description:
         "Em Buscar Professores você pesquisa profissionais disponíveis na sua região, filtra por modalidade e consulta avaliações e CREF auditado.",
@@ -136,8 +130,9 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     {
       tab: "perfil",
       section: "Perfil",
-      badge: "Passo 5 de 5 · Configurações",
+      badge: "Passo 4 de 4 · Configurações",
       icon: Building2,
+      pointerOffset: "87.5%",
       title: "Dados da Unidade e Regras",
       description:
         "No Perfil você configura os dados cadastrais da academia, valores padrão por hora/aula, modalidades aceitas e regras operacionais.",
@@ -149,7 +144,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
   const steps = role === "professor" ? professorSteps : academiaSteps;
   const totalSteps = steps.length;
-  const step = steps[currentStep];
+  const step = steps[currentStep] || steps[0];
   const StepIcon = step.icon;
 
   const goToStep = (idx: number) => {
@@ -185,123 +180,125 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-navy-950/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-lg bg-card dark:bg-navy-900 rounded-[32px] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh] animate-scale-up">
-        {/* Barra Superior com Logo, Indicador de Seção e Botão Pular */}
-        <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-navy-900/50 backdrop-blur-sm">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-primary text-white font-black text-sm flex items-center justify-center shadow-xs">
-              TM
-            </div>
-            <div>
-              <span className="text-xs font-black text-navy-900 dark:text-white block leading-none">
-                TrainerMatch
-              </span>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <Compass size={11} className="text-primary shrink-0" />
-                <span className="text-[10px] font-bold text-primary truncate">
-                  Tutorial · {step.section}
+    <>
+      {/* 1. Overlay Escuro que cobre a tela, destacando a tab bar e o card */}
+      <div
+        className="fixed inset-0 z-40 bg-black/80 backdrop-blur-xs animate-fade-in cursor-pointer"
+        onClick={handleFinish}
+        title="Toque para sair do tutorial"
+      />
+
+      {/* 2. Card do Tutorial posicionado acima da barra de navegação com Seta Apontadora */}
+      <div className="fixed bottom-[calc(max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))+4.5rem)] left-0 right-0 max-w-md mx-auto px-4 z-50 pointer-events-auto">
+        <div className="relative bg-card dark:bg-navy-900 border-2 border-primary/40 dark:border-primary/50 rounded-[28px] p-5 shadow-2xl animate-slide-up space-y-3.5">
+          {/* Seta Apontadora para o botão da aba ativa */}
+          <div
+            className="absolute -bottom-2 w-4 h-4 bg-card dark:bg-navy-900 border-r-2 border-b-2 border-primary/40 dark:border-primary/50 transform rotate-45 transition-all duration-300"
+            style={{ left: step.pointerOffset, transform: "translateX(-50%) rotate(45deg)" }}
+          />
+
+          {/* Cabeçalho do Card */}
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-primary text-white font-black text-xs flex items-center justify-center shadow-xs">
+                TM
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Compass size={12} className="text-primary shrink-0" />
+                <span className="text-xs font-black text-navy-900 dark:text-white">
+                  {step.badge}
                 </span>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={handleFinish}
+              className="text-[11px] font-bold text-muted dark:text-slate-400 hover:text-navy-900 dark:hover:text-white px-2 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors"
+            >
+              Pular tutorial
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={handleFinish}
-            className="text-xs font-bold text-muted dark:text-slate-400 hover:text-navy-900 dark:hover:text-white px-3 py-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors"
-          >
-            Pular tutorial
-          </button>
-        </div>
-
-        {/* Conteúdo do Slide */}
-        <div className="p-6 sm:p-8 flex-1 overflow-y-auto space-y-5">
-          {/* Card Visual com Gradiente e Apontador de Seção */}
-          <div
-            className={`w-full rounded-2xl p-6 bg-gradient-to-br ${step.color} text-white shadow-lg flex flex-col items-center justify-center text-center space-y-3 relative overflow-hidden transition-all duration-300`}
-          >
-            <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-inner">
-              <StepIcon size={32} strokeWidth={2} className="text-white" />
+          {/* Conteúdo com Ícone, Título e Descrição */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2.5">
+              <div className={`p-2 rounded-xl bg-gradient-to-br ${step.color} text-white shadow-sm shrink-0`}>
+                <StepIcon size={20} strokeWidth={2} />
+              </div>
+              <h3 className="text-sm sm:text-base font-black text-navy-900 dark:text-white leading-tight">
+                {step.title}
+              </h3>
             </div>
-            <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-xs px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider">
-              <span>{step.badge}</span>
-            </div>
-          </div>
 
-          {/* Título e Texto */}
-          <div className="space-y-3 text-center sm:text-left">
-            <h2 className="text-lg sm:text-xl font-black text-navy-900 dark:text-white tracking-tight">
-              {step.title}
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
               {step.description}
             </p>
 
-            {/* Caixa de Destaque / Dica */}
-            <div className="p-3.5 bg-primary/5 dark:bg-primary/10 rounded-2xl border border-primary/20 text-left flex items-start gap-2.5">
-              <Sparkles size={16} className="text-primary shrink-0 mt-0.5" />
+            {/* Destaque / Dica */}
+            <div className="p-2.5 bg-primary/5 dark:bg-primary/10 rounded-xl border border-primary/20 flex items-start gap-2">
+              <Sparkles size={14} className="text-primary shrink-0 mt-0.5" />
               <p className="text-[11px] font-medium text-navy-900 dark:text-slate-200 leading-snug">
                 {step.highlight}
               </p>
             </div>
           </div>
-        </div>
 
-        {/* Rodapé com Stepper e Botões de Ação */}
-        <div className="p-5 bg-slate-50 dark:bg-navy-800/60 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
-          {/* Indicador de Bolinhas (Dots) */}
-          <div className="flex items-center gap-1.5">
-            {steps.map((_, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => goToStep(idx)}
-                className={`transition-all rounded-full ${
-                  currentStep === idx
-                    ? "w-6 h-2 bg-primary shadow-xs"
-                    : "w-2 h-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400"
-                }`}
-                aria-label={`Ir para passo ${idx + 1}`}
-              />
-            ))}
-          </div>
+          {/* Rodapé com Stepper e Botões de Navegação */}
+          <div className="pt-2 flex items-center justify-between gap-2">
+            {/* Indicador de Bolinhas (Dots) */}
+            <div className="flex items-center gap-1.5">
+              {steps.map((_, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => goToStep(idx)}
+                  className={`transition-all rounded-full ${
+                    currentStep === idx
+                      ? "w-6 h-2 bg-primary shadow-xs"
+                      : "w-2 h-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400"
+                  }`}
+                  aria-label={`Ir para passo ${idx + 1}`}
+                />
+              ))}
+            </div>
 
-          {/* Botões de Navegação */}
-          <div className="flex items-center gap-2">
-            {currentStep > 0 && (
-              <button
-                type="button"
-                onClick={handlePrev}
-                className="px-3.5 py-2.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-700 text-xs font-bold transition-all flex items-center gap-1 active:scale-95"
-              >
-                <ArrowLeft size={13} />
-                <span>Voltar</span>
-              </button>
-            )}
+            {/* Botões Voltar / Próximo */}
+            <div className="flex items-center gap-1.5">
+              {currentStep > 0 && (
+                <button
+                  type="button"
+                  onClick={handlePrev}
+                  className="px-3 py-2 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-800 text-xs font-bold transition-all flex items-center gap-1"
+                >
+                  <ArrowLeft size={12} />
+                  <span>Voltar</span>
+                </button>
+              )}
 
-            {currentStep < totalSteps - 1 ? (
-              <button
-                type="button"
-                onClick={handleNext}
-                className="bg-primary hover:bg-primary-hover text-white font-extrabold px-5 py-2.5 rounded-full text-xs shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
-              >
-                <span>Próximo</span>
-                <ArrowRight size={13} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleFinish}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2.5 rounded-full text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-95"
-              >
-                <span>Começar a Usar</span>
-                <Check size={14} strokeWidth={2.5} />
-              </button>
-            )}
+              {currentStep < totalSteps - 1 ? (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="bg-primary hover:bg-primary-hover text-white font-extrabold px-4 py-2 rounded-full text-xs shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                >
+                  <span>Próximo</span>
+                  <ArrowRight size={12} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleFinish}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2 rounded-full text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+                >
+                  <span>Concluir</span>
+                  <Check size={13} strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };

@@ -61,7 +61,7 @@ import {
   Database,
   Edit3
 } from "lucide-react";
-import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, maskDate, formatToDDMMAAAA, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
+import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, maskDate, formatToDDMMAAAA, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString, OfferedSlot } from "@/store/mock-data";
 import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility } from "@/store/use-app-store";
 import { TimeStepperInput } from "@/components/time-stepper-input";
 import { AnimatedModal } from "@/components/animated-modal";
@@ -171,6 +171,9 @@ export const ProfessorView: React.FC = () => {
   const [offerStartTime, setOfferStartTime] = useState<string>("07:00");
   const [offerEndTime, setOfferEndTime] = useState<string>("12:00");
   const [offerSuccessMsg, setOfferSuccessMsg] = useState<string | null>(null);
+  const offerSelectedDayRef = useRef<HTMLButtonElement | null>(null);
+  const offerTodayRef = useRef<HTMLButtonElement | null>(null);
+
 
   // Modal de alteração de senha
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
@@ -564,6 +567,15 @@ export const ProfessorView: React.FC = () => {
     return s.date.startsWith(selectedMonthStr);
   });
 
+  // Horários avulsos oferecidos pelo próprio professor para o mês ou dia selecionado
+  const myOfferedSlots = (currentInstructor.offeredSlots || []).filter((s) => {
+    if (selectedDayNumber !== null) {
+      const targetDate = `${selectedMonthStr}-${String(selectedDayNumber).padStart(2, "0")}`;
+      return s.date === targetDate;
+    }
+    return (s.date || "").startsWith(selectedMonthStr);
+  });
+
   // Todos os turnos confirmados ou realizados do mês atual para o resumo (não inclui cancelados)
   const monthAllConfirmedShifts = shifts.filter((s) => {
     const isMine = isMyInstructorId(s.confirmedInstructorId);
@@ -593,6 +605,18 @@ export const ProfessorView: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [activeTab, agendaSubTab, selectedYear, selectedMonth, isCurrentMonthView]);
+
+  // Scroll suave com foco no dia atual / selecionado no calendário da modal "Quero Oferecer um Horário"
+  useEffect(() => {
+    if (showOfferSlotWizard && offerWizardStep === 3) {
+      const timer = setTimeout(() => {
+        const target = offerSelectedDayRef.current || offerTodayRef.current;
+        target?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      }, 180);
+      return () => clearTimeout(timer);
+    }
+  }, [showOfferSlotWizard, offerWizardStep, offerDate]);
+
 
   // Lista dos dias do mês para a linha horizontal única do calendário com integração da grade semanal
   const daysInSelectedMonth = new Date(selectedYear, selectedMonth, 0).getDate();
@@ -624,6 +648,10 @@ export const ProfessorView: React.FC = () => {
       ? matchingAvail.slots.map((sl) => `${sl.start}–${sl.end}`).join(", ")
       : "";
 
+    // Checagem de horários avulsos oferecidos pelo professor nesta data
+    const dayOfferedSlots = (currentInstructor.offeredSlots || []).filter((s) => s.date === dateStr);
+    const hasOfferedSlots = dayOfferedSlots.length > 0;
+
     const isToday = isCurrentMonthView && dayNum === targetTodayDay;
     return {
       dayNum,
@@ -634,10 +662,12 @@ export const ProfessorView: React.FC = () => {
       hasShifts: dayShifts.length > 0,
       hasCompleted: dayShifts.some((s) => s.status === "realizada"),
       hasCancelled: dayCancelledShifts.length > 0 && dayShifts.length === 0,
+      hasOfferedSlots,
+      offeredSlotsCount: dayOfferedSlots.length,
       shiftsCount: dayShifts.length,
-      isAvailable,
+      isAvailable: isAvailable || hasOfferedSlots,
       isBlocked,
-      slotsSummary
+      slotsSummary: slotsSummary || (hasOfferedSlots ? dayOfferedSlots.map((s) => `${s.startTime}–${s.endTime}`).join(", ") : "")
     };
   });
 
@@ -1636,6 +1666,27 @@ export const ProfessorView: React.FC = () => {
               setOfferHourlyRate(currentInstructor.hourlyRate || 45);
               setOfferMinHourlyRate((currentInstructor as any).minHourlyRate || Math.max(30, (currentInstructor.hourlyRate || 45) - 10));
               setOfferModalities(currentInstructor.modalities?.length ? currentInstructor.modalities : ["Musculação"]);
+              const now = new Date();
+              const yyyy = now.getFullYear();
+              const mm = String(now.getMonth() + 1).padStart(2, "0");
+              const dd = String(now.getDate()).padStart(2, "0");
+              setOfferDate(`${yyyy}-${mm}-${dd}`);
+
+              // Ajusta horário padrão para não iniciar no passado se for hoje
+              const currentHour = now.getHours();
+              if (currentHour >= 21) {
+                setOfferStartTime("07:00");
+                setOfferEndTime("12:00");
+              } else if (currentHour >= 6) {
+                const nextH = Math.min(22, currentHour + 1);
+                const endH = Math.min(23, nextH + 4);
+                setOfferStartTime(`${String(nextH).padStart(2, "0")}:00`);
+                setOfferEndTime(`${String(endH).padStart(2, "0")}:00`);
+              } else {
+                setOfferStartTime("07:00");
+                setOfferEndTime("12:00");
+              }
+
               setShowOfferSlotWizard(true);
               setOfferWizardStep(1);
             }}
@@ -1926,82 +1977,173 @@ export const ProfessorView: React.FC = () => {
                     )}
                     <span className="text-[11px] font-bold text-muted dark:text-slate-400 bg-slate-100 dark:bg-navy-900 px-2 py-0.5 rounded-full">
                       {myConfirmedShifts.length} {myConfirmedShifts.length === 1 ? "aula" : "aulas"}
+                      {myOfferedSlots.length > 0 && ` · ${myOfferedSlots.length} ${myOfferedSlots.length === 1 ? "horário oferecido" : "horários oferecidos"}`}
                     </span>
                   </div>
                 </div>
 
+                {/* Horários Oferecidos pelo Professor (Disponibilidades Ativas para Contratação) */}
+                {myOfferedSlots.length > 0 && (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-navy-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                        <Clock size={13} className="text-primary" />
+                        Seus Horários Disponibilizados ({myOfferedSlots.length})
+                      </span>
+                      <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                        Ativo para Contratação
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {myOfferedSlots.map((slot) => (
+                        <div
+                          key={slot.id}
+                          className="bg-card dark:bg-navy-900 border-2 border-primary/30 p-4 rounded-2xl shadow-sm space-y-3 animate-fade-in relative overflow-hidden"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span className="text-[11px] font-black uppercase text-emerald-700 dark:text-emerald-400 tracking-wider">
+                                  Disponível no App
+                                </span>
+                              </div>
+                              <h3 className="text-base font-black text-navy-900 dark:text-white flex items-center gap-2">
+                                <Clock size={16} className="text-primary" />
+                                {slot.startTime} às {slot.endTime}
+                              </h3>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 font-bold flex items-center gap-1.5">
+                                <Calendar size={13} className="text-primary" />
+                                {formatDateDDMMAAAA(slot.date)}
+                              </p>
+                            </div>
+
+                            <div className="text-right">
+                              <span className="bg-primary/10 text-primary font-black text-xs px-2.5 py-1 rounded-full block">
+                                R$ {slot.hourlyRate}/h
+                              </span>
+                              {slot.allowNegotiation && slot.minHourlyRate && (
+                                <span className="text-[10px] text-muted dark:text-slate-400 block mt-1">
+                                  Mín: R$ {slot.minHourlyRate}/h
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {slot.modalities && slot.modalities.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-0.5">
+                              {slot.modalities.map((m) => (
+                                <span
+                                  key={m}
+                                  className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-navy-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700"
+                                >
+                                  {m}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
+                            <span className="text-[11px] text-muted dark:text-slate-400">
+                              Academias podem contratar diretamente
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = (currentInstructor.offeredSlots || []).filter((s) => s.id !== slot.id);
+                                updateInstructorProfile(currentInstructor.id || activeInstructorId, {
+                                  offeredSlots: updated
+                                });
+                                setOfferSuccessMsg("Horário oferecido removido com sucesso.");
+                                setTimeout(() => setOfferSuccessMsg(null), 4000);
+                              }}
+                              className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 transition-colors"
+                            >
+                              <Trash2 size={12} />
+                              <span>Remover horário</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {myConfirmedShifts.length === 0 ? (
-                  selectedDayInfo && selectedDayInfo.isAvailable ? (
-                    <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/60 rounded-squircle p-5 text-xs space-y-3 animate-fade-in shadow-soft">
-                      <div className="flex items-center justify-between">
-                        <span className="font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                          <Clock size={15} strokeWidth={1.5} className="text-emerald-600" />
-                          Dia Disponível para Novas Aulas
-                        </span>
-                        <span className="text-[10px] font-extrabold uppercase bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                          Grade Ativa
-                        </span>
+                  myOfferedSlots.length > 0 ? null : (
+                    selectedDayInfo && selectedDayInfo.isAvailable ? (
+                      <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/60 rounded-squircle p-5 text-xs space-y-3 animate-fade-in shadow-soft">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                            <Clock size={15} strokeWidth={1.5} className="text-emerald-600" />
+                            Dia Disponível para Novas Aulas
+                          </span>
+                          <span className="text-[10px] font-extrabold uppercase bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                            Grade Ativa
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                          Nenhuma aula contratada ainda para esta data. Seus horários programados na Grade Semanal estão ativos: <strong className="font-extrabold text-navy-900 dark:text-white">{selectedDayInfo.slotsSummary || "Horário livre"}</strong>. Quando uma academia buscar por este horário, você será recomendado no topo!
+                        </p>
+                        <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-between">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">Quer descansar neste dia?</span>
+                          <button
+                            type="button"
+                            onClick={() => toggleBlockDate(activeInstructorId, selectedDayInfo.dateStr)}
+                            className="text-[11px] font-black text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 transition-colors"
+                          >
+                            Definir folga apenas neste dia
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                        Nenhuma aula contratada ainda para esta data. Seus horários programados na Grade Semanal estão ativos: <strong className="font-extrabold text-navy-900 dark:text-white">{selectedDayInfo.slotsSummary || "Horário livre"}</strong>. Quando uma academia buscar por este horário, você será recomendado no topo!
-                      </p>
-                      <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-between">
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400">Quer descansar neste dia?</span>
-                        <button
-                          type="button"
-                          onClick={() => toggleBlockDate(activeInstructorId, selectedDayInfo.dateStr)}
-                          className="text-[11px] font-black text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 transition-colors"
-                        >
-                          Definir folga apenas neste dia
-                        </button>
+                    ) : selectedDayInfo && selectedDayInfo.isBlocked ? (
+                      <div className="bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-800 rounded-squircle p-5 text-xs space-y-3 animate-fade-in shadow-soft">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                            Folga Pontual Programada
+                          </span>
+                          <span className="text-[10px] font-extrabold uppercase bg-slate-200 dark:bg-navy-700 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full">
+                            Bloqueado
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted dark:text-slate-400 leading-relaxed">
+                          Você bloqueou esta data para descanso ou compromissos pessoais. As demais semanas continuam ativas normalmente.
+                        </p>
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => toggleBlockDate(activeInstructorId, selectedDayInfo.dateStr)}
+                            className="text-[11px] font-black text-primary hover:underline flex items-center gap-1"
+                          >
+                            Restaurar disponibilidade deste dia
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ) : selectedDayInfo && selectedDayInfo.isBlocked ? (
-                    <div className="bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-800 rounded-squircle p-5 text-xs space-y-3 animate-fade-in shadow-soft">
-                      <div className="flex items-center justify-between">
-                        <span className="font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                          Folga Pontual Programada
-                        </span>
-                        <span className="text-[10px] font-extrabold uppercase bg-slate-200 dark:bg-navy-700 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full">
-                          Bloqueado
-                        </span>
+                    ) : (
+                      <div className="bg-card dark:bg-navy-800 rounded-squircle p-8 text-center shadow-soft border border-slate-100 dark:border-slate-800 space-y-2">
+                        <Calendar className="mx-auto text-slate-300 dark:text-slate-600" size={32} />
+                        <p className="text-sm font-bold text-navy-900 dark:text-white">
+                          {selectedDayNumber !== null
+                            ? `Nenhuma aula agendada para o dia ${String(selectedDayNumber).padStart(2, "0")}`
+                            : "Nenhuma aula confirmada neste mês"}
+                        </p>
+                        <p className="text-xs text-muted dark:text-slate-400">
+                          {selectedDayNumber !== null
+                            ? "Este dia está definido como folga na sua Grade Semanal."
+                            : "Após aceitar propostas com as academias, suas aulas aparecerão aqui."}
+                        </p>
+                        {selectedDayNumber !== null && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDayNumber(null)}
+                            className="mt-2 text-xs font-bold text-primary hover:underline"
+                          >
+                            Ver todas as aulas de {MONTH_NAMES[selectedMonth - 1]}
+                          </button>
+                        )}
                       </div>
-                      <p className="text-[11px] text-muted dark:text-slate-400 leading-relaxed">
-                        Você bloqueou esta data para descanso ou compromissos pessoais. As demais semanas continuam ativas normalmente.
-                      </p>
-                      <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => toggleBlockDate(activeInstructorId, selectedDayInfo.dateStr)}
-                          className="text-[11px] font-black text-primary hover:underline flex items-center gap-1"
-                        >
-                          Restaurar disponibilidade deste dia
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-card dark:bg-navy-800 rounded-squircle p-8 text-center shadow-soft border border-slate-100 dark:border-slate-800 space-y-2">
-                      <Calendar className="mx-auto text-slate-300 dark:text-slate-600" size={32} />
-                      <p className="text-sm font-bold text-navy-900 dark:text-white">
-                        {selectedDayNumber !== null
-                          ? `Nenhuma aula agendada para o dia ${String(selectedDayNumber).padStart(2, "0")}`
-                          : "Nenhuma aula confirmada neste mês"}
-                      </p>
-                      <p className="text-xs text-muted dark:text-slate-400">
-                        {selectedDayNumber !== null
-                          ? "Este dia está definido como folga na sua Grade Semanal."
-                          : "Após aceitar propostas com as academias, suas aulas aparecerão aqui."}
-                      </p>
-                      {selectedDayNumber !== null && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDayNumber(null)}
-                          className="mt-2 text-xs font-bold text-primary hover:underline"
-                        >
-                          Ver todas as aulas de {MONTH_NAMES[selectedMonth - 1]}
-                        </button>
-                      )}
-                    </div>
+                    )
                   )
                 ) : (
                   myConfirmedShifts.map((shift) => {
@@ -2591,10 +2733,10 @@ export const ProfessorView: React.FC = () => {
               </div>
 
               {/* Espaçador para o conteúdo rolável não ficar coberto pelo botão flutuante */}
-              <div className="h-24" />
+              <div className="h-36" />
 
-              {/* Botão Flutuante Único: Salvar Minha Grade Semanal (Fixo logo acima da Tab Bar) */}
-              <div className="fixed bottom-[74px] left-0 right-0 max-w-md mx-auto px-4 z-30 pointer-events-none">
+              {/* Botão Flutuante Único: Salvar Minha Grade Semanal (Fixo com folga segura acima da Tab Bar) */}
+              <div className="fixed bottom-[calc(max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))+4.25rem)] left-0 right-0 max-w-md mx-auto px-4 z-30 pointer-events-none">
                 <button
                   type="button"
                   onClick={() => {
@@ -5316,12 +5458,25 @@ export const ProfessorView: React.FC = () => {
             </div>
       </AnimatedModal>
 
-      {/* ===================== BARRA DE NAVEGAÇÃO INFERIOR ===================== */}
-      <nav aria-label="Navegação do Professor" className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 px-6 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] flex justify-between items-center z-40 transition-colors duration-200">
+      {/* ===================== BARRA DE NAVEGAÇÃO INFERIOR COM SPOTLIGHT PARA ONBOARDING ===================== */}
+      <nav
+        aria-label="Navegação do Professor"
+        className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto ${
+          showOnboarding
+            ? "z-50 shadow-2xl ring-2 ring-primary/40 bg-card dark:bg-navy-900 border-primary/30"
+            : "z-40 bg-card/95 dark:bg-navy-900/95 border-slate-100 dark:border-slate-800"
+        } backdrop-blur-md border-t px-6 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] flex justify-between items-center transition-all duration-300`}
+      >
         <button
           onClick={() => setActiveTab("inicio")}
-          className={`flex flex-col items-center gap-1 text-xs font-semibold transition-colors ${
-            activeTab === "inicio" ? "text-primary font-bold" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          className={`flex flex-col items-center gap-1 text-xs font-semibold transition-all duration-300 ${
+            showOnboarding
+              ? activeTab === "inicio"
+                ? "bg-primary text-white scale-110 -translate-y-1 shadow-lg shadow-primary/60 ring-4 ring-primary/40 rounded-2xl px-3 py-1.5 font-black"
+                : "text-slate-400 opacity-25 blur-[0.3px]"
+              : activeTab === "inicio"
+              ? "text-primary font-bold"
+              : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           }`}
         >
           <MapPin size={18} />
@@ -5330,8 +5485,14 @@ export const ProfessorView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab("propostas")}
-          className={`flex flex-col items-center gap-1 text-xs font-semibold relative transition-colors ${
-            activeTab === "propostas" ? "text-primary font-bold" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          className={`flex flex-col items-center gap-1 text-xs font-semibold relative transition-all duration-300 ${
+            showOnboarding
+              ? activeTab === "propostas"
+                ? "bg-primary text-white scale-110 -translate-y-1 shadow-lg shadow-primary/60 ring-4 ring-primary/40 rounded-2xl px-3 py-1.5 font-black"
+                : "text-slate-400 opacity-25 blur-[0.3px]"
+              : activeTab === "propostas"
+              ? "text-primary font-bold"
+              : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           }`}
         >
           <div className="relative">
@@ -5347,8 +5508,14 @@ export const ProfessorView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab("agenda")}
-          className={`flex flex-col items-center gap-1 text-xs font-semibold transition-colors ${
-            activeTab === "agenda" ? "text-primary font-bold" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          className={`flex flex-col items-center gap-1 text-xs font-semibold transition-all duration-300 ${
+            showOnboarding
+              ? activeTab === "agenda"
+                ? "bg-primary text-white scale-110 -translate-y-1 shadow-lg shadow-primary/60 ring-4 ring-primary/40 rounded-2xl px-3 py-1.5 font-black"
+                : "text-slate-400 opacity-25 blur-[0.3px]"
+              : activeTab === "agenda"
+              ? "text-primary font-bold"
+              : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           }`}
         >
           <Calendar size={18} />
@@ -5357,8 +5524,14 @@ export const ProfessorView: React.FC = () => {
 
         <button
           onClick={() => setActiveTab("perfil")}
-          className={`flex flex-col items-center gap-1 text-xs font-semibold transition-colors ${
-            activeTab === "perfil" ? "text-primary font-bold" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          className={`flex flex-col items-center gap-1 text-xs font-semibold transition-all duration-300 ${
+            showOnboarding
+              ? activeTab === "perfil"
+                ? "bg-primary text-white scale-110 -translate-y-1 shadow-lg shadow-primary/60 ring-4 ring-primary/40 rounded-2xl px-3 py-1.5 font-black"
+                : "text-slate-400 opacity-25 blur-[0.3px]"
+              : activeTab === "perfil"
+              ? "text-primary font-bold"
+              : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           }`}
         >
           <User size={18} />
@@ -6064,10 +6237,16 @@ export const ProfessorView: React.FC = () => {
           const totalEstimate = Math.round(durationHours * offerHourlyRate);
 
           // Lógica de cálculo dos dias do mês para deslize horizontal no modal de oferecer horário
-          const offerParts = (offerDate || "").split("-").map(Number);
-          const offerYear = offerParts[0] || 2026;
-          const offerMonth = offerParts[1] || 11;
-          const offerDay = offerParts[2] || 11;
+          const today = new Date();
+          const todayYear = today.getFullYear();
+          const todayMonth = today.getMonth() + 1;
+          const todayDay = today.getDate();
+          const todayStr = `${todayYear}-${String(todayMonth).padStart(2, "0")}-${String(todayDay).padStart(2, "0")}`;
+
+          const offerParts = (offerDate || todayStr).split("-").map(Number);
+          const offerYear = offerParts[0] || todayYear;
+          const offerMonth = offerParts[1] || todayMonth;
+          const offerDay = offerParts[2] || todayDay;
           const daysInOfferMonth = new Date(offerYear, offerMonth, 0).getDate();
 
           const weekdayShort = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
@@ -6076,8 +6255,6 @@ export const ProfessorView: React.FC = () => {
             "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
             "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
           ];
-          const today = new Date();
-          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
           const offerMonthLabel = `${monthNamesPt[offerMonth - 1]} de ${offerYear}`;
 
@@ -6104,7 +6281,8 @@ export const ProfessorView: React.FC = () => {
               dayOfWeek: weekdayShort[dow],
               dayName: weekdayFull[dow],
               isToday: dStr === todayStr,
-              isSelected: dStr === offerDate
+              isSelected: dStr === offerDate,
+              isPast: dStr < todayStr
             };
           });
 
@@ -6113,7 +6291,7 @@ export const ProfessorView: React.FC = () => {
           const selectedDayMeta = {
             dayName: weekdayFull[selectedDow] || "Dia Selecionado",
             dayOfWeek: weekdayShort[selectedDow] || "DIA",
-            formatted: formatDateDDMMAAAA(offerDate)
+            formatted: formatDateDDMMAAAA(offerDate || todayStr)
           };
 
           const modalitiesMeta = [
@@ -6393,7 +6571,7 @@ export const ProfessorView: React.FC = () => {
                         Escolha o dia e o horário específico
                       </span>
                       <p className="text-[11px] leading-relaxed">
-                        Deslize pelos dias do mês para escolher a data, ou selecione qualquer outra data abaixo.
+                        O calendário inicia no dia de hoje. Deslize pelos dias para definir datas futuras ou use a seleção abaixo.
                       </p>
                     </div>
 
@@ -6407,7 +6585,7 @@ export const ProfessorView: React.FC = () => {
                             className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-navy-800 text-slate-500 hover:text-navy-900 dark:hover:text-white transition-colors"
                             title="Mês anterior"
                           >
-                            <ChevronLeft size={14} strokeWidth={2} />
+                            <ChevronLeft size={16} strokeWidth={2} />
                           </button>
                           <span className="text-xs font-black text-navy-900 dark:text-white">
                             {offerMonthLabel}
@@ -6418,19 +6596,30 @@ export const ProfessorView: React.FC = () => {
                             className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-navy-800 text-slate-500 hover:text-navy-900 dark:hover:text-white transition-colors"
                             title="Próximo mês"
                           >
-                            <ChevronRight size={14} strokeWidth={2} />
+                            <ChevronRight size={16} strokeWidth={2} />
                           </button>
+                          {(offerDate !== todayStr || offerMonth !== todayMonth || offerYear !== todayYear) && (
+                            <button
+                              type="button"
+                              onClick={() => setOfferDate(todayStr)}
+                              className="ml-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 dark:bg-primary/20 dark:text-primary-light transition-colors"
+                              title="Voltar para a data de hoje"
+                            >
+                              Hoje
+                            </button>
+                          )}
                         </div>
-                        <span className="text-[10px] text-primary font-bold">
+                        <span className="text-[11px] text-primary font-bold">
                           {selectedDayMeta.dayName}, {selectedDayMeta.formatted}
                         </span>
                       </div>
 
-                      {/* Container com scroll horizontal idêntico à Minha Agenda */}
-                      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1.5 scroll-smooth">
+                      {/* Container com scroll horizontal e foco automático no dia atual / selecionado */}
+                      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 scroll-smooth">
                         {offerMonthDays.map((d) => (
                           <button
                             key={d.dateStr}
+                            ref={d.isSelected ? offerSelectedDayRef : (d.isToday ? offerTodayRef : null)}
                             type="button"
                             onClick={() => setOfferDate(d.dateStr)}
                             className={`flex-shrink-0 flex flex-col items-center justify-center w-12 h-14 rounded-2xl transition-all relative ${
@@ -6438,6 +6627,8 @@ export const ProfessorView: React.FC = () => {
                                 ? "bg-primary text-white shadow-md scale-105 border-2 border-white dark:border-navy-900 ring-2 ring-primary/50"
                                 : d.isToday
                                 ? "bg-primary/10 dark:bg-primary/20 text-primary border-2 border-primary font-black"
+                                : d.isPast
+                                ? "bg-slate-50 dark:bg-navy-950 text-slate-400 dark:text-slate-600 opacity-60 hover:opacity-100 border border-transparent"
                                 : "bg-slate-100 dark:bg-navy-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-navy-800 border border-transparent"
                             }`}
                           >
@@ -6462,8 +6653,8 @@ export const ProfessorView: React.FC = () => {
 
                     {/* Selecionar Outras Datas */}
                     <div className="p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
-                      <label className="font-bold text-navy-900 dark:text-white flex items-center gap-1">
-                        <Calendar size={12} strokeWidth={1.5} className="text-primary" />
+                      <label className="font-bold text-navy-900 dark:text-white flex items-center gap-1.5">
+                        <Calendar size={14} strokeWidth={1.5} className="text-primary" />
                         Outra data:
                       </label>
                       <input
@@ -6501,10 +6692,10 @@ export const ProfessorView: React.FC = () => {
                     </div>
 
                     <div className="p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 flex justify-between items-center text-xs">
-                      <span className="text-[11px] text-muted dark:text-slate-400">
+                      <span className="text-[11px] text-muted dark:text-slate-400 font-medium">
                         {durationHours} horas ({offerStartTime} às {offerEndTime})
                       </span>
-                      <span className="font-black text-emerald-600 dark:text-emerald-400">
+                      <span className="font-black text-emerald-600 dark:text-emerald-400 text-xs">
                         R$ {totalEstimate},00 potencial
                       </span>
                     </div>
@@ -6523,53 +6714,82 @@ export const ProfessorView: React.FC = () => {
 
                 {/* ================= ETAPA 4: REVISÃO E CONFIRMAÇÃO ================= */}
                 {offerWizardStep === 4 && (
-                  <div className="space-y-3.5 animate-fade-in flex-1">
-                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200/60 dark:border-emerald-800/40 text-slate-700 dark:text-slate-300">
-                      <span className="font-extrabold text-emerald-800 dark:text-emerald-300 text-xs block mb-0.5">
+                  <div className="space-y-4 animate-fade-in flex-1">
+                    <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-200/60 dark:border-emerald-800/40 text-slate-700 dark:text-slate-300">
+                      <span className="font-black text-emerald-800 dark:text-emerald-300 text-sm block mb-0.5">
                         Tudo pronto! Revise seu horário disponível:
                       </span>
-                      <p className="text-[11px] leading-relaxed">
+                      <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
                         Ao confirmar, este horário específico ficará ativo e as academias poderão convidar você diretamente.
                       </p>
                     </div>
 
-                    {/* Resumo */}
-                    <div className="bg-card dark:bg-navy-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-2.5 shadow-xs">
-                      <div className="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-2">
-                        <div>
-                          <span className="text-[10px] uppercase font-bold text-muted dark:text-slate-400 block tracking-wider">
-                            Data e Horário
-                          </span>
-                          <h4 className="font-black text-sm text-navy-900 dark:text-white flex items-center gap-1.5">
-                            <Calendar size={13} strokeWidth={1.5} className="text-primary" />
-                            {formatDateDDMMAAAA(offerDate)} ({selectedDayMeta.dayName})
+                    {/* Resumo com tipografia ampliada, legível e elegante */}
+                    <div className="bg-card dark:bg-navy-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-4 shadow-xs">
+                      {/* Linha 1: Data e Horário */}
+                      <div className="space-y-2 pb-3.5 border-b border-slate-100 dark:border-slate-800">
+                        <span className="text-xs uppercase font-extrabold text-muted dark:text-slate-400 block tracking-wider">
+                          Data e Horário
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Calendar size={18} strokeWidth={2} className="text-primary shrink-0" />
+                          <h4 className="font-black text-base sm:text-lg text-navy-900 dark:text-white">
+                            {formatDateDDMMAAAA(offerDate)} <span className="font-bold text-slate-500 dark:text-slate-400 text-sm">({selectedDayMeta.dayName})</span>
                           </h4>
-                          <p className="text-xs font-bold text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1">
-                            <Clock size={12} strokeWidth={1.5} className="text-primary" />
-                            {offerStartTime} às {offerEndTime} ({durationHours}h)
-                          </p>
                         </div>
-                        <div className="text-right">
-                          <span className="bg-primary/10 text-primary font-black text-xs px-2.5 py-1 rounded-full block">
-                            R$ {offerHourlyRate}/h
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <Clock size={16} strokeWidth={2} className="text-primary shrink-0" />
+                          <span className="text-sm sm:text-base font-extrabold text-navy-900 dark:text-white">
+                            {offerStartTime} às {offerEndTime}
                           </span>
-                          {offerAllowNegotiation && (
-                            <span className="text-[10px] text-muted dark:text-slate-400 block mt-1">
-                              Mín: R$ {offerMinHourlyRate}/h
-                            </span>
-                          )}
+                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-navy-800 text-slate-600 dark:text-slate-300">
+                            {durationHours} horas
+                          </span>
                         </div>
                       </div>
 
-                      <div className="space-y-1 text-xs">
-                        <span className="text-[10px] text-muted dark:text-slate-400 block">
+                      {/* Linha 2: Valores e Ganhos Estimados */}
+                      <div className="grid grid-cols-2 gap-3 pb-3.5 border-b border-slate-100 dark:border-slate-800">
+                        <div className="space-y-1">
+                          <span className="text-xs uppercase font-extrabold text-muted dark:text-slate-400 block tracking-wider">
+                            Valor por Hora
+                          </span>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-black text-primary">R$ {offerHourlyRate}</span>
+                            <span className="text-xs font-bold text-slate-400">/hora</span>
+                          </div>
+                          {offerAllowNegotiation && (
+                            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block">
+                              Mínimo: R$ {offerMinHourlyRate}/h
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-1 text-right sm:text-left">
+                          <span className="text-xs uppercase font-extrabold text-muted dark:text-slate-400 block tracking-wider">
+                            Ganho Potencial
+                          </span>
+                          <div className="flex items-baseline justify-end sm:justify-start gap-1">
+                            <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                              R$ {totalEstimate},00
+                            </span>
+                          </div>
+                          <span className="text-xs text-muted dark:text-slate-400 block">
+                            Total ({durationHours}h)
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Linha 3: Modalidades Selecionadas */}
+                      <div className="space-y-2">
+                        <span className="text-xs uppercase font-extrabold text-muted dark:text-slate-400 block tracking-wider">
                           Modalidades Selecionadas ({offerModalities.length})
                         </span>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-2">
                           {offerModalities.map((m) => (
                             <span
                               key={m}
-                              className="bg-slate-100 dark:bg-navy-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                              className="bg-slate-100 dark:bg-navy-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold px-3 py-1.5 rounded-xl"
                             >
                               {m}
                             </span>
@@ -6627,11 +6847,26 @@ export const ProfessorView: React.FC = () => {
                     type="button"
                     onClick={() => {
                       const currentId = currentInstructor.id || activeInstructorId;
-                      updateInstructorProfile(currentId, {
+
+                      // Criação do novo horário oferecido específico (OfferedSlot)
+                      const newSlot: OfferedSlot = {
+                        id: `offered-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                        instructorId: currentId,
+                        date: offerDate,
+                        startTime: offerStartTime,
+                        endTime: offerEndTime,
                         hourlyRate: offerHourlyRate,
                         minHourlyRate: offerAllowNegotiation ? offerMinHourlyRate : offerHourlyRate,
-                        modalities: offerModalities
-                      });
+                        allowNegotiation: offerAllowNegotiation,
+                        modalities: offerModalities,
+                        createdAt: new Date().toISOString()
+                      };
+
+                      const existingOffered = currentInstructor.offeredSlots || [];
+                      const updatedOffered = [
+                        ...existingOffered.filter((s) => !(s.date === offerDate && s.startTime === offerStartTime)),
+                        newSlot
+                      ];
 
                       // Mapeia o dia da semana da data escolhida para atualizar a grade
                       const parts = (offerDate || "").split("-").map(Number);
@@ -6660,10 +6895,27 @@ export const ProfessorView: React.FC = () => {
                         });
                       }
 
+                      // Sincroniza o perfil do instrutor com os slots avulsos e dados de valor
+                      updateInstructorProfile(currentId, {
+                        hourlyRate: offerHourlyRate,
+                        minHourlyRate: offerAllowNegotiation ? offerMinHourlyRate : offerHourlyRate,
+                        modalities: offerModalities,
+                        offeredSlots: updatedOffered
+                      });
+
+                      // Sincroniza a disponibilidade no store e no estado local da Grade Semanal
                       updateInstructorAvailability(currentId, updatedAvail);
+                      setLocalAvailability(updatedAvail);
 
                       setShowOfferSlotWizard(false);
-                      setAgendaSubTab("grade");
+
+                      // Posiciona a Minha Agenda exatamente na data do horário oferecido para visualização imediata
+                      if (parts.length === 3) {
+                        setSelectedYear(parts[0]);
+                        setSelectedMonth(parts[1]);
+                        setSelectedDayNumber(parts[2]);
+                      }
+                      setAgendaSubTab("aulas");
                       setOfferSuccessMsg(`Horário para ${formatDateDDMMAAAA(offerDate)} (${offerStartTime} às ${offerEndTime}) disponibilizado com sucesso!`);
                       setTimeout(() => setOfferSuccessMsg(null), 5000);
                     }}

@@ -123,7 +123,22 @@ export interface Instructor {
   modalities: string[];
   availability: DayAvailability[];
   blockedDates?: string[]; // Datas YYYY-MM-DD em que o professor definiu folga pontual
+  offeredSlots?: OfferedSlot[]; // Horários e turnos avulsos disponibilizados pelo professor para contratação
 }
+
+export interface OfferedSlot {
+  id: string;
+  instructorId: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string;   // HH:mm
+  hourlyRate: number;
+  minHourlyRate?: number;
+  allowNegotiation?: boolean;
+  modalities: string[];
+  createdAt: string;
+}
+
 
 export interface Shift {
   id: string;
