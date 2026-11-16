@@ -58,7 +58,8 @@ import {
   HelpCircle,
   ThumbsUp,
   XCircle,
-  Database
+  Database,
+  CalendarCheck
 } from "lucide-react";
 import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
 import {
@@ -71,6 +72,7 @@ import { OnboardingModal } from "@/components/onboarding-modal";
 import { ReviewModal } from "@/components/review-modal";
 import { CancelShiftModal } from "@/components/cancel-shift-modal";
 import { HorizontalBars } from "@/components/horizontal-bars";
+import { TimeStepperInput } from "@/components/time-stepper-input";
 import { cropAndCompressImage } from "@/lib/image-utils";
 
 
@@ -319,7 +321,10 @@ export const AcademiaView: React.FC = () => {
   // Filtros Mobile - Foco inicial no dia atual
   const [mobileSelectedDate, setMobileSelectedDate] = useState<string>("2026-11-11");
   const [mobileSearchTeacher, setMobileSearchTeacher] = useState<string>("");
+  const [mobileAgendaTab, setMobileAgendaTab] = useState<"confirmadas" | "disponiveis">("confirmadas");
   const mobileTodayButtonRef = useRef<HTMLButtonElement | null>(null);
+  const hireTodayRef = useRef<HTMLButtonElement | null>(null);
+  const hireSelectedDayRef = useRef<HTMLButtonElement | null>(null);
 
   // Efeito para rolar e centralizar no dia atual no calendário mobile da academia
   useEffect(() => {
@@ -334,6 +339,17 @@ export const AcademiaView: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [selectedAgendaMonth, activeMenu]);
+
+  // Scroll suave com foco no dia atual / selecionado no calendário da modal de contratação
+  useEffect(() => {
+    if (showHireWizard && hireWizardStep === 3) {
+      const timer = setTimeout(() => {
+        const target = hireSelectedDayRef.current || hireTodayRef.current;
+        target?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      }, 180);
+      return () => clearTimeout(timer);
+    }
+  }, [showHireWizard, hireWizardStep, hireDate]);
 
   // Regras de Precificação da Academia (Item 5)
   const [pricingModalityRates, setPricingModalityRates] = useState<Record<string, number>>(
@@ -902,7 +918,8 @@ export const AcademiaView: React.FC = () => {
                         const isToday = isCurrentMonth && dayNum === refTodayDay;
                         const isSel = mobileSelectedDate === dateStr;
                         const dayShifts = gymShifts.filter((s) => s.date === dateStr);
-                        const hasShifts = dayShifts.length > 0;
+                        const hasConfirmed = dayShifts.some((s) => s.status === "confirmado" || s.status === "realizada" || Boolean(s.confirmedInstructorId));
+                        const hasAvailable = dayShifts.some((s) => !s.confirmedInstructorId && s.status !== "cancelado" && s.status !== "realizada");
 
                         return (
                           <button
@@ -933,217 +950,337 @@ export const AcademiaView: React.FC = () => {
                             }`}>
                               {String(dayNum).padStart(2, "0")}
                             </span>
-                            {hasShifts && (
+                            {/* Bullets: 🟢 Confirmada | 🟡 Disponível */}
+                            {hasConfirmed && hasAvailable ? (
+                              <div className="absolute bottom-1 flex items-center justify-center gap-0.5">
+                                <span className={`w-1.5 h-1.5 rounded-full ${isSel ? "bg-white" : "bg-emerald-500"}`} />
+                                <span className={`w-1.5 h-1.5 rounded-full ${isSel ? "bg-white/80" : "bg-amber-400"}`} />
+                              </div>
+                            ) : hasConfirmed ? (
                               <span
-                                className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
-                                  isSel ? "bg-white" : "bg-primary"
+                                className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${
+                                  isSel ? "bg-white" : "bg-emerald-500"
                                 }`}
                               />
-                            )}
+                            ) : hasAvailable ? (
+                              <span
+                                className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${
+                                  isSel ? "bg-white" : "bg-amber-400"
+                                }`}
+                              />
+                            ) : null}
                           </button>
                         );
                       });
                     })()}
                   </div>
+
+                  {/* Legenda dos Bullets */}
+                  <div className="flex items-center justify-center gap-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 pt-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      Aulas Confirmadas
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      Vagas Disponíveis
+                    </span>
+                  </div>
                 </div>
 
-                {/* Lista de Horários em Cards Verticais Limpos */}
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">
-                    Horários Cadastrados
-                  </h3>
+                {/* Sub-abas Mobile: Aulas Confirmadas vs Vagas Disponíveis */}
+                {(() => {
+                  const dayList = gymShifts.filter(s => mobileSelectedDate === "todas" || s.date === mobileSelectedDate);
+                  const confirmedList = dayList.filter(
+                    s => s.status === "confirmado" || s.status === "realizada" || Boolean(s.confirmedInstructorId) || (s.status === "cancelado" && Boolean(s.confirmedInstructorId || s.confirmedInstructorName))
+                  );
+                  const availableList = dayList.filter(
+                    s => !s.confirmedInstructorId && !s.confirmedInstructorName && s.status !== "cancelado" && s.status !== "realizada"
+                  );
+                  const currentList = mobileAgendaTab === "confirmadas" ? confirmedList : availableList;
 
-                  {(() => {
-                    const list = gymShifts.filter(s => mobileSelectedDate === "todas" || s.date === mobileSelectedDate);
-                    if (list.length === 0) {
-                      return (
-                        <div className="bg-card dark:bg-navy-800 p-6 rounded-squircle text-center border border-slate-100 dark:border-slate-800 space-y-2">
-                          <CalendarIcon className="mx-auto text-slate-300 dark:text-slate-600" size={28} />
-                          <p className="text-xs font-bold text-navy-900 dark:text-white">Nenhum horário para esta data</p>
-                          <p className="text-[11px] text-muted dark:text-slate-400">Cadastre uma nova aula para abrir vagas.</p>
-                        </div>
-                      );
-                    }
-
-                    return list.map((shift) => {
-                      const shiftProposals = gymProposals.filter(p => p.shiftId === shift.id);
-                      const isConfirmed = shift.status === "confirmado";
-                      const isCancelled = shift.status === "cancelado";
-                      const isNegotiating = shift.status === "negociando" || (!isConfirmed && !isCancelled && shiftProposals.length > 0);
-                      const confirmedProf = instructors.find(i => i.id === shift.confirmedInstructorId);
-                      const cancelEligibility = canCancelShift(shift);
-
-                      return (
-                        <div
-                          key={shift.id}
-                          className="bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-3"
+                  return (
+                    <div className="space-y-3">
+                      {/* Abas Superiores de Divisão */}
+                      <div className="flex bg-slate-100 dark:bg-navy-900/60 p-1 rounded-2xl gap-1 border border-slate-200/60 dark:border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => setMobileAgendaTab("confirmadas")}
+                          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                            mobileAgendaTab === "confirmadas"
+                              ? "bg-white dark:bg-navy-800 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200/50 dark:border-slate-700"
+                              : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                          }`}
                         >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-black text-navy-900 dark:text-white">{shift.title}</span>
-                                <span className="text-[10px] bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold">
-                                  {shift.modality}
-                                </span>
-                              </div>
-                              <span className="text-[11px] text-muted dark:text-slate-400 block mt-0.5">
-                                {formatDateDDMMAAAA(shift.date)} · {shift.startTime} – {shift.endTime}
-                              </span>
-                            </div>
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <span>Aulas Confirmadas</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                            mobileAgendaTab === "confirmadas"
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                              : "bg-slate-200 dark:bg-navy-700 text-slate-600 dark:text-slate-400"
+                          }`}>
+                            {confirmedList.length}
+                          </span>
+                        </button>
 
-                            {isConfirmed ? (
-                              <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1">
-                                <CheckCircle size={11} /> Confirmado
-                              </span>
-                            ) : isCancelled ? (
-                              <span className="text-[10px] bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1">
-                                <XCircle size={11} strokeWidth={1.5} /> Cancelada
-                              </span>
-                            ) : isNegotiating ? (
-                              <span className="text-[10px] bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1">
-                                <Clock size={11} /> Negociando
-                              </span>
-                            ) : (
-                              <span className="text-[10px] bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800 px-2.5 py-1 rounded-full font-extrabold">
-                                Vaga Aberta
-                              </span>
-                            )}
-                          </div>
+                        <button
+                          type="button"
+                          onClick={() => setMobileAgendaTab("disponiveis")}
+                          className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                            mobileAgendaTab === "disponiveis"
+                              ? "bg-white dark:bg-navy-800 text-amber-600 dark:text-amber-400 shadow-xs border border-slate-200/50 dark:border-slate-700"
+                              : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                          }`}
+                        >
+                          <span className="w-2 h-2 rounded-full bg-amber-400" />
+                          <span>Vagas Disponíveis</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                            mobileAgendaTab === "disponiveis"
+                              ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                              : "bg-slate-200 dark:bg-navy-700 text-slate-600 dark:text-slate-400"
+                          }`}>
+                            {availableList.length}
+                          </span>
+                        </button>
+                      </div>
 
-                          {/* Informação adicional do turno */}
-                          <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex justify-between items-center text-xs">
-                            <span className="text-muted dark:text-slate-400">Valor oferecido:</span>
-                            <span className="font-black text-primary">R$ {shift.maxRate ?? (shift as any).rate ?? 45}/hora aula (Fixo)</span>
-                          </div>
+                      {/* Header explicativo da aba ativa */}
+                      <div className="flex items-center justify-between px-0.5">
+                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                          {mobileAgendaTab === "confirmadas"
+                            ? "Aulas com professores contratados"
+                            : "Vagas abertas aguardando instrutores"}
+                        </span>
+                        {mobileAgendaTab === "disponiveis" && (
+                          <button
+                            type="button"
+                            onClick={() => setShowNewShiftModal(true)}
+                            className="text-[11px] font-black text-primary hover:underline flex items-center gap-1"
+                          >
+                            <Plus size={12} /> Nova Vaga
+                          </button>
+                        )}
+                      </div>
 
-                          {/* Se cancelado, mostra dados do cancelamento */}
-                          {isCancelled && (
-                            <div className="p-2.5 bg-rose-50/60 dark:bg-rose-950/20 rounded-xl border border-rose-100 dark:border-rose-900/50 space-y-1 text-xs">
-                              <div className="flex items-center justify-between">
-                                <span className="font-extrabold text-rose-800 dark:text-rose-300 text-[11px]">
-                                  {shift.cancelledBy === "academia" ? "Cancelada por Você" : "Cancelada pelo Professor"}
-                                </span>
-                                {shift.cancelledAt && (
-                                  <span className="text-[10px] text-muted dark:text-slate-400">
-                                    {formatDateDDMMAAAA(shift.cancelledAt)}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[11px] text-slate-700 dark:text-slate-300">
-                                <strong className="font-bold">Motivo:</strong> {shift.cancellationReason || "Motivo não informado"}
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Se confirmado ou realizada, mostra o professor e opção de cancelar */}
-                          {(isConfirmed || shift.status === "realizada") && (confirmedProf || shift.confirmedInstructorName) && (() => {
-                            const isDeleted = !confirmedProf || confirmedProf.isDeleted || (confirmedProf as any).isActive === false;
-                            const profName = confirmedProf?.name || shift.confirmedInstructorName || "Professor";
-                            const profCref = confirmedProf?.cref;
-
-                            return (
-                              <div className="space-y-2">
-                                <div className="p-2.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    {confirmedProf?.avatar ? (
-                                      <img src={confirmedProf.avatar} alt={profName} className="w-8 h-8 rounded-full object-cover" />
-                                    ) : (
-                                      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-navy-700 flex items-center justify-center text-slate-500 font-bold text-xs">
-                                        {profName[0]}
-                                      </div>
-                                    )}
-                                    <div>
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="text-xs font-bold text-navy-900 dark:text-white leading-tight">{profName}</span>
-                                        {isDeleted && (
-                                          <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-navy-700 px-1.5 py-0.2 rounded">
-                                            (Usuário excluído)
-                                          </span>
-                                        )}
-                                      </div>
-                                      {profCref && (
-                                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold block">{profCref}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <span className="text-[10px] font-bold text-slate-500">
-                                    {shift.status === "realizada" ? "Realizada" : "Contratado"}
-                                  </span>
-                                </div>
-
-                                {isConfirmed && cancelEligibility.canCancel && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setShiftToCancel(shift);
-                                      setShowCancelModal(true);
-                                    }}
-                                    className="w-full py-1.5 px-3 rounded-full border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 font-extrabold text-[11px] flex items-center justify-center gap-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors"
-                                  >
-                                    <XCircle size={12} strokeWidth={1.5} />
-                                    <span>Cancelar Aula Contratada</span>
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })()}
-
-                          {/* Botão de Recomendação Automática */}
-                          {!isConfirmed && !isCancelled && (() => {
-                            const recMatches = getRecommendedInstructorsForShift(shift, activeInstructors, "horarios", shifts, gyms);
-                            const recCount = recMatches.filter((m) => m.isRecommended).length;
-
-                            return (
-                              <button
-                                onClick={() => {
-                                  setSelectedShiftForRecommendations(shift.id);
-                                  setActiveMenu("professores");
-                                }}
-                                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-colors text-xs font-bold"
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <Sparkles size={13} />
-                                  <span>{recCount} {recCount === 1 ? "professor compatível" : "professores compatíveis"}</span>
-                                </div>
-                                <span className="text-[11px] font-extrabold underline">Ver Recomendados →</span>
-                              </button>
-                            );
-                          })()}
-
-                          {/* Se negociando, mostra atalho */}
-                          {isNegotiating && !isConfirmed && (
-                            <div className="flex justify-between items-center p-2.5 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl border border-amber-100 dark:border-amber-800/60">
-                              <span className="text-xs font-bold text-amber-800 dark:text-amber-300">
-                                {shiftProposals.length} {shiftProposals.length === 1 ? "candidatura recebida" : "candidaturas recebidas"}
-                              </span>
-                              <button
-                                onClick={() => setActiveMenu("propostas")}
-                                className="text-xs font-bold text-primary hover:underline"
-                              >
-                                Ver Candidaturas →
-                              </button>
-                            </div>
-                          )}
-
-                          {/* Ação de Excluir Vaga Aberta/Vaga sem contratação */}
-                          {!isConfirmed && !isCancelled && (
-                            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                      {/* Conteúdo da lista */}
+                      {currentList.length === 0 ? (
+                        <div className="bg-card dark:bg-navy-800 p-6 rounded-squircle text-center border border-slate-100 dark:border-slate-800 space-y-2">
+                          {mobileAgendaTab === "confirmadas" ? (
+                            <>
+                              <CalendarCheck className="mx-auto text-emerald-400/60" size={30} />
+                              <p className="text-xs font-bold text-navy-900 dark:text-white">Nenhuma aula contratada para esta data</p>
+                              <p className="text-[11px] text-muted dark:text-slate-400">Quando um instrutor for contratado, a aula aparecerá aqui.</p>
+                            </>
+                          ) : (
+                            <>
+                              <Clock className="mx-auto text-amber-400/60" size={30} />
+                              <p className="text-xs font-bold text-navy-900 dark:text-white">Nenhuma vaga aberta para esta data</p>
+                              <p className="text-[11px] text-muted dark:text-slate-400">Cadastre um novo horário para abrir vagas no aplicativo.</p>
                               <button
                                 type="button"
-                                onClick={() => handleDeleteShiftClick(shift)}
-                                className="text-[11px] font-bold text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-1 transition-colors"
-                                title="Excluir horário vago da agenda"
+                                onClick={() => setShowNewShiftModal(true)}
+                                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-white text-xs font-bold shadow-xs hover:bg-primary-hover transition-colors"
                               >
-                                <Trash2 size={13} strokeWidth={1.5} />
-                                <span>Excluir Horário</span>
+                                <Plus size={13} /> Cadastrar Vaga
                               </button>
-                            </div>
+                            </>
                           )}
                         </div>
-                      );
-                    });
-                  })()}
-                </div>
+                      ) : (
+                        currentList.map((shift) => {
+                          const shiftProposals = gymProposals.filter(p => p.shiftId === shift.id);
+                          const isConfirmed = shift.status === "confirmado";
+                          const isCancelled = shift.status === "cancelado";
+                          const isNegotiating = shift.status === "negociando" || (!isConfirmed && !isCancelled && shiftProposals.length > 0);
+                          const confirmedProf = instructors.find(i => i.id === shift.confirmedInstructorId);
+                          const cancelEligibility = canCancelShift(shift);
+
+                          return (
+                            <div
+                              key={shift.id}
+                              className="bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-3"
+                            >
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-black text-navy-900 dark:text-white">{shift.title}</span>
+                                    <span className="text-[10px] bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold">
+                                      {shift.modality}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] text-muted dark:text-slate-400 block mt-0.5">
+                                    {formatDateDDMMAAAA(shift.date)} · {shift.startTime} – {shift.endTime}
+                                  </span>
+                                </div>
+
+                                {isConfirmed ? (
+                                  <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1">
+                                    <CheckCircle size={11} /> Confirmado
+                                  </span>
+                                ) : isCancelled ? (
+                                  <span className="text-[10px] bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1">
+                                    <XCircle size={11} strokeWidth={1.5} /> Cancelada
+                                  </span>
+                                ) : isNegotiating ? (
+                                  <span className="text-[10px] bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1">
+                                    <Clock size={11} /> Negociando
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800 px-2.5 py-1 rounded-full font-extrabold flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Vaga Aberta
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Informação de valor */}
+                              <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex justify-between items-center text-xs">
+                                <span className="text-muted dark:text-slate-400">Valor oferecido:</span>
+                                <span className="font-black text-primary">R$ {shift.maxRate ?? (shift as any).rate ?? 45}/hora aula (Fixo)</span>
+                              </div>
+
+                              {/* Se cancelado, mostra dados do cancelamento */}
+                              {isCancelled && (
+                                <div className="p-2.5 bg-rose-50/60 dark:bg-rose-950/20 rounded-xl border border-rose-100 dark:border-rose-900/50 space-y-1 text-xs">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-extrabold text-rose-800 dark:text-rose-300 text-[11px]">
+                                      {shift.cancelledBy === "academia" ? "Cancelada por Você" : "Cancelada pelo Professor"}
+                                    </span>
+                                    {shift.cancelledAt && (
+                                      <span className="text-[10px] text-muted dark:text-slate-400">
+                                        {formatDateDDMMAAAA(shift.cancelledAt)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-slate-700 dark:text-slate-300">
+                                    <strong className="font-bold">Motivo:</strong> {shift.cancellationReason || "Motivo não informado"}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Se confirmado ou realizada, mostra o professor e opções */}
+                              {(isConfirmed || shift.status === "realizada") && (confirmedProf || shift.confirmedInstructorName) && (() => {
+                                const isDeleted = !confirmedProf || confirmedProf.isDeleted || (confirmedProf as any).isActive === false;
+                                const profName = confirmedProf?.name || shift.confirmedInstructorName || "Professor";
+                                const profCref = confirmedProf?.cref;
+
+                                return (
+                                  <div className="space-y-2">
+                                    <div className="p-2.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        {confirmedProf?.avatar ? (
+                                          <img src={confirmedProf.avatar} alt={profName} className="w-8 h-8 rounded-full object-cover" />
+                                        ) : (
+                                          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-navy-700 flex items-center justify-center text-slate-500 font-bold text-xs">
+                                            {profName[0]}
+                                          </div>
+                                        )}
+                                        <div>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-xs font-bold text-navy-900 dark:text-white leading-tight">{profName}</span>
+                                            {isDeleted && (
+                                              <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-navy-700 px-1.5 py-0.2 rounded">
+                                                (Usuário excluído)
+                                              </span>
+                                            )}
+                                          </div>
+                                          {profCref && (
+                                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold block">{profCref}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <span className="text-[10px] font-bold text-slate-500">
+                                        {shift.status === "realizada" ? "Realizada" : "Contratado"}
+                                      </span>
+                                    </div>
+
+                                    {/* Validação de Presença se o professor fez check-in */}
+                                    {isConfirmed && Boolean(shift.instructorCheckInAt) && !shift.gymValidationAt && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleValidateAttendance(shift.id, profName)}
+                                        className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                                      >
+                                        <CheckCircle size={13} />
+                                        <span>Validar Presença do Professor</span>
+                                      </button>
+                                    )}
+
+                                    {/* Botão de Cancelar Aula Contratada */}
+                                    {isConfirmed && cancelEligibility.canCancel && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setShiftToCancel(shift);
+                                          setShowCancelModal(true);
+                                        }}
+                                        className="w-full py-1.5 px-3 rounded-full border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 font-extrabold text-[11px] flex items-center justify-center gap-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors"
+                                      >
+                                        <XCircle size={12} strokeWidth={1.5} />
+                                        <span>Cancelar Aula Contratada</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Botão de Recomendação Automática (para vagas abertas) */}
+                              {!isConfirmed && !isCancelled && (() => {
+                                const recMatches = getRecommendedInstructorsForShift(shift, activeInstructors, "horarios", shifts, gyms);
+                                const recCount = recMatches.filter((m) => m.isRecommended).length;
+
+                                return (
+                                  <button
+                                    onClick={() => {
+                                      setSelectedShiftForRecommendations(shift.id);
+                                      setActiveMenu("professores");
+                                    }}
+                                    className="w-full flex items-center justify-between p-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-colors text-xs font-bold"
+                                  >
+                                    <div className="flex items-center gap-1.5">
+                                      <Sparkles size={13} />
+                                      <span>{recCount} {recCount === 1 ? "professor compatível" : "professores compatíveis"}</span>
+                                    </div>
+                                    <span className="text-[11px] font-extrabold underline">Ver Recomendados →</span>
+                                  </button>
+                                );
+                              })()}
+
+                              {/* Se negociando, mostra atalho */}
+                              {isNegotiating && !isConfirmed && (
+                                <div className="flex justify-between items-center p-2.5 bg-amber-50/50 dark:bg-amber-950/20 rounded-xl border border-amber-100 dark:border-amber-800/60">
+                                  <span className="text-xs font-bold text-amber-800 dark:text-amber-300">
+                                    {shiftProposals.length} {shiftProposals.length === 1 ? "candidatura recebida" : "candidaturas recebidas"}
+                                  </span>
+                                  <button
+                                    onClick={() => setActiveMenu("propostas")}
+                                    className="text-xs font-bold text-primary hover:underline"
+                                  >
+                                    Ver Candidaturas →
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Ação de Excluir Vaga Aberta/Vaga sem contratação */}
+                              {!isConfirmed && !isCancelled && (
+                                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteShiftClick(shift)}
+                                    className="text-[11px] font-bold text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 flex items-center gap-1 transition-colors"
+                                    title="Excluir horário vago da agenda"
+                                  >
+                                    <Trash2 size={13} strokeWidth={1.5} />
+                                    <span>Excluir Horário</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -4938,6 +5075,7 @@ export const AcademiaView: React.FC = () => {
         isOpen={showNewShiftModal}
         onClose={() => setShowNewShiftModal(false)}
         maxWidth="max-w-lg"
+        defaultExpanded={true}
         className="p-5 sm:p-6 space-y-4"
       >
         {(() => {
@@ -5045,28 +5183,27 @@ export const AcademiaView: React.FC = () => {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-navy-900/60 rounded-2xl border border-slate-100 dark:border-slate-700/60">
-                    <div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="space-y-1">
                       <label className="text-navy-800 dark:text-slate-200 block font-bold mb-1 flex items-center gap-1">
                         <Clock size={12} className="text-primary" /> Hora de Início
                       </label>
-                      <input
-                        type="time"
+                      <TimeStepperInput
                         value={newStartTime}
-                        onChange={(e) => handleStartTimeChange(e.target.value)}
-                        className="w-full p-2 bg-white dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-extrabold text-navy-900 dark:text-white text-sm focus:outline-primary"
+                        onChange={(val) => handleStartTimeChange(val)}
+                        ariaLabel="Hora de Início"
+                        className="w-full"
                       />
                     </div>
-
-                    <div>
+                    <div className="space-y-1">
                       <label className="text-navy-800 dark:text-slate-200 block font-bold mb-1 flex items-center gap-1">
                         <Clock size={12} className="text-primary" /> Hora de Término
                       </label>
-                      <input
-                        type="time"
+                      <TimeStepperInput
                         value={newEndTime}
-                        onChange={(e) => setNewEndTime(e.target.value)}
-                        className="w-full p-2 bg-white dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-extrabold text-navy-900 dark:text-white text-sm focus:outline-primary"
+                        onChange={(val) => setNewEndTime(val)}
+                        ariaLabel="Hora de Término"
+                        className="w-full"
                       />
                     </div>
                   </div>
@@ -5463,6 +5600,7 @@ export const AcademiaView: React.FC = () => {
         isOpen={showHireWizard}
         onClose={() => setShowHireWizard(false)}
         maxWidth="max-w-lg"
+        defaultExpanded={true}
         className="p-5 sm:p-6"
       >
         {(() => {
@@ -5545,7 +5683,7 @@ export const AcademiaView: React.FC = () => {
           ];
 
           return (
-            <div className="h-[520px] max-h-[85vh] flex flex-col justify-between">
+            <div className="h-[84dvh] sm:h-[660px] flex flex-col justify-between">
               {/* Header do Wizard (Fixo no Topo) */}
               <div className="space-y-3 pb-2 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex justify-between items-center">
@@ -5834,6 +5972,7 @@ export const AcademiaView: React.FC = () => {
                         {hireMonthDays.map((d) => (
                           <button
                             key={d.dateStr}
+                            ref={d.isSelected ? hireSelectedDayRef : d.isToday ? hireTodayRef : undefined}
                             type="button"
                             onClick={() => setHireDate(d.dateStr)}
                             className={`flex-shrink-0 flex flex-col items-center justify-center w-12 h-14 rounded-2xl transition-all relative ${
@@ -5877,18 +6016,18 @@ export const AcademiaView: React.FC = () => {
                       />
                     </div>
 
-                    {/* Intervalo de Horário: Início e Fim */}
+                    {/* Intervalo de Horário: Início e Fim com Stepper */}
                     <div className="grid grid-cols-2 gap-2.5">
                       <div className="space-y-1">
                         <label className="text-[11px] font-bold text-navy-900 dark:text-white flex items-center gap-1">
                           <Clock size={12} strokeWidth={1.5} className="text-primary" />
                           Início da Aula
                         </label>
-                        <input
-                          type="time"
+                        <TimeStepperInput
                           value={hireStartTime}
-                          onChange={(e) => setHireStartTime(e.target.value)}
-                          className="w-full p-2 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-navy-900 dark:text-white focus:outline-primary"
+                          onChange={(val) => setHireStartTime(val)}
+                          ariaLabel="Início da Aula"
+                          className="w-full"
                         />
                       </div>
                       <div className="space-y-1">
@@ -5896,11 +6035,11 @@ export const AcademiaView: React.FC = () => {
                           <Clock size={12} strokeWidth={1.5} className="text-primary" />
                           Término da Aula
                         </label>
-                        <input
-                          type="time"
+                        <TimeStepperInput
                           value={hireEndTime}
-                          onChange={(e) => setHireEndTime(e.target.value)}
-                          className="w-full p-2 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-navy-900 dark:text-white focus:outline-primary"
+                          onChange={(val) => setHireEndTime(val)}
+                          ariaLabel="Término da Aula"
+                          className="w-full"
                         />
                       </div>
                     </div>
@@ -5938,55 +6077,58 @@ export const AcademiaView: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Card de Resumo Completo */}
-                    <div className="bg-card dark:bg-navy-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-2.5 shadow-xs">
-                      <div className="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-2">
+                    {/* Card de Resumo Completo com tipografia legível e espaçamento generoso */}
+                    <div className="bg-card dark:bg-navy-900 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-3 shadow-xs">
+                      <div className="flex justify-between items-start border-b border-slate-100 dark:border-slate-800 pb-3">
                         <div>
                           <span className="text-[10px] uppercase font-bold text-muted dark:text-slate-400 block tracking-wider">
                             Modalidade
                           </span>
-                          <h4 className="font-black text-sm text-navy-900 dark:text-white">
+                          <h4 className="font-black text-base text-navy-900 dark:text-white">
                             {modalityToUse}
                           </h4>
                         </div>
                         <div className="text-right">
-                          <span className="bg-primary/10 text-primary font-black text-xs px-2.5 py-1 rounded-full block">
+                          <span className="bg-primary/10 text-primary font-black text-sm px-3 py-1 rounded-full inline-block">
                             R$ {hireRate}/h
                           </span>
                           {hireAllowNegotiation && (
-                            <span className="text-[10px] text-muted dark:text-slate-400 block mt-1">
+                            <span className="text-[11px] font-semibold text-muted dark:text-slate-400 block mt-1">
                               Mín: R$ {hireMinNegotiableRate}/h
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] text-muted dark:text-slate-400 block">Data da Aula</span>
-                          <p className="font-bold text-navy-900 dark:text-white flex items-center gap-1">
-                            <CalendarIcon size={12} strokeWidth={1.5} className="text-primary" />
-                            {formatDateDDMMAAAA(hireDate)}
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="space-y-1">
+                          <span className="text-[11px] text-muted dark:text-slate-400 block">Data da Aula</span>
+                          <p className="font-extrabold text-sm text-navy-900 dark:text-white flex items-center gap-1.5">
+                            <CalendarIcon size={14} strokeWidth={1.5} className="text-primary shrink-0" />
+                            <span>{formatDateDDMMAAAA(hireDate)}</span>
                           </p>
                         </div>
 
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] text-muted dark:text-slate-400 block">Horário e Duração</span>
-                          <p className="font-bold text-navy-900 dark:text-white flex items-center gap-1">
-                            <Clock size={12} strokeWidth={1.5} className="text-primary" />
-                            {hireStartTime} às {hireEndTime} ({durationHours}h)
+                        <div className="space-y-1">
+                          <span className="text-[11px] text-muted dark:text-slate-400 block">Horário e Duração</span>
+                          <p className="font-extrabold text-sm text-navy-900 dark:text-white flex items-center gap-1.5">
+                            <Clock size={14} strokeWidth={1.5} className="text-primary shrink-0" />
+                            <span>{hireStartTime} às {hireEndTime}</span>
                           </p>
+                          <span className="text-[10px] text-slate-400 font-bold block">
+                            Duração: {durationHours}h
+                          </span>
                         </div>
                       </div>
 
-                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
                         <div>
                           <span className="text-[10px] text-muted dark:text-slate-400 block">Unidade Solicitante</span>
-                          <span className="font-bold text-navy-900 dark:text-white">{currentGym.name}</span>
+                          <span className="font-bold text-navy-900 dark:text-white text-xs">{currentGym.name}</span>
                         </div>
                         <div className="text-right">
                           <span className="text-[10px] text-muted dark:text-slate-400 block">Total Estimado</span>
-                          <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">R$ {totalEstimate},00</span>
+                          <span className="text-base font-black text-emerald-600 dark:text-emerald-400">R$ {totalEstimate},00</span>
                         </div>
                       </div>
                     </div>

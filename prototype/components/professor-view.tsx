@@ -59,7 +59,8 @@ import {
   Smartphone,
   XCircle,
   Database,
-  Edit3
+  Edit3,
+  CalendarCheck
 } from "lucide-react";
 import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, maskDate, formatToDDMMAAAA, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString, OfferedSlot } from "@/store/mock-data";
 import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility } from "@/store/use-app-store";
@@ -134,6 +135,7 @@ export const ProfessorView: React.FC = () => {
 
   // Sub-aba de Agenda e Grade de Disponibilidade + Calendário Horizontal de Linha Única
   const [agendaSubTab, setAgendaSubTab] = useState<"aulas" | "grade">("aulas");
+  const [agendaDayTab, setAgendaDayTab] = useState<"confirmadas" | "disponiveis">("confirmadas");
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [selectedMonth, setSelectedMonth] = useState<number>(11); // 1 = Jan, 11 = Nov, 12 = Dez
   const [selectedDayNumber, setSelectedDayNumber] = useState<number | null>(new Date().getDate()); // foco no dia atual (visualização primária)
@@ -554,6 +556,17 @@ export const ProfessorView: React.FC = () => {
   // Mês selecionado no calendário horizontal (YYYY-MM)
   const selectedMonthStr = `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`;
 
+  // Verifica se um horário oferecido pelo professor já foi contratado por uma academia
+  const isSlotHired = (slot: OfferedSlot) => {
+    return shifts.some((s) => {
+      const isMine = isMyInstructorId(s.confirmedInstructorId);
+      if (!isMine) return false;
+      if (s.date !== slot.date) return false;
+      if (s.status !== "confirmado" && s.status !== "realizada") return false;
+      return s.startTime < slot.endTime && s.endTime > slot.startTime;
+    });
+  };
+
   // Turnos do professor para o mês selecionado (confirmados, já realizados ou cancelados)
   const myConfirmedShifts = shifts.filter((s) => {
     const isMine = isMyInstructorId(s.confirmedInstructorId);
@@ -567,8 +580,9 @@ export const ProfessorView: React.FC = () => {
     return s.date.startsWith(selectedMonthStr);
   });
 
-  // Horários avulsos oferecidos pelo próprio professor para o mês ou dia selecionado
+  // Horários avulsos oferecidos pelo próprio professor que ainda estão disponíveis (não contratados)
   const myOfferedSlots = (currentInstructor.offeredSlots || []).filter((s) => {
+    if (isSlotHired(s)) return false;
     if (selectedDayNumber !== null) {
       const targetDate = `${selectedMonthStr}-${String(selectedDayNumber).padStart(2, "0")}`;
       return s.date === targetDate;
@@ -648,8 +662,10 @@ export const ProfessorView: React.FC = () => {
       ? matchingAvail.slots.map((sl) => `${sl.start}–${sl.end}`).join(", ")
       : "";
 
-    // Checagem de horários avulsos oferecidos pelo professor nesta data
-    const dayOfferedSlots = (currentInstructor.offeredSlots || []).filter((s) => s.date === dateStr);
+    // Checagem de horários avulsos oferecidos pelo professor nesta data (e ainda disponíveis)
+    const dayOfferedSlots = (currentInstructor.offeredSlots || []).filter(
+      (s) => s.date === dateStr && !isSlotHired(s)
+    );
     const hasOfferedSlots = dayOfferedSlots.length > 0;
 
     const isToday = isCurrentMonthView && dayNum === targetTodayDay;
@@ -1695,7 +1711,7 @@ export const ProfessorView: React.FC = () => {
             Quero oferecer um horário
           </button>
 
-          {/* Sub-Aba: Alternar entre Aulas Confirmadas e Meus horários semanais */}
+          {/* Sub-Aba: Alternar entre Agenda Diária e Meus horários semanais */}
           <div className="flex bg-slate-100 dark:bg-navy-800 p-1 rounded-full text-xs font-bold border border-slate-200/60 dark:border-slate-700">
             <button
               onClick={() => setAgendaSubTab("aulas")}
@@ -1706,7 +1722,7 @@ export const ProfessorView: React.FC = () => {
               }`}
             >
               <Calendar size={13} />
-              <span>Aulas Confirmadas ({myConfirmedShifts.length})</span>
+              <span>Agenda Diária</span>
             </button>
             <button
               onClick={() => setAgendaSubTab("grade")}
@@ -1888,23 +1904,26 @@ export const ProfessorView: React.FC = () => {
                           {String(d.dayNum).padStart(2, "0")}
                         </span>
 
-                        {/* Indicador de Estado: 🔵 Aula Contratada | 🟢 Disponível | 🔴 Cancelada */}
-                        {d.hasShifts ? (
-                          <span
-                            className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${
-                              isSelected
-                                ? "bg-white"
-                                : d.hasCompleted
-                                ? "bg-emerald-500"
-                                : "bg-blue-500 ring-1 ring-white dark:ring-navy-800"
-                            }`}
-                          />
-                        ) : d.isAvailable ? (
+                        {/* Indicadores de Estado: 🟢 Aula Confirmada | 🟡 Horário Disponível | 🔴 Cancelada */}
+                        {d.hasShifts && d.hasOfferedSlots ? (
+                          <div className="absolute bottom-1 flex items-center justify-center gap-0.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white" : "bg-emerald-500"}`} />
+                            <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white/80" : "bg-amber-400"}`} />
+                          </div>
+                        ) : d.hasShifts ? (
                           <span
                             className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${
                               isSelected
                                 ? "bg-white"
                                 : "bg-emerald-500 ring-1 ring-white dark:ring-navy-800"
+                            }`}
+                          />
+                        ) : d.hasOfferedSlots ? (
+                          <span
+                            className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${
+                              isSelected
+                                ? "bg-white"
+                                : "bg-amber-400 ring-1 ring-white dark:ring-navy-800"
                             }`}
                           />
                         ) : d.hasCancelled ? (
@@ -1919,6 +1938,18 @@ export const ProfessorView: React.FC = () => {
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Legenda dos Bullets */}
+                <div className="flex items-center justify-center gap-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 pt-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    Aulas Confirmadas
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                    Horários Disponíveis
+                  </span>
                 </div>
               </div>
 
@@ -1950,18 +1981,18 @@ export const ProfessorView: React.FC = () => {
                 </div>
               )}
 
-              {/* Lista de Aulas do Mês/Dia Selecionado */}
+              {/* Lista de Aulas e Horários do Mês/Dia Selecionado */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <div>
                     <h2 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">
                       {selectedDayNumber !== null
-                        ? `Aulas de ${String(selectedDayNumber).padStart(2, "0")}/${String(selectedMonth).padStart(2, "0")}/${selectedYear}`
-                        : `Aulas em ${MONTH_NAMES[selectedMonth - 1]}/${selectedYear} (Mês Inteiro)`}
+                        ? `Agenda de ${String(selectedDayNumber).padStart(2, "0")}/${String(selectedMonth).padStart(2, "0")}/${selectedYear}`
+                        : `Agenda em ${MONTH_NAMES[selectedMonth - 1]}/${selectedYear} (Mês Inteiro)`}
                     </h2>
                     {selectedDayNumber === null && (
                       <p className="text-[11px] text-muted dark:text-slate-400">
-                        Visualização primária exibindo todas as aulas do mês
+                        Visualização de todas as aulas e disponibilidades do mês
                       </p>
                     )}
                   </div>
@@ -1975,177 +2006,90 @@ export const ProfessorView: React.FC = () => {
                         <RotateCcw size={10} /> Mês Todo
                       </button>
                     )}
-                    <span className="text-[11px] font-bold text-muted dark:text-slate-400 bg-slate-100 dark:bg-navy-900 px-2 py-0.5 rounded-full">
-                      {myConfirmedShifts.length} {myConfirmedShifts.length === 1 ? "aula" : "aulas"}
-                      {myOfferedSlots.length > 0 && ` · ${myOfferedSlots.length} ${myOfferedSlots.length === 1 ? "horário oferecido" : "horários oferecidos"}`}
-                    </span>
                   </div>
                 </div>
 
-                {/* Horários Oferecidos pelo Professor (Disponibilidades Ativas para Contratação) */}
-                {myOfferedSlots.length > 0 && (
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-navy-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                        <Clock size={13} className="text-primary" />
-                        Seus Horários Disponibilizados ({myOfferedSlots.length})
-                      </span>
-                      <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                        Ativo para Contratação
-                      </span>
-                    </div>
+                {/* Duas Abas: Aulas Confirmadas vs Horários Disponíveis */}
+                <div className="flex bg-slate-100 dark:bg-navy-800 p-1 rounded-2xl text-xs font-bold border border-slate-200/60 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setAgendaDayTab("confirmadas")}
+                    className={`flex-1 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                      agendaDayTab === "confirmadas"
+                        ? "bg-white dark:bg-navy-700 text-navy-900 dark:text-white shadow-xs font-black"
+                        : "text-slate-600 dark:text-slate-400 hover:text-navy-900 dark:hover:text-white font-bold"
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Aulas Confirmadas ({myConfirmedShifts.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAgendaDayTab("disponiveis")}
+                    className={`flex-1 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 ${
+                      agendaDayTab === "disponiveis"
+                        ? "bg-white dark:bg-navy-700 text-navy-900 dark:text-white shadow-xs font-black"
+                        : "text-slate-600 dark:text-slate-400 hover:text-navy-900 dark:hover:text-white font-bold"
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                    <span>Horários Disponíveis ({myOfferedSlots.length})</span>
+                  </button>
+                </div>
 
-                    <div className="space-y-2.5">
-                      {myOfferedSlots.map((slot) => (
-                        <div
-                          key={slot.id}
-                          className="bg-card dark:bg-navy-900 border-2 border-primary/30 p-4 rounded-2xl shadow-sm space-y-3 animate-fade-in relative overflow-hidden"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-[11px] font-black uppercase text-emerald-700 dark:text-emerald-400 tracking-wider">
-                                  Disponível no App
-                                </span>
-                              </div>
-                              <h3 className="text-base font-black text-navy-900 dark:text-white flex items-center gap-2">
-                                <Clock size={16} className="text-primary" />
-                                {slot.startTime} às {slot.endTime}
-                              </h3>
-                              <p className="text-xs text-slate-600 dark:text-slate-300 font-bold flex items-center gap-1.5">
-                                <Calendar size={13} className="text-primary" />
-                                {formatDateDDMMAAAA(slot.date)}
-                              </p>
-                            </div>
-
-                            <div className="text-right">
-                              <span className="bg-primary/10 text-primary font-black text-xs px-2.5 py-1 rounded-full block">
-                                R$ {slot.hourlyRate}/h
-                              </span>
-                              {slot.allowNegotiation && slot.minHourlyRate && (
-                                <span className="text-[10px] text-muted dark:text-slate-400 block mt-1">
-                                  Mín: R$ {slot.minHourlyRate}/h
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {slot.modalities && slot.modalities.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pt-0.5">
-                              {slot.modalities.map((m) => (
-                                <span
-                                  key={m}
-                                  className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-navy-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700"
-                                >
-                                  {m}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-
-                          <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
-                            <span className="text-[11px] text-muted dark:text-slate-400">
-                              Academias podem contratar diretamente
+                {/* CONTEÚDO DA ABA 1: AULAS CONFIRMADAS */}
+                {agendaDayTab === "confirmadas" && (
+                  <div className="space-y-3 animate-fade-in">
+                    {myConfirmedShifts.length === 0 ? (
+                      selectedDayInfo && selectedDayInfo.isBlocked ? (
+                        <div className="bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-800 rounded-squircle p-5 text-xs space-y-3 animate-fade-in shadow-soft">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                              Folga Pontual Programada
                             </span>
+                            <span className="text-[10px] font-extrabold uppercase bg-slate-200 dark:bg-navy-700 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full">
+                              Bloqueado
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted dark:text-slate-400 leading-relaxed">
+                            Você bloqueou esta data para descanso ou compromissos pessoais. As demais semanas continuam ativas normalmente.
+                          </p>
+                          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-end">
                             <button
                               type="button"
-                              onClick={() => {
-                                const updated = (currentInstructor.offeredSlots || []).filter((s) => s.id !== slot.id);
-                                updateInstructorProfile(currentInstructor.id || activeInstructorId, {
-                                  offeredSlots: updated
-                                });
-                                setOfferSuccessMsg("Horário oferecido removido com sucesso.");
-                                setTimeout(() => setOfferSuccessMsg(null), 4000);
-                              }}
-                              className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 transition-colors"
+                              onClick={() => toggleBlockDate(activeInstructorId, selectedDayInfo.dateStr)}
+                              className="text-[11px] font-black text-primary hover:underline flex items-center gap-1"
                             >
-                              <Trash2 size={12} />
-                              <span>Remover horário</span>
+                              Restaurar disponibilidade deste dia
                             </button>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {myConfirmedShifts.length === 0 ? (
-                  myOfferedSlots.length > 0 ? null : (
-                    selectedDayInfo && selectedDayInfo.isAvailable ? (
-                      <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-800/60 rounded-squircle p-5 text-xs space-y-3 animate-fade-in shadow-soft">
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                            <Clock size={15} strokeWidth={1.5} className="text-emerald-600" />
-                            Dia Disponível para Novas Aulas
-                          </span>
-                          <span className="text-[10px] font-extrabold uppercase bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                            Grade Ativa
-                          </span>
+                      ) : (
+                        <div className="bg-card dark:bg-navy-800 rounded-squircle p-7 text-center shadow-soft border border-slate-100 dark:border-slate-800 space-y-2.5">
+                          <CalendarCheck className="mx-auto text-slate-300 dark:text-slate-600" size={32} />
+                          <p className="text-sm font-bold text-navy-900 dark:text-white">
+                            {selectedDayNumber !== null
+                              ? `Nenhuma aula confirmada para o dia ${String(selectedDayNumber).padStart(2, "0")}`
+                              : `Nenhuma aula confirmada em ${MONTH_NAMES[selectedMonth - 1]}/${selectedYear}`}
+                          </p>
+                          <p className="text-xs text-muted dark:text-slate-400 max-w-xs mx-auto">
+                            {selectedDayNumber !== null
+                              ? "Assim que você aceitar uma proposta ou uma academia contratar seu horário, ela aparecerá aqui."
+                              : "Após aceitar propostas com as academias, suas aulas aparecerão aqui."}
+                          </p>
+                          {myOfferedSlots.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setAgendaDayTab("disponiveis")}
+                              className="mt-2 text-xs font-black text-amber-600 dark:text-amber-400 hover:underline flex items-center justify-center gap-1.5 mx-auto"
+                            >
+                              <Clock size={13} />
+                              Ver {myOfferedSlots.length} {myOfferedSlots.length === 1 ? "horário disponível" : "horários disponíveis"} deste dia
+                            </button>
+                          )}
                         </div>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                          Nenhuma aula contratada ainda para esta data. Seus horários programados na Grade Semanal estão ativos: <strong className="font-extrabold text-navy-900 dark:text-white">{selectedDayInfo.slotsSummary || "Horário livre"}</strong>. Quando uma academia buscar por este horário, você será recomendado no topo!
-                        </p>
-                        <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-between">
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400">Quer descansar neste dia?</span>
-                          <button
-                            type="button"
-                            onClick={() => toggleBlockDate(activeInstructorId, selectedDayInfo.dateStr)}
-                            className="text-[11px] font-black text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 transition-colors"
-                          >
-                            Definir folga apenas neste dia
-                          </button>
-                        </div>
-                      </div>
-                    ) : selectedDayInfo && selectedDayInfo.isBlocked ? (
-                      <div className="bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-800 rounded-squircle p-5 text-xs space-y-3 animate-fade-in shadow-soft">
-                        <div className="flex items-center justify-between">
-                          <span className="font-black text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                            Folga Pontual Programada
-                          </span>
-                          <span className="text-[10px] font-extrabold uppercase bg-slate-200 dark:bg-navy-700 text-slate-700 dark:text-slate-300 px-2.5 py-0.5 rounded-full">
-                            Bloqueado
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-muted dark:text-slate-400 leading-relaxed">
-                          Você bloqueou esta data para descanso ou compromissos pessoais. As demais semanas continuam ativas normalmente.
-                        </p>
-                        <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => toggleBlockDate(activeInstructorId, selectedDayInfo.dateStr)}
-                            className="text-[11px] font-black text-primary hover:underline flex items-center gap-1"
-                          >
-                            Restaurar disponibilidade deste dia
-                          </button>
-                        </div>
-                      </div>
+                      )
                     ) : (
-                      <div className="bg-card dark:bg-navy-800 rounded-squircle p-8 text-center shadow-soft border border-slate-100 dark:border-slate-800 space-y-2">
-                        <Calendar className="mx-auto text-slate-300 dark:text-slate-600" size={32} />
-                        <p className="text-sm font-bold text-navy-900 dark:text-white">
-                          {selectedDayNumber !== null
-                            ? `Nenhuma aula agendada para o dia ${String(selectedDayNumber).padStart(2, "0")}`
-                            : "Nenhuma aula confirmada neste mês"}
-                        </p>
-                        <p className="text-xs text-muted dark:text-slate-400">
-                          {selectedDayNumber !== null
-                            ? "Este dia está definido como folga na sua Grade Semanal."
-                            : "Após aceitar propostas com as academias, suas aulas aparecerão aqui."}
-                        </p>
-                        {selectedDayNumber !== null && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedDayNumber(null)}
-                            className="mt-2 text-xs font-bold text-primary hover:underline"
-                          >
-                            Ver todas as aulas de {MONTH_NAMES[selectedMonth - 1]}
-                          </button>
-                        )}
-                      </div>
-                    )
-                  )
-                ) : (
                   myConfirmedShifts.map((shift) => {
                     const gym = gyms.find((g) => g.id === shift.gymId);
                     const isRealizada = shift.status === "realizada";
@@ -2175,6 +2119,12 @@ export const ProfessorView: React.FC = () => {
                           </div>
 
                           <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 tracking-wider">
+                                Aula Confirmada
+                              </span>
+                            </div>
                             <div className="flex justify-between items-start">
                               <h3 className="text-sm font-bold text-navy-900 dark:text-white truncate">{gym?.name}</h3>
                               <span className="text-xs font-extrabold text-navy-900 dark:text-white">R$ {shift.agreedRate || shift.maxRate || (shift as any).rate || 45}/h</span>
@@ -2335,8 +2285,124 @@ export const ProfessorView: React.FC = () => {
                   })
                 )}
               </div>
-            </div>
-          )}
+            )}
+
+            {/* CONTEÚDO DA ABA 2: HORÁRIOS DISPONÍVEIS */}
+            {agendaDayTab === "disponiveis" && (
+              <div className="space-y-3 animate-fade-in">
+                {/* Banner de Contexto */}
+                <div className="bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 rounded-2xl p-3.5 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-black text-amber-900 dark:text-amber-300">
+                    <Clock size={14} className="text-amber-600 dark:text-amber-400" />
+                    <span>Horários Abertos para Contratação</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800/90 dark:text-amber-300/80 leading-relaxed">
+                    Estes horários foram disponibilizados por você no app e estão visíveis para as academias da sua região. Quando uma academia contratar, o horário será transferido automaticamente para <strong>Aulas Confirmadas</strong>.
+                  </p>
+                </div>
+
+                {myOfferedSlots.length === 0 ? (
+                  <div className="bg-card dark:bg-navy-800 rounded-squircle p-7 text-center shadow-soft border border-slate-100 dark:border-slate-800 space-y-3 animate-fade-in">
+                    <Clock className="mx-auto text-slate-300 dark:text-slate-600" size={32} />
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">
+                      {selectedDayNumber !== null
+                        ? `Nenhum horário avulso disponibilizado para o dia ${String(selectedDayNumber).padStart(2, "0")}`
+                        : `Nenhum horário avulso disponibilizado em ${MONTH_NAMES[selectedMonth - 1]}`}
+                    </p>
+                    <p className="text-xs text-muted dark:text-slate-400 max-w-xs mx-auto">
+                      Disponibilize faixas de horário específicas para que as academias possam contratá-lo diretamente.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowOfferSlotWizard(true);
+                        setOfferWizardStep(1);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white text-xs font-black shadow-xs hover:bg-primary-hover active:scale-95 transition-all mx-auto"
+                    >
+                      <Plus size={13} />
+                      Oferecer um horário agora
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {myOfferedSlots.map((slot) => (
+                      <div
+                        key={slot.id}
+                        className="bg-card dark:bg-navy-900 border-2 border-amber-300/80 dark:border-amber-700/60 p-4 rounded-2xl shadow-sm space-y-3 relative overflow-hidden animate-fade-in"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+                              <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 tracking-wider">
+                                Disponível para Contratação
+                              </span>
+                            </div>
+                            <h3 className="text-base font-black text-navy-900 dark:text-white flex items-center gap-2">
+                              <Clock size={16} className="text-amber-500" />
+                              {slot.startTime} às {slot.endTime}
+                            </h3>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 font-bold flex items-center gap-1.5">
+                              <Calendar size={13} className="text-amber-500" />
+                              {formatDateDDMMAAAA(slot.date)}
+                            </p>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-black text-xs px-2.5 py-1 rounded-full block border border-amber-200 dark:border-amber-800">
+                              R$ {slot.hourlyRate}/h
+                            </span>
+                            {slot.allowNegotiation && slot.minHourlyRate && (
+                              <span className="text-[10px] text-muted dark:text-slate-400 block mt-1">
+                                Mín: R$ {slot.minHourlyRate}/h
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {slot.modalities && slot.modalities.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-0.5">
+                            {slot.modalities.map((m) => (
+                              <span
+                                key={m}
+                                className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-navy-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700"
+                              >
+                                {m}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
+                          <span className="text-[11px] text-muted dark:text-slate-400">
+                            Nenhuma academia contratou ainda
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = (currentInstructor.offeredSlots || []).filter((s) => s.id !== slot.id);
+                              updateInstructorProfile(currentInstructor.id || activeInstructorId, {
+                                offeredSlots: updated
+                              });
+                              setOfferSuccessMsg("Horário disponível excluído com sucesso.");
+                              setTimeout(() => setOfferSuccessMsg(null), 4000);
+                            }}
+                            className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 transition-colors"
+                          >
+                            <Trash2 size={12} />
+                            <span>Excluir Horário Disponível</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
           {/* SUB-ABA 2: GRADE DE DISPONIBILIDADE DO PROFESSOR */}
           {agendaSubTab === "grade" && (
@@ -5136,12 +5202,12 @@ export const ProfessorView: React.FC = () => {
           </span>
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-              <span>Aula Contratada</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+              <span>Aula Confirmada</span>
             </div>
             <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-              <span>Disponível</span>
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+              <span>Horário Disponível</span>
             </div>
             <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
               <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
@@ -6916,6 +6982,7 @@ export const ProfessorView: React.FC = () => {
                         setSelectedDayNumber(parts[2]);
                       }
                       setAgendaSubTab("aulas");
+                      setAgendaDayTab("disponiveis");
                       setOfferSuccessMsg(`Horário para ${formatDateDDMMAAAA(offerDate)} (${offerStartTime} às ${offerEndTime}) disponibilizado com sucesso!`);
                       setTimeout(() => setOfferSuccessMsg(null), 5000);
                     }}
