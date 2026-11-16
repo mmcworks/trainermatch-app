@@ -19,6 +19,29 @@ export interface AnimatedModalProps {
   onToggleExpand?: (expanded: boolean) => void;
 }
 
+let activeModalsCount = 0;
+
+function lockBodyScroll() {
+  activeModalsCount++;
+  if (activeModalsCount === 1 && typeof document !== "undefined") {
+    document.body.style.overflow = "hidden";
+  }
+}
+
+function unlockBodyScroll() {
+  activeModalsCount = Math.max(0, activeModalsCount - 1);
+  if (typeof document !== "undefined") {
+    setTimeout(() => {
+      // Verifica se ainda existe alguma modal ativa montada no DOM
+      const hasOpenModal = document.querySelector('[role="dialog"][aria-modal="true"]');
+      if (activeModalsCount === 0 || !hasOpenModal) {
+        activeModalsCount = 0;
+        document.body.style.overflow = "";
+      }
+    }, 50);
+  }
+}
+
 export function AnimatedModal({
   isOpen,
   onClose,
@@ -98,13 +121,12 @@ export function AnimatedModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, isClosing]);
 
-  // Previne rolagem de fundo enquanto a modal está aberta
+  // Previne rolagem de fundo enquanto a modal está aberta e restaura sem risco de travamento
   useEffect(() => {
     if (mounted) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
+      lockBodyScroll();
       return () => {
-        document.body.style.overflow = originalOverflow;
+        unlockBodyScroll();
       };
     }
   }, [mounted]);

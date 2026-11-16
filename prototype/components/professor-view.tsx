@@ -441,6 +441,10 @@ export const ProfessorView: React.FC = () => {
     );
     updateInstructorProfile(instructorId, { avatar: compressed });
     setShowProfessorCropModal(false);
+    setShowAvatarModal(false);
+    if (typeof document !== "undefined") {
+      document.body.style.overflow = "";
+    }
     setProfileSuccessMsg("Foto de perfil circular atualizada com sucesso!");
     setTimeout(() => setProfileSuccessMsg(null), 3000);
   };

@@ -645,6 +645,9 @@ export const AcademiaView: React.FC = () => {
       updateGymProfile(gymId, { facadeUrl: compressed });
     }
     setShowCropModal(false);
+    if (typeof document !== "undefined") {
+      document.body.style.overflow = "";
+    }
     setProfileSuccessMsg(
       cropTarget === "logo"
         ? "Logotipo circular atualizado com sucesso!"
