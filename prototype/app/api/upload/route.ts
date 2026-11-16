@@ -30,6 +30,13 @@ export async function POST(req: NextRequest) {
       const ext = path.extname(file.name) || ".jpg";
       const randomName = `${crypto.randomUUID()}${ext}`;
 
+      // Em ambiente serverless (Vercel) ou quando configurado, retorna DataURL para persistir no banco sem perda efêmera
+      if (process.env.VERCEL || process.env.PERSIST_DATA_URL === "true") {
+        const mimeType = file.type || "image/jpeg";
+        const base64 = buffer.toString("base64");
+        return NextResponse.json({ url: `data:${mimeType};base64,${base64}` });
+      }
+
       try {
         const uploadDir = path.join(process.cwd(), "public", "uploads");
         if (!fs.existsSync(uploadDir)) {
@@ -39,7 +46,7 @@ export async function POST(req: NextRequest) {
         fs.writeFileSync(filePath, buffer);
         return NextResponse.json({ url: `/uploads/${randomName}` });
       } catch (fsErr) {
-        // Ambiente Serverless read-only (ex: Vercel): retorna DataURL inline
+        // Ambiente Serverless read-only: retorna DataURL inline
         const mimeType = file.type || "image/jpeg";
         const base64 = buffer.toString("base64");
         return NextResponse.json({ url: `data:${mimeType};base64,${base64}` });
@@ -72,6 +79,11 @@ export async function POST(req: NextRequest) {
 
       const randomName = `${crypto.randomUUID()}${ext}`;
 
+      // Em ambiente serverless (Vercel) ou quando configurado, retorna a DataURL diretamente
+      if (process.env.VERCEL || process.env.PERSIST_DATA_URL === "true") {
+        return NextResponse.json({ url: body.dataUrl });
+      }
+
       try {
         const uploadDir = path.join(process.cwd(), "public", "uploads");
         if (!fs.existsSync(uploadDir)) {
@@ -81,7 +93,7 @@ export async function POST(req: NextRequest) {
         fs.writeFileSync(filePath, buffer);
         return NextResponse.json({ url: `/uploads/${randomName}` });
       } catch (fsErr) {
-        // Ambiente Serverless read-only (ex: Vercel): retorna a DataURL diretamente
+        // Ambiente Serverless read-only: retorna a DataURL diretamente
         return NextResponse.json({ url: body.dataUrl });
       }
     }

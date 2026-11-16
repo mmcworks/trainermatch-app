@@ -57,7 +57,8 @@ import {
   Layers,
   HelpCircle,
   ThumbsUp,
-  XCircle
+  XCircle,
+  Database
 } from "lucide-react";
 import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
 import {
@@ -98,6 +99,9 @@ export const AcademiaView: React.FC = () => {
     updateGymProfile,
     isDarkMode,
     toggleDarkMode,
+    isMockDataEnabled,
+    toggleMockData,
+    clearMockData,
     userName,
     userEmail,
     logout,
@@ -143,7 +147,7 @@ export const AcademiaView: React.FC = () => {
     }
   };
 
-  const currentGym = gyms.find((g) => g.id === activeGymId) || (activeGymId ? fallbackGym : gyms[0]) || fallbackGym;
+  const currentGym = gyms.find((g) => g.id === activeGymId) || fallbackGym;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -4853,6 +4857,19 @@ export const AcademiaView: React.FC = () => {
                     >
                       <HelpCircle size={13} className="text-primary" />
                       <span>Como Funciona o App</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleMockData()}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-full shadow-2xs transition-all active:scale-95 ${
+                        isMockDataEnabled
+                          ? "bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+                          : "bg-emerald-100 hover:bg-emerald-200 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200"
+                      }`}
+                    >
+                      <Database size={13} />
+                      <span>{isMockDataEnabled ? "Mocks Ativos (Toque para desligar)" : "Modo Real (Mocks Desligados)"}</span>
                     </button>
 
                     <button

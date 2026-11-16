@@ -57,7 +57,8 @@ import {
   Building2,
   ThumbsUp,
   Smartphone,
-  XCircle
+  XCircle,
+  Database
 } from "lucide-react";
 import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
 import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility } from "@/store/use-app-store";
@@ -90,6 +91,9 @@ export const ProfessorView: React.FC = () => {
     submitGymReview,
     isDarkMode,
     toggleDarkMode,
+    isMockDataEnabled,
+    toggleMockData,
+    clearMockData,
     logout,
     deleteAccount
   } = useAppStore();
@@ -255,7 +259,7 @@ export const ProfessorView: React.FC = () => {
     }
   };
 
-  const rawInstructor: Instructor = (instructors.find((i) => i.id === activeInstructorId) || (activeInstructorId ? fallbackInstructor : instructors[0]) || fallbackInstructor) as Instructor;
+  const rawInstructor: Instructor = (instructors.find((i) => i.id === activeInstructorId) || fallbackInstructor) as Instructor;
   const currentInstructor = useMemo(() => ({
     ...rawInstructor,
     criteria: rawInstructor.criteria || {
@@ -444,7 +448,7 @@ export const ProfessorView: React.FC = () => {
 
   // Helper para identificar o instrutor ativo
   const isMyInstructorId = (id?: string) =>
-    id === activeInstructorId || id === currentInstructor?.id || (!activeInstructorId && id === "inst-1");
+    Boolean(id && (id === activeInstructorId || id === currentInstructor?.id));
 
   // Proposta prioritária (convite da academia aguardando resposta do professor)
   const urgentProposal = proposals.find(
@@ -460,31 +464,35 @@ export const ProfessorView: React.FC = () => {
   // Helper para formatar data em destaque: DD mmm AAAA + Dia da semana + Horários
   const formatShiftDate = (shift?: Shift) => {
     const monthNamesPt = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-    if (!shift) return { fullDate: "04 nov 2026", dayMonth: "04 nov 2026", weekday: "Quarta-feira", hours: "18:00 – 21:00" };
+    const weekdaysNames = [
+      "Domingo",
+      "Segunda-feira",
+      "Terça-feira",
+      "Quarta-feira",
+      "Quinta-feira",
+      "Sexta-feira",
+      "Sábado"
+    ];
+
+    if (!shift || !shift.date) {
+      return { fullDate: "16 nov 2026", dayMonth: "16 nov 2026", weekday: "Segunda-feira", hours: "18:00 – 21:00" };
+    }
+
     const parts = shift.date.split("-");
-    const day = (parts[2] || "04").padStart(2, "0");
-    const month = (parts[1] || "11").padStart(2, "0");
-    const year = parts[0] || "2026";
-    const monthIdx = parseInt(month, 10) - 1;
-    const monthShort = monthNamesPt[monthIdx] || month;
-    const fullDate = `${day} ${monthShort} ${year}`;
+    const year = parseInt(parts[0] || "2026", 10);
+    const monthIdx = Math.max(0, parseInt(parts[1] || "11", 10) - 1);
+    const day = parseInt(parts[2] || "16", 10);
+
+    const dayStr = String(day).padStart(2, "0");
+    const monthShort = monthNamesPt[monthIdx] || "nov";
+    const fullDate = `${dayStr} ${monthShort} ${year}`;
     const dayMonth = fullDate;
 
-    const weekdaysMap: Record<string, string> = {
-      "2026-11-04": "Quarta-feira",
-      "2026-11-05": "Quinta-feira",
-      "2026-11-06": "Sexta-feira",
-      "2026-11-07": "Sábado",
-      "2026-11-08": "Domingo",
-      "2026-11-09": "Segunda-feira",
-      "2026-11-10": "Terça-feira",
-      "2026-11-11": "Quarta-feira",
-      "2026-11-12": "Quinta-feira",
-      "2026-11-13": "Sexta-feira",
-      "2026-11-14": "Sábado",
-    };
-    const weekday = weekdaysMap[shift.date] || "Quarta-feira";
-    const hours = `${shift.startTime} – ${shift.endTime}`;
+    // Horário ao meio-dia evita problemas de fuso horário / DST ao obter o getDay()
+    const dateObj = new Date(year, monthIdx, day, 12, 0, 0);
+    const weekday = weekdaysNames[dateObj.getDay()] || "Segunda-feira";
+    const hours = `${shift.startTime || "08:00"} – ${shift.endTime || "12:00"}`;
+
     return { fullDate, dayMonth, weekday, hours };
   };
 
@@ -2258,7 +2266,7 @@ export const ProfessorView: React.FC = () => {
 
                       // Checa se existe aula confirmada nesse dia da semana e horário
                       const conflictingShift = shifts.find((s) => {
-                        const isMyShift = s.confirmedInstructorId === myInstId || s.confirmedInstructorId === "inst-1";
+                        const isMyShift = Boolean(myInstId && s.confirmedInstructorId === myInstId);
                         if (!isMyShift || s.status !== "confirmado") return false;
                         const [y, m, d] = (s.date || "").split("-").map(Number);
                         const sDate = new Date(y, m - 1, d);
@@ -2278,7 +2286,7 @@ export const ProfessorView: React.FC = () => {
 
                       // Checa se existe proposta ativa/pendente para esse horário
                       const conflictingProposal = proposals.find((p) => {
-                        const isMyProp = p.instructorId === myInstId || p.instructorId === "inst-1";
+                        const isMyProp = Boolean(myInstId && p.instructorId === myInstId);
                         if (!isMyProp || (p.status !== "pendente" && p.status !== "aceita")) return false;
                         const targetShift = shifts.find((s) => s.id === p.shiftId);
                         if (!targetShift) return false;
@@ -2919,6 +2927,28 @@ export const ProfessorView: React.FC = () => {
               </div>
               <span className="text-[11px] font-bold text-primary px-2.5 py-1 rounded-full bg-primary/10 shrink-0 ml-2">
                 {isDarkMode ? "Escuro" : "Claro"}
+              </span>
+            </button>
+
+            {/* Opção: Alternar Modo de Dados Fictícios (Mock / Real) */}
+            <button
+              type="button"
+              onClick={() => toggleMockData()}
+              className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-border/60 dark:border-slate-800"
+            >
+              <div className="flex items-center gap-3.5 min-w-0">
+                <Database size={20} strokeWidth={1.5} className="text-slate-800 dark:text-slate-200 shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">
+                    Dados de Demonstração (Mocks)
+                  </span>
+                  <span className="text-[11px] text-muted dark:text-slate-400 block truncate">
+                    {isMockDataEnabled ? "Exibindo dados de teste (toque para desligar)" : "Modo Produção Real (sem ofertas fictícias)"}
+                  </span>
+                </div>
+              </div>
+              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ml-2 ${isMockDataEnabled ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" : "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"}`}>
+                {isMockDataEnabled ? "Mocks Ativos" : "100% Real"}
               </span>
             </button>
 

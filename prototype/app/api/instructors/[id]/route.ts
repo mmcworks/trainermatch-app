@@ -24,9 +24,6 @@ export async function GET(
           }
         } catch (e) {}
       }
-      if (!instructor) {
-        instructor = await prisma.instructor.findFirst();
-      }
     }
 
     if (!instructor) return NextResponse.json({ error: "Professor não encontrado" }, { status: 404 });
@@ -97,52 +94,10 @@ export async function PUT(
           }
         } catch (e) {}
       }
-      if (!targetInstructor) {
-        targetInstructor = await prisma.instructor.findFirst();
-      }
     }
 
     if (!targetInstructor) {
-      const bcrypt = (await import("bcryptjs")).default;
-      const defaultHash = await bcrypt.hash("12345qwe", 10);
-      const email = body.email || "lucasf@email.com";
-      const name = body.name || body.displayName || "Lucas Ferreira";
-      const phone = body.phone || "(27) 99999-1234";
-
-      const newUser = await prisma.user.create({
-        data: {
-          email,
-          name,
-          phone,
-          passwordHash: defaultHash,
-          role: "PROFESSOR",
-          document: body.cpf || "123.456.789-00",
-          instructor: {
-            create: {
-              name,
-              email,
-              phone,
-              cpf: body.cpf || "123.456.789-00",
-              cref: body.cref || "049182-G/SP",
-              avatar: body.avatar || "",
-              bio: body.bio || "",
-              hourlyRate: Number(body.hourlyRate || 45),
-              modalities: updateData.modalities || "[]",
-              pixKeys: updateData.pixKeys || "[]",
-              availability: updateData.availability || "[]",
-              blockedDates: updateData.blockedDates || "[]"
-            }
-          }
-        },
-        include: {
-          instructor: true
-        }
-      });
-      targetInstructor = newUser.instructor;
-    }
-
-    if (!targetInstructor) {
-      return NextResponse.json({ error: "Professor não encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Professor não encontrado para atualização" }, { status: 404 });
     }
 
     const updated = await prisma.instructor.update({

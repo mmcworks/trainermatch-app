@@ -518,14 +518,37 @@ interface AppState {
   subscribePlan: (plan: "essencial" | "pro" | "rede") => void;
   resetAll: () => void;
   
+  // Controle de dados mock
+  isMockDataEnabled: boolean;
+  toggleMockData: (enabled?: boolean) => void;
+  clearMockData: () => void;
+
   // Simulação Dev (avançar tempo)
   tickSimulationTime: (minutes: number) => void;
 }
+
+export const isMockShift = (s: any) => {
+  if (!s || !s.id) return true;
+  const idStr = String(s.id);
+  if (/^shift-(cur|hist|fut|today|\d{1,2})(-.+)?$/.test(idStr)) return true;
+  if (s.gymId === "gym-1" || s.gymId === "gym-2" || s.gymId === "gym-3") return true;
+  if (s.gym?.name === "Academia Mova") return true;
+  return false;
+};
+
+export const isMockProposal = (p: any) => {
+  if (!p || !p.id) return true;
+  const idStr = String(p.id);
+  if (/^prop-\d{1,2}$/.test(idStr)) return true;
+  if (p.shiftId && /^shift-(cur|hist|fut|today|\d{1,2})(-.+)?$/.test(String(p.shiftId))) return true;
+  return false;
+};
 
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       isLoaded: false,
+      isMockDataEnabled: false,
       gyms: [],
       instructors: [],
       shifts: [],
@@ -584,29 +607,14 @@ export const useAppStore = create<AppState>()(
             };
           });
 
-          // Filtra e limpa turnos e propostas vindos do banco e do storage local
-          const isMockShift = (s: any) => {
-            if (!s || !s.id) return true;
-            const idStr = String(s.id);
-            if (/^shift-(cur|hist|fut|today|\d{1,2})(-.+)?$/.test(idStr)) return true;
-            if (s.gymId === "gym-1" || s.gymId === "gym-2" || s.gymId === "gym-3") return true;
-            return false;
-          };
+          const isMockActive = get().isMockDataEnabled;
 
-          const isMockProposal = (p: any) => {
-            if (!p || !p.id) return true;
-            const idStr = String(p.id);
-            if (/^prop-\d{1,2}$/.test(idStr)) return true;
-            if (p.shiftId && /^shift-(cur|hist|fut|today|\d{1,2})(-.+)?$/.test(String(p.shiftId))) return true;
-            return false;
-          };
-
-          const validFetchedShifts = fetchedShifts.filter((s) => !isMockShift(s));
-          const validRawProposals = rawProposals.filter((p: any) => !isMockProposal(p));
+          const validFetchedShifts = fetchedShifts.filter((s) => isMockActive || !isMockShift(s));
+          const validRawProposals = rawProposals.filter((p: any) => isMockActive || !isMockProposal(p));
 
           // Purga do storage local quaisquer turnos ou propostas mockadas legadas
-          const validLocalShifts = localShifts.filter((s) => !isMockShift(s));
-          const validLocalProposals = localProposals.filter((p) => !isMockProposal(p));
+          const validLocalShifts = localShifts.filter((s) => isMockActive || !isMockShift(s));
+          const validLocalProposals = localProposals.filter((p) => isMockActive || !isMockProposal(p));
 
           // Sincronização estrita de turnos (sem fallbacks para dados fictícios)
           let shifts: Shift[] = [];
@@ -636,11 +644,11 @@ export const useAppStore = create<AppState>()(
 
           // Filtra instrutores ativos do banco
           const apiInstructors = rawInstructors.filter(
-            (i: any) => !i.isDeleted && i.isActive !== false
+            (i: any) => !i.isDeleted && i.isActive !== false && (isMockActive || (i.id !== "inst-1" && i.id !== "inst-2" && i.name !== "Lucas Ferreira"))
           );
 
           // Mescla instrutores: API + local (preservando edições locais de perfil, foto e disponibilidade)
-          let mergedInstructors = apiInstructors.length > 0 ? apiInstructors : (localInstructors.length > 0 ? localInstructors : MOCK_INSTRUCTORS);
+          let mergedInstructors = apiInstructors.length > 0 ? apiInstructors : (localInstructors.length > 0 ? localInstructors : (isMockActive ? MOCK_INSTRUCTORS : []));
           if (localInstructors.length > 0 && apiInstructors.length > 0) {
             mergedInstructors = apiInstructors.map((apiInst: any) => {
               const loc = localInstructors.find((li) => li.id === apiInst.id);
@@ -666,8 +674,8 @@ export const useAppStore = create<AppState>()(
           }
 
           // Mescla academias
-          const apiGyms = rawGyms.filter((g: any) => !g.isDeleted);
-          let mergedGyms = apiGyms.length > 0 ? apiGyms : (localGyms.length > 0 ? localGyms : MOCK_GYMS);
+          const apiGyms = rawGyms.filter((g: any) => !g.isDeleted && (isMockActive || (g.id !== "gym-1" && g.id !== "gym-2" && g.id !== "gym-3" && g.name !== "Academia Mova")));
+          let mergedGyms = apiGyms.length > 0 ? apiGyms : (localGyms.length > 0 ? localGyms : (isMockActive ? MOCK_GYMS : []));
           if (localGyms.length > 0 && apiGyms.length > 0) {
             mergedGyms = apiGyms.map((apiG: any) => {
               const loc = localGyms.find((lg) => lg.id === apiG.id);
@@ -680,52 +688,59 @@ export const useAppStore = create<AppState>()(
             }
           }
 
-          // Recupera cache local de emergência
+          // Recupera cache local de emergência ESPECÍFICO do usuário autenticado
           let cachedGym: any = null;
           let cachedInstructor: any = null;
           try {
-            if (typeof window !== "undefined") {
-              const storedG = localStorage.getItem("trainermatch_gym_cache");
+            if (typeof window !== "undefined" && sessionUser?.id) {
+              const storedG = localStorage.getItem(`trainermatch_gym_cache_${sessionUser.id}`);
               if (storedG) cachedGym = JSON.parse(storedG);
-              const storedI = localStorage.getItem("trainermatch_instructor_cache");
+              const storedI = localStorage.getItem(`trainermatch_instructor_cache_${sessionUser.id}`);
               if (storedI) cachedInstructor = JSON.parse(storedI);
             }
           } catch (e) {}
 
-          if (cachedInstructor) {
+          if (cachedInstructor && sessionUser?.instructor?.id) {
             mergedInstructors = mergedInstructors.map((i: any) =>
-              i.id === cachedInstructor.id || i.id === get().activeInstructorId ? { ...i, ...cachedInstructor } : i
+              i.id === sessionUser.instructor.id ? { ...i, ...cachedInstructor } : i
             );
           }
-          if (cachedGym) {
+          if (cachedGym && sessionUser?.gym?.id) {
             mergedGyms = mergedGyms.map((g: any) =>
-              g.id === cachedGym.id || g.id === get().activeGymId ? { ...g, ...cachedGym } : g
+              g.id === sessionUser.gym.id ? { ...g, ...cachedGym } : g
             );
           }
 
           if (sessionUser) {
             const userGymId = sessionUser.role === "academia" && sessionUser.gym?.id
               ? sessionUser.gym.id
-              : (sessionUser.role === "academia" ? (get().activeGymId || mergedGyms[0]?.id || "") : "");
+              : (sessionUser.role === "academia" ? (get().activeGymId || (isMockActive ? mergedGyms[0]?.id : "") || "") : "");
             const userInstructorId = sessionUser.role === "professor" && sessionUser.instructor?.id
               ? sessionUser.instructor.id
-              : (sessionUser.role === "professor" ? (get().activeInstructorId || mergedInstructors[0]?.id || "") : "");
+              : (sessionUser.role === "professor" ? (get().activeInstructorId || (isMockActive ? mergedInstructors[0]?.id : "") || "") : "");
 
             if (sessionUser.instructor) {
+              const instructorWithCache = cachedInstructor
+                ? { ...sessionUser.instructor, ...cachedInstructor, id: sessionUser.instructor.id }
+                : sessionUser.instructor;
               mergedInstructors = [
-                sessionUser.instructor,
+                instructorWithCache,
                 ...mergedInstructors.filter((i: any) => i.id !== sessionUser.instructor.id)
               ];
             }
             if (sessionUser.gym) {
+              const gymWithCache = cachedGym
+                ? { ...sessionUser.gym, ...cachedGym, id: sessionUser.gym.id }
+                : sessionUser.gym;
               mergedGyms = [
-                sessionUser.gym,
+                gymWithCache,
                 ...mergedGyms.filter((g: any) => g.id !== sessionUser.gym.id)
               ];
             }
 
-            const effectiveEmail = cachedGym?.email || cachedInstructor?.email || sessionUser.email || get().userEmail;
-            const effectiveName = cachedGym?.name || cachedInstructor?.name || sessionUser.name || get().userName;
+            // sessionUser é a fonte de autoridade prioritária soberana
+            const effectiveEmail = sessionUser.email || cachedInstructor?.email || cachedGym?.email || get().userEmail;
+            const effectiveName = sessionUser.name || cachedInstructor?.name || cachedGym?.name || get().userName;
 
             set({
               isLoaded: true,
@@ -823,12 +838,22 @@ export const useAppStore = create<AppState>()(
     } catch (e) {
       console.warn("Erro no logout:", e);
     }
+    try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("trainermatch_instructor_cache");
+        localStorage.removeItem("trainermatch_gym_cache");
+      }
+    } catch (e) {}
     set({
       isAuthenticated: false,
       userEmail: "",
       userName: "",
       activeGymId: "",
-      activeInstructorId: ""
+      activeInstructorId: "",
+      shifts: [],
+      proposals: [],
+      gyms: [],
+      instructors: []
     });
   },
 
@@ -918,6 +943,13 @@ export const useAppStore = create<AppState>()(
         ? [user.gym, ...get().gyms.filter((g) => g.id !== user.gym.id)]
         : get().gyms;
 
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("trainermatch_instructor_cache");
+          localStorage.removeItem("trainermatch_gym_cache");
+        }
+      } catch (e) {}
+
       set({
         isAuthenticated: true,
         userName: user.name,
@@ -946,7 +978,7 @@ export const useAppStore = create<AppState>()(
   setRole: (role) => set({ currentRole: role }),
 
   updateInstructorAvailability: (instructorId, availability) => {
-    const targetId = instructorId || get().activeInstructorId || get().instructors[0]?.id;
+    const targetId = instructorId || get().activeInstructorId;
     if (!targetId) return;
 
     set((state) => ({
@@ -957,10 +989,11 @@ export const useAppStore = create<AppState>()(
 
     try {
       if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("trainermatch_instructor_cache") || "{}";
+        const cacheKey = `trainermatch_instructor_cache_${targetId}`;
+        const stored = localStorage.getItem(cacheKey) || "{}";
         const parsed = JSON.parse(stored);
         localStorage.setItem(
-          "trainermatch_instructor_cache",
+          cacheKey,
           JSON.stringify({ ...parsed, availability, id: targetId })
         );
       }
@@ -990,7 +1023,7 @@ export const useAppStore = create<AppState>()(
   },
 
   updateInstructorProfile: (instructorId, data) => {
-    const targetId = instructorId || get().activeInstructorId || get().instructors[0]?.id;
+    const targetId = instructorId || get().activeInstructorId;
     if (!targetId) return;
 
     set((state) => ({
@@ -1003,9 +1036,10 @@ export const useAppStore = create<AppState>()(
 
     try {
       if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("trainermatch_instructor_cache") || "{}";
+        const cacheKey = `trainermatch_instructor_cache_${targetId}`;
+        const stored = localStorage.getItem(cacheKey) || "{}";
         const parsed = JSON.parse(stored);
-        localStorage.setItem("trainermatch_instructor_cache", JSON.stringify({ ...parsed, ...data, id: targetId }));
+        localStorage.setItem(cacheKey, JSON.stringify({ ...parsed, ...data, id: targetId }));
       }
     } catch (e) {}
 
@@ -1481,7 +1515,7 @@ export const useAppStore = create<AppState>()(
   },
 
   updateGymProfile: (gymId, data) => {
-    const targetId = gymId || get().activeGymId || get().gyms[0]?.id;
+    const targetId = gymId || get().activeGymId;
     if (!targetId) return;
 
     set((state) => ({
@@ -1492,9 +1526,10 @@ export const useAppStore = create<AppState>()(
 
     try {
       if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("trainermatch_gym_cache") || "{}";
+        const cacheKey = `trainermatch_gym_cache_${targetId}`;
+        const stored = localStorage.getItem(cacheKey) || "{}";
         const parsed = JSON.parse(stored);
-        localStorage.setItem("trainermatch_gym_cache", JSON.stringify({ ...parsed, ...data, id: targetId }));
+        localStorage.setItem(cacheKey, JSON.stringify({ ...parsed, ...data, id: targetId }));
       }
     } catch (e) {}
 
@@ -1610,6 +1645,24 @@ export const useAppStore = create<AppState>()(
     get().syncWithBackend();
   },
 
+  toggleMockData: (enabled?: boolean) => {
+    const nextVal = enabled !== undefined ? enabled : !get().isMockDataEnabled;
+    set({ isMockDataEnabled: nextVal });
+    if (!nextVal) {
+      get().clearMockData();
+    }
+    get().syncWithBackend();
+  },
+
+  clearMockData: () => {
+    set((state) => ({
+      shifts: state.shifts.filter((s) => !isMockShift(s)),
+      proposals: state.proposals.filter((p) => !isMockProposal(p)),
+      gyms: state.gyms.filter((g) => g.id !== "gym-1" && g.id !== "gym-2" && g.id !== "gym-3" && g.name !== "Academia Mova"),
+      instructors: state.instructors.filter((i) => i.id !== "inst-1" && i.id !== "inst-2" && i.name !== "Lucas Ferreira")
+    }));
+  },
+
   tickSimulationTime: (minutes) => {
     set((state) => ({
       proposals: state.proposals.map((p) => {
@@ -1638,7 +1691,8 @@ export const useAppStore = create<AppState>()(
         isAuthenticated: state.isAuthenticated,
         currentRole: state.currentRole,
         gymPlan: state.gymPlan,
-        isDarkMode: state.isDarkMode
+        isDarkMode: state.isDarkMode,
+        isMockDataEnabled: state.isMockDataEnabled
       })
     }
   )

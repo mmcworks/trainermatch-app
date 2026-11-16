@@ -32,9 +32,6 @@ export async function GET(
           }
         } catch (e) {}
       }
-      if (!gym) {
-        gym = await prisma.gym.findFirst();
-      }
     }
 
     if (!gym) return NextResponse.json({ error: "Academia não encontrada" }, { status: 404 });
@@ -90,9 +87,6 @@ export async function PUT(
             });
           }
         } catch (e) {}
-      }
-      if (!targetGym) {
-        targetGym = await prisma.gym.findFirst();
       }
     }
 
