@@ -123,6 +123,7 @@ export interface Instructor {
   modalities: string[];
   availability: DayAvailability[];
   blockedDates?: string[]; // Datas YYYY-MM-DD em que o professor definiu folga pontual
+  blockedDateSlots?: string[]; // "YYYY-MM-DD_HH:mm_HH:mm" - exclusões pontuais de slots da grade semanal
   offeredSlots?: OfferedSlot[]; // Horários e turnos avulsos disponibilizados pelo professor para contratação
 }
 

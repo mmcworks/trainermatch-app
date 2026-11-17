@@ -373,6 +373,8 @@ export const ProfessorView: React.FC = () => {
   }, [
     rawInstructor.id,
     rawInstructor.name,
+    rawInstructor.birthDate,
+    rawInstructor.cpf,
     rawInstructor.email,
     rawInstructor.phone,
     rawInstructor.avatar,
@@ -629,21 +631,23 @@ export const ProfessorView: React.FC = () => {
 
   // Motor Unificado de Disponibilidade Diária (combina Grade Semanal e Horários Avulsos com Opção A de Substituição)
   const getAvailableSlotsForDate = (dateStr: string) => {
-    const isBlocked = Boolean(rawInstructor.blockedDates?.includes(dateStr));
-    if (isBlocked) return [];
+    const todayStr = getTodayDateString();
+
+    const isDateBlocked = Boolean(rawInstructor.blockedDates?.includes(dateStr));
+    if (isDateBlocked) return [];
 
     const dateParts = dateStr.split("-").map(Number);
     const dObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
     const dayOfWeekIndex = dObj.getDay();
 
-    // 1. Horários avulsos específicos desta data (que não foram contratados)
+    // 1. Horários avulsos específicos desta data (que não foram contratados e não estão no passado)
     const rawSingleSlots = (currentInstructor.offeredSlots || []).filter(
-      (s) => s.date === dateStr && !isSlotHired(s)
+      (s) => s.date === dateStr && !isSlotHired(s) && (s.date > todayStr || !isTimeInPastForDate(s.date, s.startTime))
     );
 
-    // 2. Grade semanal para este dia da semana
+    // 2. Grade semanal para este dia da semana (presente apenas para o dia atual e dias futuros)
     const matchingAvail = localAvailability.find((a) => a.dayOfWeek === dayOfWeekIndex);
-    const weeklySlots = (matchingAvail?.active && matchingAvail.slots) ? matchingAvail.slots : [];
+    const weeklySlots = (dateStr >= todayStr && matchingAvail?.active && matchingAvail.slots) ? matchingAvail.slots : [];
 
     const results: {
       id: string;
@@ -660,9 +664,21 @@ export const ProfessorView: React.FC = () => {
       rawSlot?: OfferedSlot;
     }[] = [];
 
-    // Processa os horários da grade semanal
+    // Processa os horários da grade semanal (apenas datas presentes e futuras)
     for (let i = 0; i < weeklySlots.length; i++) {
       const wSlot = weeklySlots[i];
+
+      // Se for a data de hoje e o horário de início já passou, não exibe
+      if (dateStr === todayStr && isTimeInPastForDate(dateStr, wSlot.start)) {
+        continue;
+      }
+
+      // Se foi excluído pontualmente nesta data específica
+      const slotKey = `${dateStr}_${wSlot.start}_${wSlot.end}`;
+      if (rawInstructor.blockedDateSlots?.includes(slotKey)) {
+        continue;
+      }
+
       // Se já foi contratado neste dia específico, não exibe como disponível
       if (isIntervalHired(dateStr, wSlot.start, wSlot.end)) {
         continue;
@@ -744,7 +760,21 @@ export const ProfessorView: React.FC = () => {
       allSlots.push(...getAvailableSlotsForDate(dStr));
     }
     return allSlots;
-  }, [selectedYear, selectedMonth, selectedDayNumber, daysInSelectedMonth, localAvailability, rawInstructor.blockedDates, currentInstructor.offeredSlots, shifts, currentInstructor.id, activeInstructorId, currentInstructor.hourlyRate, currentInstructor.modalities]);
+  }, [
+    selectedYear,
+    selectedMonth,
+    selectedDayNumber,
+    daysInSelectedMonth,
+    localAvailability,
+    rawInstructor.blockedDates,
+    rawInstructor.blockedDateSlots,
+    currentInstructor.offeredSlots,
+    shifts,
+    currentInstructor.id,
+    activeInstructorId,
+    currentInstructor.hourlyRate,
+    currentInstructor.modalities
+  ]);
 
   const myOfferedSlots = myDailyAvailableSlots;
 
@@ -2519,26 +2549,28 @@ export const ProfessorView: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const currentBlocked = rawInstructor.blockedDates || [];
-                                  if (!currentBlocked.includes(slot.date)) {
-                                    const updatedBlocked = [...currentBlocked, slot.date];
+                                  const slotKey = `${slot.date}_${slot.startTime}_${slot.endTime}`;
+                                  const currentBlocked = rawInstructor.blockedDateSlots || [];
+                                  if (!currentBlocked.includes(slotKey)) {
+                                    const updatedBlocked = [...currentBlocked, slotKey];
                                     updateInstructorProfile(currentInstructor.id || activeInstructorId, {
-                                      blockedDates: updatedBlocked
+                                      blockedDateSlots: updatedBlocked
                                     });
-                                    setOfferSuccessMsg(`Data ${formatDateDDMMAAAA(slot.date)} bloqueada para folga.`);
-                                    setTimeout(() => setOfferSuccessMsg(null), 4000);
+                                    setOfferSuccessMsg(`Horário excluído da agenda apenas para o dia ${formatDateDDMMAAAA(slot.date)}. Suas demais semanas continuam ativas.`);
+                                    setTimeout(() => setOfferSuccessMsg(null), 5000);
                                   }
                                 }}
-                                className="text-[11px] font-bold text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 flex items-center gap-1 transition-colors"
-                                title="Não estar disponível apenas nesta data"
+                                className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 transition-colors"
+                                title="Excluir este horário da grade apenas nesta data específica"
                               >
-                                <XCircle size={12} />
-                                <span>Folga nesta data</span>
+                                <Trash2 size={12} />
+                                <span>Excluir Horário</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setAgendaSubTab("grade")}
                                 className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 transition-colors"
+                                title="Editar a grade semanal recorrente"
                               >
                                 <Edit3 size={12} />
                                 <span>Editar Grade</span>
@@ -3070,7 +3102,15 @@ export const ProfessorView: React.FC = () => {
             {/* Opção 1: Meus Dados */}
             <button
               type="button"
-              onClick={() => setShowPersonalDataModal(true)}
+              onClick={() => {
+                setEditFullName(currentInstructor.name || "");
+                setEditDisplayName(currentInstructor.displayName || currentInstructor.name || "");
+                setEditBirthDate(formatToDDMMAAAA(currentInstructor.birthDate || ""));
+                setEditCpf(currentInstructor.cpf || "");
+                setEditEmail(currentInstructor.email || "");
+                setEditPhone(currentInstructor.phone || "");
+                setShowPersonalDataModal(true);
+              }}
               className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50/80 dark:hover:bg-navy-700/50 transition-colors group"
             >
               <div className="flex items-center gap-3.5 min-w-0">

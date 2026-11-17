@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import "./globals.css";
 import { useAppStore } from "@/store/use-app-store";
 
@@ -22,8 +22,22 @@ export default function RootLayout({
   }, [isDarkMode]);
 
   // Previne zoom indesejado (pinch/double-tap) e trava orientação retrato no mobile
+  const [isLandscapeMobile, setIsLandscapeMobile] = useState(false);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Detecção ativa de celular no modo paisagem (landscape)
+    const checkOrientation = () => {
+      const isTouch = window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
+      const isLandscape = window.innerWidth > window.innerHeight;
+      const isMobileHeight = window.innerHeight <= 680;
+      setIsLandscapeMobile(isTouch && isLandscape && isMobileHeight);
+    };
+
+    checkOrientation();
+    window.addEventListener("resize", checkOrientation);
+    window.addEventListener("orientationchange", checkOrientation);
 
     // Tenta travar orientação na tela em modo portrait (se suportado pelo navegador)
     try {
@@ -58,6 +72,8 @@ export default function RootLayout({
     document.addEventListener("touchend", handleTouchEnd, { passive: false });
 
     return () => {
+      window.removeEventListener("resize", checkOrientation);
+      window.removeEventListener("orientationchange", checkOrientation);
       document.removeEventListener("gesturestart", handleGesture as any);
       document.removeEventListener("gesturechange", handleGesture as any);
       document.removeEventListener("gestureend", handleGesture as any);
@@ -106,11 +122,17 @@ export default function RootLayout({
       <body className="min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 transition-colors duration-200">
         {children}
 
-        {/* Bloqueio/Aviso de rotação para celulares no modo paisagem */}
-        <div className="fixed inset-0 z-[99999] bg-navy-950/95 backdrop-blur-md text-white flex-col items-center justify-center p-6 text-center hidden [@media(max-height:520px)_and_(orientation:landscape)]:flex">
-          <div className="w-14 h-14 rounded-2xl bg-primary/20 text-primary flex items-center justify-center mb-3.5 border border-primary/30">
+        {/* Bloqueio de rotação para celulares e telas móveis no modo paisagem */}
+        <div
+          className={`fixed inset-0 z-[999999] bg-navy-950/98 backdrop-blur-lg text-white flex-col items-center justify-center p-6 text-center select-none transition-opacity duration-300 ${
+            isLandscapeMobile
+              ? "flex pointer-events-auto opacity-100"
+              : "hidden [@media(orientation:landscape)_and_(max-height:680px)_and_(pointer:coarse)]:flex pointer-events-none opacity-0"
+          }`}
+        >
+          <div className="w-16 h-16 rounded-3xl bg-primary/20 text-primary flex items-center justify-center mb-4 border border-primary/30 shadow-lg shadow-primary/10">
             <svg
-              className="w-7 h-7 animate-pulse"
+              className="w-8 h-8 animate-pulse"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -118,13 +140,15 @@ export default function RootLayout({
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+              <rect width="14" height="20" x="5" y="2" rx="3" ry="3" />
               <path d="M12 18h.01" />
             </svg>
           </div>
-          <h3 className="text-sm font-black text-white mb-1">Gire o dispositivo para a vertical</h3>
+          <h3 className="text-base font-black text-white mb-1.5 tracking-tight">
+            Gire o celular para a vertical
+          </h3>
           <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
-            O TrainerMatch foi otimizado para o modo retrato. Por favor, utilize o seu celular na vertical.
+            O TrainerMatch foi desenhado exclusivamente para uso no <strong>Modo Retrato (vertical)</strong> para garantir a segurança e precisão dos agendamentos.
           </p>
         </div>
       </body>
