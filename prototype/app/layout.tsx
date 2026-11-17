@@ -21,6 +21,50 @@ export default function RootLayout({
     }
   }, [isDarkMode]);
 
+  // Previne zoom indesejado (pinch/double-tap) e trava orientação retrato no mobile
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Tenta travar orientação na tela em modo portrait (se suportado pelo navegador)
+    try {
+      if (window.screen && (window.screen as any).orientation?.lock) {
+        (window.screen as any).orientation.lock("portrait").catch(() => {});
+      }
+    } catch (e) {}
+
+    // Previne pinça/pinch-to-zoom em navegadores WebKit/Safari
+    const handleGesture = (e: Event) => {
+      e.preventDefault();
+    };
+
+    // Previne double-tap zoom em dispositivos móveis
+    let lastTouchEnd = 0;
+    const handleTouchEnd = (e: TouchEvent) => {
+      // Ignora se estiver interagindo com elementos de texto ou botões normais com múltiplos toques
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) {
+        // Apenas cancela se o alvo não for um campo de texto selecionável
+        const target = e.target as HTMLElement | null;
+        if (target && !["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
+          e.preventDefault();
+        }
+      }
+      lastTouchEnd = now;
+    };
+
+    document.addEventListener("gesturestart", handleGesture as any, { passive: false });
+    document.addEventListener("gesturechange", handleGesture as any, { passive: false });
+    document.addEventListener("gestureend", handleGesture as any, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd, { passive: false });
+
+    return () => {
+      document.removeEventListener("gesturestart", handleGesture as any);
+      document.removeEventListener("gesturechange", handleGesture as any);
+      document.removeEventListener("gestureend", handleGesture as any);
+      document.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, []);
+
   return (
     <html lang="pt-BR" className={isDarkMode ? "dark" : ""}>
       <head>
@@ -61,6 +105,28 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 transition-colors duration-200">
         {children}
+
+        {/* Bloqueio/Aviso de rotação para celulares no modo paisagem */}
+        <div className="fixed inset-0 z-[99999] bg-navy-950/95 backdrop-blur-md text-white flex-col items-center justify-center p-6 text-center hidden [@media(max-height:520px)_and_(orientation:landscape)]:flex">
+          <div className="w-14 h-14 rounded-2xl bg-primary/20 text-primary flex items-center justify-center mb-3.5 border border-primary/30">
+            <svg
+              className="w-7 h-7 animate-pulse"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+              <path d="M12 18h.01" />
+            </svg>
+          </div>
+          <h3 className="text-sm font-black text-white mb-1">Gire o dispositivo para a vertical</h3>
+          <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+            O TrainerMatch foi otimizado para o modo retrato. Por favor, utilize o seu celular na vertical.
+          </p>
+        </div>
       </body>
     </html>
   );

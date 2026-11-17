@@ -6,7 +6,10 @@
   --font-plus-jakarta: 'Plus Jakarta Sans', sans-serif;
 }
 
+html,
 body {
+  touch-action: pan-x pan-y;
+  overscroll-behavior-y: none;
   font-family: var(--font-plus-jakarta);
   -webkit-font-smoothing: antialiased;
   background-color: #F4F6F9;

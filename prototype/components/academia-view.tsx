@@ -6966,19 +6966,29 @@ export const AcademiaView: React.FC = () => {
         )}
       </AnimatedModal>
 
-      {/* TOAST FLUTUANTE DE VALIDAÇÃO DE PRESENÇA */}
+      {/* TOAST FLUTUANTE DE VALIDAÇÃO DE PRESENÇA (NO TOPO) */}
       {validationSuccessToast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 animate-slide-up border border-emerald-500">
-          <CheckCheck size={18} className="text-white shrink-0" />
-          <span className="text-xs font-black">{validationSuccessToast}</span>
+        <div className="fixed top-[max(0.75rem,env(safe-area-inset-top,12px))] left-4 right-4 max-w-md mx-auto z-[100] bg-emerald-600 text-white px-4 py-3 rounded-2xl shadow-floating flex items-center justify-between gap-2.5 animate-bounce border border-emerald-400/40 backdrop-blur-md">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <CheckCheck size={18} className="text-white shrink-0" />
+            <span className="text-xs font-black">{validationSuccessToast}</span>
+          </div>
+          <button type="button" onClick={() => setValidationSuccessToast(null)} className="text-white/80 hover:text-white p-1">
+            <X size={15} />
+          </button>
         </div>
       )}
 
-      {/* TOAST FLUTUANTE DE CADASTRO DE GRADE / HORÁRIO */}
+      {/* TOAST FLUTUANTE DE CADASTRO DE GRADE / HORÁRIO (NO TOPO) */}
       {gridCreationFeedback && (
-        <div className="fixed bottom-6 right-6 z-50 bg-navy-900 dark:bg-white text-white dark:text-navy-900 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 animate-slide-up border border-slate-700 dark:border-slate-200">
-          <CheckCircle size={18} className="text-emerald-500 shrink-0" />
-          <span className="text-xs font-black">{gridCreationFeedback}</span>
+        <div className="fixed top-[max(0.75rem,env(safe-area-inset-top,12px))] left-4 right-4 max-w-md mx-auto z-[100] bg-navy-900 dark:bg-slate-800 text-white px-4 py-3 rounded-2xl shadow-floating flex items-center justify-between gap-2.5 animate-bounce border border-white/20 backdrop-blur-md">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <CheckCircle size={18} className="text-emerald-400 shrink-0" />
+            <span className="text-xs font-black">{gridCreationFeedback}</span>
+          </div>
+          <button type="button" onClick={() => setGridCreationFeedback(null)} className="text-white/80 hover:text-white p-1">
+            <X size={15} />
+          </button>
         </div>
       )}
 

@@ -656,9 +656,10 @@ export const useAppStore = create<AppState>()(
               return {
                 ...apiInst,
                 ...loc,
-                // Prioriza disponibilidade e modalidades que foram salvas localmente
+                // Prioriza disponibilidade, modalidades e nascimento que foram salvas localmente
                 availability: loc.availability && loc.availability.length > 0 ? loc.availability : apiInst.availability,
                 modalities: loc.modalities && loc.modalities.length > 0 ? loc.modalities : apiInst.modalities,
+                birthDate: loc.birthDate || apiInst.birthDate,
                 avatar: loc.avatar || apiInst.avatar,
                 phone: loc.phone || apiInst.phone,
                 email: loc.email || apiInst.email,
@@ -688,21 +689,30 @@ export const useAppStore = create<AppState>()(
             }
           }
 
-          // Recupera cache local de emergência ESPECÍFICO do usuário autenticado
+          // Recupera cache local de emergência do usuário autenticado ou ativo
           let cachedGym: any = null;
           let cachedInstructor: any = null;
           try {
-            if (typeof window !== "undefined" && sessionUser?.id) {
-              const storedG = localStorage.getItem(`trainermatch_gym_cache_${sessionUser.id}`);
-              if (storedG) cachedGym = JSON.parse(storedG);
-              const storedI = localStorage.getItem(`trainermatch_instructor_cache_${sessionUser.id}`);
+            if (typeof window !== "undefined") {
+              const uId = sessionUser?.id;
+              const instId = sessionUser?.instructor?.id || get().activeInstructorId;
+              const storedI = (uId && localStorage.getItem(`trainermatch_instructor_cache_${uId}`)) ||
+                              (instId && localStorage.getItem(`trainermatch_instructor_cache_${instId}`)) ||
+                              localStorage.getItem("trainermatch_instructor_cache_active");
               if (storedI) cachedInstructor = JSON.parse(storedI);
+
+              const gymId = sessionUser?.gym?.id || get().activeGymId;
+              const storedG = (uId && localStorage.getItem(`trainermatch_gym_cache_${uId}`)) ||
+                              (gymId && localStorage.getItem(`trainermatch_gym_cache_${gymId}`)) ||
+                              localStorage.getItem("trainermatch_gym_cache_active");
+              if (storedG) cachedGym = JSON.parse(storedG);
             }
           } catch (e) {}
 
-          if (cachedInstructor && sessionUser?.instructor?.id) {
+          if (cachedInstructor) {
+            const matchTargetId = sessionUser?.instructor?.id || cachedInstructor.id || get().activeInstructorId;
             mergedInstructors = mergedInstructors.map((i: any) =>
-              i.id === sessionUser.instructor.id ? { ...i, ...cachedInstructor } : i
+              i.id === matchTargetId ? { ...i, ...cachedInstructor } : i
             );
           }
           if (cachedGym && sessionUser?.gym?.id) {
@@ -1039,7 +1049,9 @@ export const useAppStore = create<AppState>()(
         const cacheKey = `trainermatch_instructor_cache_${targetId}`;
         const stored = localStorage.getItem(cacheKey) || "{}";
         const parsed = JSON.parse(stored);
-        localStorage.setItem(cacheKey, JSON.stringify({ ...parsed, ...data, id: targetId }));
+        const updatedCache = { ...parsed, ...data, id: targetId };
+        localStorage.setItem(cacheKey, JSON.stringify(updatedCache));
+        localStorage.setItem("trainermatch_instructor_cache_active", JSON.stringify(updatedCache));
       }
     } catch (e) {}
 

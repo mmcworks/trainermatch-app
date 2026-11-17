@@ -121,6 +121,7 @@ export async function PUT(
       success: true,
       instructor: {
         ...updated,
+        birthDate: body.birthDate !== undefined ? body.birthDate : (targetInstructor as any).birthDate,
         modalities: JSON.parse(updated.modalities || "[]"),
         pixKeys: JSON.parse(updated.pixKeys || "[]"),
         availability: JSON.parse(updated.availability || "[]"),

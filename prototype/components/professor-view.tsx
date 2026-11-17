@@ -62,7 +62,7 @@ import {
   Edit3,
   CalendarCheck
 } from "lucide-react";
-import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, maskDate, formatToDDMMAAAA, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString, OfferedSlot } from "@/store/mock-data";
+import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, maskDate, formatToDDMMAAAA, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString, OfferedSlot, MODALITY_CATEGORIES } from "@/store/mock-data";
 import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility } from "@/store/use-app-store";
 import { TimeStepperInput } from "@/components/time-stepper-input";
 import { AnimatedModal } from "@/components/animated-modal";
@@ -176,6 +176,55 @@ export const ProfessorView: React.FC = () => {
   const offerSelectedDayRef = useRef<HTMLButtonElement | null>(null);
   const offerTodayRef = useRef<HTMLButtonElement | null>(null);
 
+  const handleOpenOfferSlotWizard = () => {
+    setOfferHourlyRate(currentInstructor.hourlyRate || 45);
+    setOfferMinHourlyRate((currentInstructor as any).minHourlyRate || Math.max(30, (currentInstructor.hourlyRate || 45) - 10));
+
+    // Alinha modalidades: seleciona apenas as macro modalidades que condizem com o perfil do professor
+    const macroNames = [
+      "Musculação",
+      "Spinning",
+      "Funcional",
+      "Pilates",
+      "Alongamento / Yoga",
+      "Cross Training",
+      "Natação / Hidro",
+      "Dança / Ritmos",
+      "Lutas / Boxe"
+    ];
+    const initialSelected = macroNames.filter((macro) =>
+      currentInstructor.modalities?.some((m) => {
+        if (m === macro) return true;
+        const cat = MODALITY_CATEGORIES.find((c) => c.name === macro);
+        return cat?.subModalities.includes(m);
+      })
+    );
+    setOfferModalities(initialSelected.length > 0 ? initialSelected : ["Musculação"]);
+    setOfferCustomModality("");
+
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    setOfferDate(`${yyyy}-${mm}-${dd}`);
+
+    const currentHour = now.getHours();
+    if (currentHour >= 21) {
+      setOfferStartTime("07:00");
+      setOfferEndTime("12:00");
+    } else if (currentHour >= 6) {
+      const nextH = Math.min(22, currentHour + 1);
+      const endH = Math.min(23, nextH + 4);
+      setOfferStartTime(`${String(nextH).padStart(2, "0")}:00`);
+      setOfferEndTime(`${String(endH).padStart(2, "0")}:00`);
+    } else {
+      setOfferStartTime("07:00");
+      setOfferEndTime("12:00");
+    }
+
+    setShowOfferSlotWizard(true);
+    setOfferWizardStep(1);
+  };
 
   // Modal de alteração de senha
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
@@ -1667,45 +1716,10 @@ export const ProfessorView: React.FC = () => {
             </div>
           </div>
 
-          {/* Feedback de sucesso do wizard */}
-          {offerSuccessMsg && (
-            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-xs font-bold rounded-2xl flex items-center gap-2 animate-fade-in shadow-xs">
-              <CheckCircle size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>{offerSuccessMsg}</span>
-            </div>
-          )}
-
           {/* Botão de Destaque: Quero oferecer um horário (Posicionado logo acima das abas) */}
           <button
             type="button"
-            onClick={() => {
-              setOfferHourlyRate(currentInstructor.hourlyRate || 45);
-              setOfferMinHourlyRate((currentInstructor as any).minHourlyRate || Math.max(30, (currentInstructor.hourlyRate || 45) - 10));
-              setOfferModalities(currentInstructor.modalities?.length ? currentInstructor.modalities : ["Musculação"]);
-              const now = new Date();
-              const yyyy = now.getFullYear();
-              const mm = String(now.getMonth() + 1).padStart(2, "0");
-              const dd = String(now.getDate()).padStart(2, "0");
-              setOfferDate(`${yyyy}-${mm}-${dd}`);
-
-              // Ajusta horário padrão para não iniciar no passado se for hoje
-              const currentHour = now.getHours();
-              if (currentHour >= 21) {
-                setOfferStartTime("07:00");
-                setOfferEndTime("12:00");
-              } else if (currentHour >= 6) {
-                const nextH = Math.min(22, currentHour + 1);
-                const endH = Math.min(23, nextH + 4);
-                setOfferStartTime(`${String(nextH).padStart(2, "0")}:00`);
-                setOfferEndTime(`${String(endH).padStart(2, "0")}:00`);
-              } else {
-                setOfferStartTime("07:00");
-                setOfferEndTime("12:00");
-              }
-
-              setShowOfferSlotWizard(true);
-              setOfferWizardStep(1);
-            }}
+            onClick={handleOpenOfferSlotWizard}
             className="w-full flex items-center justify-center bg-gradient-to-r from-primary to-blue-600 hover:from-primary-hover hover:to-blue-700 text-white text-xs font-black py-3.5 px-4 rounded-2xl shadow-md active:scale-[0.98] transition-all"
           >
             Quero oferecer um horário
@@ -2314,10 +2328,7 @@ export const ProfessorView: React.FC = () => {
                     </p>
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowOfferSlotWizard(true);
-                        setOfferWizardStep(1);
-                      }}
+                      onClick={handleOpenOfferSlotWizard}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white text-xs font-black shadow-xs hover:bg-primary-hover active:scale-95 transition-all mx-auto"
                     >
                       <Plus size={13} />
@@ -2824,13 +2835,6 @@ export const ProfessorView: React.FC = () => {
       {/* ===================== TAB: PERFIL (ESTILO IFOOD COM ÍCONES OUTLINE LIGHT NA COR DA FONTE) ===================== */}
       {activeTab === "perfil" && (
         <main className="p-5 space-y-4 animate-fade-in">
-          {/* Mensagem de Sucesso Flutuante */}
-          {profileSuccessMsg && (
-            <div className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2 border border-emerald-200/50 dark:border-emerald-900/50 shadow-xs animate-scale-up">
-              <CheckCircle size={16} className="text-emerald-500 shrink-0" />
-              <span>{profileSuccessMsg}</span>
-            </div>
-          )}
 
           {/* 1. Card Superior: Foto Clicável, Nome, CREF e Nota Geral com Estrela */}
           <div className="bg-card dark:bg-navy-800 rounded-squircle p-6 shadow-soft border border-slate-100 dark:border-slate-800 text-center space-y-3">
@@ -2933,7 +2937,9 @@ export const ProfessorView: React.FC = () => {
                 <div className="min-w-0">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">Meus Dados</span>
                   <span className="text-[11px] text-muted dark:text-slate-400 block truncate">
-                    Nome completo, CPF, nascimento, contato
+                    {currentInstructor.birthDate
+                      ? `Nasc: ${formatToDDMMAAAA(currentInstructor.birthDate)} · CPF, contato`
+                      : "Nome completo, CPF, nascimento, contato"}
                   </span>
                 </div>
               </div>
@@ -5105,6 +5111,28 @@ export const ProfessorView: React.FC = () => {
             </div>
       </AnimatedModal>
 
+      {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO NO TOPO ===================== */}
+      {(profileSuccessMsg || offerSuccessMsg) && (
+        <div className="fixed top-[max(0.75rem,env(safe-area-inset-top,12px))] left-4 right-4 max-w-md mx-auto z-[100] animate-bounce">
+          <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-floating border border-emerald-400/40 backdrop-blur-md flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <CheckCircle size={18} className="text-white shrink-0" />
+              <span className="text-xs font-bold leading-snug">{profileSuccessMsg || offerSuccessMsg}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setProfileSuccessMsg(null);
+                setOfferSuccessMsg(null);
+              }}
+              className="text-white/80 hover:text-white p-1 shrink-0"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ===================== SIMULADOR DE PUSH NOTIFICATION FLUTUANTE ===================== */}
       {pushToast && (
         <div className="fixed top-3 left-4 right-4 max-w-md mx-auto z-50 animate-bounce">
@@ -6549,12 +6577,20 @@ export const ProfessorView: React.FC = () => {
                         Quais modalidades você irá lecionar?
                       </span>
                       <p className="text-[11px] leading-relaxed">
-                        Selecione as modalidades aplicáveis para este horário ou adicione outra digitando.
+                        Selecione pelo menos uma modalidade aplicável para este horário.
                       </p>
                     </div>
 
+                    {/* Alerta se nenhuma modalidade estiver selecionada */}
+                    {offerModalities.length === 0 && (
+                      <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 rounded-xl flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs font-bold animate-fade-in">
+                        <AlertCircle size={15} className="text-rose-500 shrink-0" />
+                        <span>Selecione pelo menos 1 modalidade para poder prosseguir.</span>
+                      </div>
+                    )}
+
                     {/* Grid com Ícones Outline Light */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[360px] sm:max-h-none overflow-y-auto pr-1 no-scrollbar">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[260px] sm:max-h-none overflow-y-auto pr-1 no-scrollbar">
                       {modalitiesMeta.map((item) => {
                         const Icon = item.icon;
                         const isSelected = offerModalities.includes(item.name);
@@ -6564,9 +6600,9 @@ export const ProfessorView: React.FC = () => {
                             type="button"
                             onClick={() => {
                               if (isSelected) {
-                                if (offerModalities.length > 1) {
-                                  setOfferModalities(offerModalities.filter((m) => m !== item.name));
-                                }
+                                const cat = MODALITY_CATEGORIES.find((c) => c.name === item.name);
+                                const subsToRemove = cat ? cat.subModalities : [];
+                                setOfferModalities(offerModalities.filter((m) => m !== item.name && !subsToRemove.includes(m)));
                               } else {
                                 setOfferModalities([...offerModalities, item.name]);
                               }
@@ -6586,6 +6622,51 @@ export const ProfessorView: React.FC = () => {
                         );
                       })}
                     </div>
+
+                    {/* Especialidades e Submodalidades das Categorias Selecionadas */}
+                    {offerModalities.some((m) => MODALITY_CATEGORIES.some((c) => c.name === m)) && (
+                      <div className="p-3 bg-slate-50 dark:bg-navy-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-navy-900 dark:text-white">
+                            Submodalidades / Foco (Opcional):
+                          </span>
+                          <span className="text-[10px] text-muted dark:text-slate-400">
+                            Toque para incluir
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {offerModalities
+                            .filter((m) => MODALITY_CATEGORIES.some((c) => c.name === m))
+                            .flatMap((macro) => {
+                              const cat = MODALITY_CATEGORIES.find((c) => c.name === macro);
+                              return cat?.subModalities.map((sub) => ({ macro, sub })) || [];
+                            })
+                            .map(({ sub }) => {
+                              const isSubSelected = offerModalities.includes(sub);
+                              return (
+                                <button
+                                  key={sub}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSubSelected) {
+                                      setOfferModalities(offerModalities.filter((m) => m !== sub));
+                                    } else {
+                                      setOfferModalities([...offerModalities, sub]);
+                                    }
+                                  }}
+                                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all border ${
+                                    isSubSelected
+                                      ? "bg-primary text-white border-primary shadow-xs"
+                                      : "bg-white dark:bg-navy-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary/50"
+                                  }`}
+                                >
+                                  {isSubSelected ? `✓ ${sub}` : `+ ${sub}`}
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Digitar Outra Modalidade */}
                     <div className="p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">

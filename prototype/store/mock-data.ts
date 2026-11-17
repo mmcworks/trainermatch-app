@@ -332,6 +332,84 @@ export function formatToDDMMAAAA(value: string): string {
   return maskDate(value);
 }
 
+export const MODALITY_CATEGORIES: {
+  name: string;
+  subModalities: string[];
+}[] = [
+  {
+    name: "Musculação",
+    subModalities: [
+      "Musculação Tradicional",
+      "Hipertrofia & Força",
+      "Levantamento de Peso Olímpico (LPO)",
+      "Calistenia & Treino Corporal"
+    ]
+  },
+  {
+    name: "Spinning",
+    subModalities: [
+      "Spinning / Ciclismo Indoor",
+      "Corrida de Rua & Esteira"
+    ]
+  },
+  {
+    name: "Funcional",
+    subModalities: [
+      "Treinamento Funcional",
+      "Cross Training",
+      "Treino Suspenso (TRX)",
+      "Treinamento para Terceira Idade",
+      "Treino Kids & Juvenil"
+    ]
+  },
+  {
+    name: "Pilates",
+    subModalities: [
+      "Pilates Solo (Mat)",
+      "Pilates em Aparelhos",
+      "Reabilitação Postural"
+    ]
+  },
+  {
+    name: "Alongamento / Yoga",
+    subModalities: [
+      "Yoga & Consciência Corporal",
+      "Alongamento & Mobilidade"
+    ]
+  },
+  {
+    name: "Cross Training",
+    subModalities: [
+      "WOD & Alta Intensidade",
+      "Condicionamento Metabólico"
+    ]
+  },
+  {
+    name: "Natação / Hidro",
+    subModalities: [
+      "Natação",
+      "Hidroginástica"
+    ]
+  },
+  {
+    name: "Dança / Ritmos",
+    subModalities: [
+      "Dança / Zumba",
+      "Step & Aeróbica",
+      "Ritmos"
+    ]
+  },
+  {
+    name: "Lutas / Boxe",
+    subModalities: [
+      "Boxe",
+      "Muay Thai",
+      "Jiu-Jitsu",
+      "Judô"
+    ]
+  }
+];
+
 export const CANCELLATION_REASONS = [
   "Imprevisto de saúde / emergência médica",
   "Problema de transporte ou trânsito excessivo",
