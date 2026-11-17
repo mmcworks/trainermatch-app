@@ -699,7 +699,7 @@ export const AcademiaView: React.FC = () => {
     <div className="min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 transition-colors duration-200">
       
       {/* ===================== VERSÃO MOBILE DEDICADA DA ACADEMIA (SOMENTE EM CELULARES: < 768px) ===================== */}
-      <div className="block md:hidden w-full max-w-md mx-auto min-h-screen pb-28 shadow-2xl relative font-sans transition-colors duration-200 flex flex-col overflow-x-hidden">
+      <div className="block md:hidden w-full max-w-md landscape:max-w-3xl mx-auto min-h-screen pb-28 landscape:pb-20 shadow-2xl relative font-sans transition-colors duration-200 flex flex-col overflow-x-hidden">
         
         {/* Header Mobile da Academia */}
         <header className="p-4 bg-card/95 dark:bg-navy-800/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-700/60 flex justify-between items-center z-10 flex-shrink-0 sticky top-0">
@@ -2190,11 +2190,11 @@ export const AcademiaView: React.FC = () => {
           {/* Bottom Bar Mobile Fixa (Somente Celular: < 768px) */}
           <nav
             aria-label="Navegação da Academia Mobile"
-            className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto md:hidden ${
+            className={`fixed bottom-0 left-0 right-0 max-w-md landscape:max-w-3xl mx-auto md:hidden ${
               showOnboarding
                 ? "z-50 shadow-2xl ring-2 ring-primary/40 bg-card dark:bg-navy-900 border-primary/30"
                 : "z-40 bg-card/95 dark:bg-navy-900/95 border-slate-100 dark:border-slate-700/60"
-            } backdrop-blur-md border-t px-4 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] flex justify-around items-center transition-all duration-300`}
+            } backdrop-blur-md border-t px-4 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] landscape:py-2 flex justify-around items-center transition-all duration-300`}
           >
             <button
               onClick={() => setActiveMenu("turnos")}

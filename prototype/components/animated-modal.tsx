@@ -142,18 +142,18 @@ export function AnimatedModal({
   // perfeitamente alinhadas com a tela do app mobile em qualquer resolução
   const isBottomAlign = align !== "center";
   const alignOverlay = isBottomAlign
-    ? "items-end p-0"
+    ? "items-end landscape:items-center p-0 landscape:p-2 sm:landscape:p-4"
     : "items-center p-3 sm:p-4";
 
   const roundedClasses = isBottomAlign
-    ? "rounded-t-[28px] sm:rounded-t-[32px] rounded-b-none border-b-0 border-x-0"
+    ? "rounded-t-[28px] sm:rounded-t-[32px] rounded-b-none border-b-0 border-x-0 landscape:rounded-2xl landscape:border"
     : "rounded-squircle";
 
   const heightClasses = isBottomAlign
     ? isExpanded
-      ? "h-[98dvh] sm:h-[96dvh]"
-      : "max-h-[96dvh] sm:max-h-[94dvh] h-auto"
-    : "max-h-[92vh]";
+      ? "h-[98dvh] sm:h-[96dvh] landscape:max-h-[94vh]"
+      : "max-h-[96dvh] sm:max-h-[94dvh] landscape:max-h-[90vh] h-auto"
+    : "max-h-[92vh] landscape:max-h-[90vh]";
 
   const overflowClass = className.includes("overflow-hidden")
     ? "overflow-hidden"
@@ -170,8 +170,8 @@ export function AnimatedModal({
       aria-label={ariaLabel}
     >
       <div
-        className={`bg-card dark:bg-navy-800 w-full max-w-md ${roundedClasses} shadow-floating ${
-          isBottomAlign ? "border-t" : "border"
+        className={`bg-card dark:bg-navy-800 w-full max-w-md landscape:max-w-xl ${roundedClasses} shadow-floating ${
+          isBottomAlign ? "border-t landscape:border" : "border"
         } border-slate-100 dark:border-slate-700 ${heightClasses} flex flex-col ${overflowClass} transition-all duration-300 ${className} ${
           isClosing ? "animate-sheet-down" : "animate-sheet-up"
         }`}

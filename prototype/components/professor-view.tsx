@@ -872,7 +872,7 @@ export const ProfessorView: React.FC = () => {
     : null;
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 pb-28 shadow-2xl overflow-hidden relative font-sans transition-colors duration-200">
+    <div className="max-w-md landscape:max-w-3xl mx-auto min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 pb-28 landscape:pb-20 shadow-2xl overflow-hidden relative font-sans transition-colors duration-200">
       
       {/* ===================== TAB: INÍCIO ===================== */}
       {activeTab === "inicio" && (
@@ -2986,7 +2986,7 @@ export const ProfessorView: React.FC = () => {
               <div className="h-36" />
 
               {/* Botão Flutuante Único: Salvar Minha Grade Semanal (Fixo com folga segura acima da Tab Bar) */}
-              <div className="fixed bottom-[calc(max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))+4.25rem)] left-0 right-0 max-w-md mx-auto px-4 z-30 pointer-events-none">
+              <div className="fixed bottom-[calc(max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))+4.25rem)] landscape:bottom-14 left-0 right-0 max-w-md landscape:max-w-3xl mx-auto px-4 z-30 pointer-events-none">
                 <button
                   type="button"
                   onClick={() => {
@@ -5736,11 +5736,11 @@ export const ProfessorView: React.FC = () => {
       {/* ===================== BARRA DE NAVEGAÇÃO INFERIOR COM SPOTLIGHT PARA ONBOARDING ===================== */}
       <nav
         aria-label="Navegação do Professor"
-        className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto ${
+        className={`fixed bottom-0 left-0 right-0 max-w-md landscape:max-w-3xl mx-auto ${
           showOnboarding
             ? "z-50 shadow-2xl ring-2 ring-primary/40 bg-card dark:bg-navy-900 border-primary/30"
             : "z-40 bg-card/95 dark:bg-navy-900/95 border-slate-100 dark:border-slate-800"
-        } backdrop-blur-md border-t px-6 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] flex justify-between items-center transition-all duration-300`}
+        } backdrop-blur-md border-t px-6 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] landscape:py-2 flex justify-between items-center transition-all duration-300`}
       >
         <button
           onClick={() => setActiveTab("inicio")}
