@@ -616,6 +616,106 @@ export const ProfessorView: React.FC = () => {
     });
   };
 
+  // Helper que verifica se um intervalo nesta data já foi contratado por alguma academia
+  const isIntervalHired = (dateStr: string, startTime: string, endTime: string) => {
+    return shifts.some((s) => {
+      const isMine = isMyInstructorId(s.confirmedInstructorId);
+      if (!isMine) return false;
+      if (s.date !== dateStr) return false;
+      if (s.status !== "confirmado" && s.status !== "realizada") return false;
+      return s.startTime < endTime && s.endTime > startTime;
+    });
+  };
+
+  // Motor Unificado de Disponibilidade Diária (combina Grade Semanal e Horários Avulsos com Opção A de Substituição)
+  const getAvailableSlotsForDate = (dateStr: string) => {
+    const isBlocked = Boolean(rawInstructor.blockedDates?.includes(dateStr));
+    if (isBlocked) return [];
+
+    const dateParts = dateStr.split("-").map(Number);
+    const dObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    const dayOfWeekIndex = dObj.getDay();
+
+    // 1. Horários avulsos específicos desta data (que não foram contratados)
+    const rawSingleSlots = (currentInstructor.offeredSlots || []).filter(
+      (s) => s.date === dateStr && !isSlotHired(s)
+    );
+
+    // 2. Grade semanal para este dia da semana
+    const matchingAvail = localAvailability.find((a) => a.dayOfWeek === dayOfWeekIndex);
+    const weeklySlots = (matchingAvail?.active && matchingAvail.slots) ? matchingAvail.slots : [];
+
+    const results: {
+      id: string;
+      instructorId: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      hourlyRate: number;
+      minHourlyRate?: number;
+      allowNegotiation?: boolean;
+      modalities: string[];
+      source: "grade" | "avulso";
+      isOverride?: boolean;
+      rawSlot?: OfferedSlot;
+    }[] = [];
+
+    // Processa os horários da grade semanal
+    for (let i = 0; i < weeklySlots.length; i++) {
+      const wSlot = weeklySlots[i];
+      // Se já foi contratado neste dia específico, não exibe como disponível
+      if (isIntervalHired(dateStr, wSlot.start, wSlot.end)) {
+        continue;
+      }
+
+      // Se houver um horário avulso nesta data que sobrepõe este slot da grade:
+      // Pela Opção A (Substituição pontual), o horário avulso substitui o da grade nesta data!
+      const overlappingSingle = rawSingleSlots.find(
+        (s) => s.startTime < wSlot.end && s.endTime > wSlot.start
+      );
+      if (overlappingSingle) {
+        continue;
+      }
+
+      results.push({
+        id: `weekly-${dateStr}-${wSlot.start}-${wSlot.end}-${i}`,
+        instructorId: currentInstructor.id || activeInstructorId,
+        date: dateStr,
+        startTime: wSlot.start,
+        endTime: wSlot.end,
+        hourlyRate: currentInstructor.hourlyRate || 45,
+        minHourlyRate: (currentInstructor as any).minHourlyRate,
+        allowNegotiation: true,
+        modalities: currentInstructor.modalities || ["Musculação"],
+        source: "grade"
+      });
+    }
+
+    // Processa os horários avulsos
+    for (const s of rawSingleSlots) {
+      const isOverride = weeklySlots.some(
+        (w) => s.startTime < w.end && s.endTime > w.start
+      );
+
+      results.push({
+        id: s.id,
+        instructorId: s.instructorId || currentInstructor.id || activeInstructorId,
+        date: s.date,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        hourlyRate: s.hourlyRate,
+        minHourlyRate: s.minHourlyRate,
+        allowNegotiation: s.allowNegotiation,
+        modalities: s.modalities || currentInstructor.modalities || ["Musculação"],
+        source: "avulso",
+        isOverride,
+        rawSlot: s
+      });
+    }
+
+    return results.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  };
+
   // Turnos do professor para o mês selecionado (confirmados, já realizados ou cancelados)
   const myConfirmedShifts = shifts.filter((s) => {
     const isMine = isMyInstructorId(s.confirmedInstructorId);
@@ -629,15 +729,24 @@ export const ProfessorView: React.FC = () => {
     return s.date.startsWith(selectedMonthStr);
   });
 
-  // Horários avulsos oferecidos pelo próprio professor que ainda estão disponíveis (não contratados)
-  const myOfferedSlots = (currentInstructor.offeredSlots || []).filter((s) => {
-    if (isSlotHired(s)) return false;
+  // Lista dos dias do mês para a linha horizontal única do calendário com integração da grade semanal
+  const daysInSelectedMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+
+  // Horários disponíveis unificados (Grade Semanal + Horários Avulsos) para o dia ou mês selecionado
+  const myDailyAvailableSlots = useMemo(() => {
     if (selectedDayNumber !== null) {
       const targetDate = `${selectedMonthStr}-${String(selectedDayNumber).padStart(2, "0")}`;
-      return s.date === targetDate;
+      return getAvailableSlotsForDate(targetDate);
     }
-    return (s.date || "").startsWith(selectedMonthStr);
-  });
+    const allSlots: ReturnType<typeof getAvailableSlotsForDate> = [];
+    for (let day = 1; day <= daysInSelectedMonth; day++) {
+      const dStr = `${selectedMonthStr}-${String(day).padStart(2, "0")}`;
+      allSlots.push(...getAvailableSlotsForDate(dStr));
+    }
+    return allSlots;
+  }, [selectedYear, selectedMonth, selectedDayNumber, daysInSelectedMonth, localAvailability, rawInstructor.blockedDates, currentInstructor.offeredSlots, shifts, currentInstructor.id, activeInstructorId, currentInstructor.hourlyRate, currentInstructor.modalities]);
+
+  const myOfferedSlots = myDailyAvailableSlots;
 
   // Todos os turnos confirmados ou realizados do mês atual para o resumo (não inclui cancelados)
   const monthAllConfirmedShifts = shifts.filter((s) => {
@@ -682,7 +791,6 @@ export const ProfessorView: React.FC = () => {
 
 
   // Lista dos dias do mês para a linha horizontal única do calendário com integração da grade semanal
-  const daysInSelectedMonth = new Date(selectedYear, selectedMonth, 0).getDate();
   const calendarDays = Array.from({ length: daysInSelectedMonth }, (_, i) => {
     const dayNum = i + 1;
     const dateObj = new Date(selectedYear, selectedMonth - 1, dayNum);
@@ -701,23 +809,11 @@ export const ProfessorView: React.FC = () => {
              s.date === dateStr
     );
 
-    // Checagem de disponibilidade na grade semanal
-    const matchingAvail = localAvailability.find((a) => a.dayOfWeek === dayOfWeekIndex);
-    const isGradeActive = Boolean(matchingAvail?.active && matchingAvail.slots && matchingAvail.slots.length > 0);
+    const dayAvailableSlots = getAvailableSlotsForDate(dateStr);
+    const hasAvailable = dayAvailableSlots.length > 0;
     const isBlocked = Boolean(rawInstructor.blockedDates?.includes(dateStr));
-    const isAvailable = isGradeActive && !isBlocked;
-
-    const slotsSummary = matchingAvail?.slots && matchingAvail.slots.length > 0
-      ? matchingAvail.slots.map((sl) => `${sl.start}–${sl.end}`).join(", ")
-      : "";
-
-    // Checagem de horários avulsos oferecidos pelo professor nesta data (e ainda disponíveis)
-    const dayOfferedSlots = (currentInstructor.offeredSlots || []).filter(
-      (s) => s.date === dateStr && !isSlotHired(s)
-    );
-    const hasOfferedSlots = dayOfferedSlots.length > 0;
-
     const isToday = isCurrentMonthView && dayNum === targetTodayDay;
+
     return {
       dayNum,
       dayOfWeek,
@@ -727,12 +823,12 @@ export const ProfessorView: React.FC = () => {
       hasShifts: dayShifts.length > 0,
       hasCompleted: dayShifts.some((s) => s.status === "realizada"),
       hasCancelled: dayCancelledShifts.length > 0 && dayShifts.length === 0,
-      hasOfferedSlots,
-      offeredSlotsCount: dayOfferedSlots.length,
+      hasOfferedSlots: hasAvailable,
+      offeredSlotsCount: dayAvailableSlots.length,
       shiftsCount: dayShifts.length,
-      isAvailable: isAvailable || hasOfferedSlots,
+      isAvailable: hasAvailable,
       isBlocked,
-      slotsSummary: slotsSummary || (hasOfferedSlots ? dayOfferedSlots.map((s) => `${s.startTime}–${s.endTime}`).join(", ") : "")
+      slotsSummary: dayAvailableSlots.map((s) => `${s.startTime}–${s.endTime}`).join(", ")
     };
   });
 
@@ -2344,11 +2440,21 @@ export const ProfessorView: React.FC = () => {
                       >
                         <div className="flex justify-between items-start">
                           <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-                              <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 tracking-wider">
-                                Disponível para Contratação
-                              </span>
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-amber-400" />
+                              {slot.source === "grade" ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
+                                  Grade semanal
+                                </span>
+                              ) : slot.isOverride ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
+                                  Substituição pontual
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                                  Horário avulso
+                                </span>
+                              )}
                             </div>
                             <h3 className="text-base font-black text-navy-900 dark:text-white flex items-center gap-2">
                               <Clock size={16} className="text-amber-500" />
@@ -2387,23 +2493,58 @@ export const ProfessorView: React.FC = () => {
 
                         <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
                           <span className="text-[11px] text-muted dark:text-slate-400">
-                            Nenhuma academia contratou ainda
+                            Disponível para contratação
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = (currentInstructor.offeredSlots || []).filter((s) => s.id !== slot.id);
-                              updateInstructorProfile(currentInstructor.id || activeInstructorId, {
-                                offeredSlots: updated
-                              });
-                              setOfferSuccessMsg("Horário disponível excluído com sucesso.");
-                              setTimeout(() => setOfferSuccessMsg(null), 4000);
-                            }}
-                            className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 transition-colors"
-                          >
-                            <Trash2 size={12} />
-                            <span>Excluir Horário Disponível</span>
-                          </button>
+                          {slot.source === "avulso" ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const slotIdToRemove = slot.rawSlot?.id || slot.id;
+                                const updated = (currentInstructor.offeredSlots || []).filter(
+                                  (s) => s.id !== slotIdToRemove
+                                );
+                                updateInstructorProfile(currentInstructor.id || activeInstructorId, {
+                                  offeredSlots: updated
+                                });
+                                setOfferSuccessMsg("Horário avulso excluído com sucesso.");
+                                setTimeout(() => setOfferSuccessMsg(null), 4000);
+                              }}
+                              className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 transition-colors"
+                            >
+                              <Trash2 size={12} />
+                              <span>Excluir Horário</span>
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const currentBlocked = rawInstructor.blockedDates || [];
+                                  if (!currentBlocked.includes(slot.date)) {
+                                    const updatedBlocked = [...currentBlocked, slot.date];
+                                    updateInstructorProfile(currentInstructor.id || activeInstructorId, {
+                                      blockedDates: updatedBlocked
+                                    });
+                                    setOfferSuccessMsg(`Data ${formatDateDDMMAAAA(slot.date)} bloqueada para folga.`);
+                                    setTimeout(() => setOfferSuccessMsg(null), 4000);
+                                  }
+                                }}
+                                className="text-[11px] font-bold text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 flex items-center gap-1 transition-colors"
+                                title="Não estar disponível apenas nesta data"
+                              >
+                                <XCircle size={12} />
+                                <span>Folga nesta data</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setAgendaSubTab("grade")}
+                                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 transition-colors"
+                              >
+                                <Edit3 size={12} />
+                                <span>Editar Grade</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -6388,6 +6529,67 @@ export const ProfessorView: React.FC = () => {
             formatted: formatDateDDMMAAAA(offerDate || todayStr)
           };
 
+          // Detecção de conflitos no modal de oferecer horário
+          const currentInstId = currentInstructor.id || activeInstructorId;
+          const offerStartMin = timeToMinutes(offerStartTime);
+          const offerEndMin = timeToMinutes(offerEndTime);
+
+          // 1. Conflito com Turno Confirmado
+          const confirmedShiftConflict = shifts.find((s) => {
+            if (!isMyInstructorId(s.confirmedInstructorId)) return false;
+            if (s.date !== offerDate) return false;
+            if (s.status !== "confirmado" && s.status !== "realizada") return false;
+            const shiftStart = timeToMinutes(s.startTime);
+            const shiftEnd = timeToMinutes(s.endTime);
+            return Math.max(offerStartMin, shiftStart) < Math.min(offerEndMin, shiftEnd);
+          });
+
+          // 2. Conflito com Horário Avulso já cadastrado
+          const duplicateSlotConflict = (currentInstructor.offeredSlots || []).find((s) => {
+            if (s.date !== offerDate) return false;
+            const sStart = timeToMinutes(s.startTime);
+            const sEnd = timeToMinutes(s.endTime);
+            return Math.max(offerStartMin, sStart) < Math.min(offerEndMin, sEnd);
+          });
+
+          // 3. Sobreposição com Grade Semanal (Opção A: Substituição Pontual informativa)
+          const weeklySlotConflict = (() => {
+            const dayOfWeek = selectedDow;
+            const availDay = (localAvailability || []).find((a) => a.dayOfWeek === dayOfWeek);
+            if (!availDay || !availDay.active || !availDay.slots) return null;
+            return (
+              availDay.slots.find((slot) => {
+                const wsStart = timeToMinutes(slot.start);
+                const wsEnd = timeToMinutes(slot.end);
+                return Math.max(offerStartMin, wsStart) < Math.min(offerEndMin, wsEnd);
+              }) || null
+            );
+          })();
+
+          type OfferConflict =
+            | { type: "confirmed_error"; message: string }
+            | { type: "duplicate_error"; message: string }
+            | { type: "weekly_override"; message: string; weeklySlot: { start: string; end: string } }
+            | null;
+
+          const offerConflict: OfferConflict = confirmedShiftConflict
+            ? {
+                type: "confirmed_error",
+                message: `Você já possui uma aula confirmada nesta data das ${confirmedShiftConflict.startTime} às ${confirmedShiftConflict.endTime} (${confirmedShiftConflict.modality || confirmedShiftConflict.title}). Não é possível disponibilizar um horário concorrente.`
+              }
+            : duplicateSlotConflict
+            ? {
+                type: "duplicate_error",
+                message: `Você já disponibilizou um horário avulso nesta data (${duplicateSlotConflict.startTime} às ${duplicateSlotConflict.endTime}).`
+              }
+            : weeklySlotConflict
+            ? {
+                type: "weekly_override",
+                message: `Este horário irá substituir sua grade semanal (${weeklySlotConflict.start} às ${weeklySlotConflict.end}) exclusivamente no dia ${formatDateDDMMAAAA(offerDate)}. Nas demais semanas, sua grade permanece inalterada.`,
+                weeklySlot: weeklySlotConflict
+              }
+            : null;
+
           const modalitiesMeta = [
             { name: "Musculação", icon: Dumbbell },
             { name: "Spinning", icon: Bike },
@@ -6856,6 +7058,37 @@ export const ProfessorView: React.FC = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Alertas e Avisos de Conflito em Tempo Real */}
+                    {offerConflict?.type === "confirmed_error" && (
+                      <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-700 rounded-xl flex items-start gap-2 text-rose-800 dark:text-rose-200 text-xs animate-fade-in">
+                        <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                        <div>
+                          <strong className="block font-bold">Conflito com Aula Confirmada</strong>
+                          {offerConflict.message}
+                        </div>
+                      </div>
+                    )}
+
+                    {offerConflict?.type === "duplicate_error" && (
+                      <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl flex items-start gap-2 text-amber-800 dark:text-amber-200 text-xs animate-fade-in">
+                        <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                        <div>
+                          <strong className="block font-bold">Horário já Cadastrado</strong>
+                          {offerConflict.message}
+                        </div>
+                      </div>
+                    )}
+
+                    {offerConflict?.type === "weekly_override" && (
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-700 rounded-xl flex items-start gap-2 text-blue-800 dark:text-blue-200 text-xs animate-fade-in">
+                        <AlertCircle size={15} className="shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+                        <div>
+                          <strong className="block font-bold">Substituição Pontual da Grade</strong>
+                          {offerConflict.message}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -6875,9 +7108,20 @@ export const ProfessorView: React.FC = () => {
                     <div className="bg-card dark:bg-navy-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 space-y-4 shadow-xs">
                       {/* Linha 1: Data e Horário */}
                       <div className="space-y-2 pb-3.5 border-b border-slate-100 dark:border-slate-800">
-                        <span className="text-xs uppercase font-extrabold text-muted dark:text-slate-400 block tracking-wider">
-                          Data e Horário
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs uppercase font-extrabold text-muted dark:text-slate-400 block tracking-wider">
+                            Data e Horário
+                          </span>
+                          {offerConflict?.type === "weekly_override" ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
+                              Substituição pontual
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                              Horário avulso
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2">
                           <Calendar size={18} strokeWidth={2} className="text-primary shrink-0" />
                           <h4 className="font-black text-base sm:text-lg text-navy-900 dark:text-white">
@@ -6948,7 +7192,7 @@ export const ProfessorView: React.FC = () => {
                 )}
               </div>
 
-              {/* Rodapé com Botões de Ação (Posicionados com folga e consistência de altura) */}
+              {/* Rodapé com Botões de Ação */}
               <div className="pt-3 pb-1 border-t border-slate-100 dark:border-slate-800 flex gap-2">
                 {offerWizardStep === 1 ? (
                   <button
@@ -6975,7 +7219,13 @@ export const ProfessorView: React.FC = () => {
                     disabled={
                       (offerWizardStep === 1 && (offerHourlyRate <= 0 || (offerAllowNegotiation && offerMinHourlyRate >= offerHourlyRate))) ||
                       (offerWizardStep === 2 && offerModalities.length === 0) ||
-                      (offerWizardStep === 3 && (!offerDate || !offerStartTime || !offerEndTime || isTimeInPastForDate(offerDate, offerStartTime)))
+                      (offerWizardStep === 3 && (
+                        !offerDate ||
+                        !offerStartTime ||
+                        !offerEndTime ||
+                        isTimeInPastForDate(offerDate, offerStartTime) ||
+                        Boolean(offerConflict && (offerConflict.type === "confirmed_error" || offerConflict.type === "duplicate_error"))
+                      ))
                     }
                     onClick={() => setOfferWizardStep((prev) => (prev + 1) as any)}
                     className="w-2/3 py-2.5 rounded-full text-xs font-black bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1"
@@ -6995,7 +7245,7 @@ export const ProfessorView: React.FC = () => {
                     onClick={() => {
                       const currentId = currentInstructor.id || activeInstructorId;
 
-                      // Criação do novo horário oferecido específico (OfferedSlot)
+                      // Criação do novo horário oferecido pontual (OfferedSlot)
                       const newSlot: OfferedSlot = {
                         id: `offered-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                         instructorId: currentId,
@@ -7015,34 +7265,7 @@ export const ProfessorView: React.FC = () => {
                         newSlot
                       ];
 
-                      // Mapeia o dia da semana da data escolhida para atualizar a grade
-                      const parts = (offerDate || "").split("-").map(Number);
-                      const dObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
-                      const dayOfWeek = dObj.getDay();
-
-                      const existingAvail = currentInstructor.availability || [];
-                      const updatedAvail = existingAvail.map((a) => {
-                        if (a.dayOfWeek === dayOfWeek) {
-                          return {
-                            ...a,
-                            active: true,
-                            slots: [{ start: offerStartTime, end: offerEndTime }]
-                          };
-                        }
-                        return a;
-                      });
-
-                      if (!updatedAvail.some((a) => a.dayOfWeek === dayOfWeek)) {
-                        updatedAvail.push({
-                          dayOfWeek,
-                          dayName: selectedDayMeta.dayName,
-                          shortDay: selectedDayMeta.dayOfWeek,
-                          active: true,
-                          slots: [{ start: offerStartTime, end: offerEndTime }]
-                        });
-                      }
-
-                      // Sincroniza o perfil do instrutor com os slots avulsos e dados de valor
+                      // Sincroniza APENAS os slots avulsos no perfil, preservando integralmente a Grade Semanal
                       updateInstructorProfile(currentId, {
                         hourlyRate: offerHourlyRate,
                         minHourlyRate: offerAllowNegotiation ? offerMinHourlyRate : offerHourlyRate,
@@ -7050,13 +7273,10 @@ export const ProfessorView: React.FC = () => {
                         offeredSlots: updatedOffered
                       });
 
-                      // Sincroniza a disponibilidade no store e no estado local da Grade Semanal
-                      updateInstructorAvailability(currentId, updatedAvail);
-                      setLocalAvailability(updatedAvail);
-
                       setShowOfferSlotWizard(false);
 
                       // Posiciona a Minha Agenda exatamente na data do horário oferecido para visualização imediata
+                      const parts = (offerDate || "").split("-").map(Number);
                       if (parts.length === 3) {
                         setSelectedYear(parts[0]);
                         setSelectedMonth(parts[1]);

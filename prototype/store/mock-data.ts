@@ -145,6 +145,7 @@ export interface Shift {
   gymId: string;
   title: string;
   modality: string;
+  origin?: "grade" | "avulso";
   date: string; // YYYY-MM-DD
   dateFormatted: string; // Ex: 'Hoje · 18:00 – 21:00'
   startTime: string; // '18:00'

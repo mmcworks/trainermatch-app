@@ -65,6 +65,7 @@ import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructo
 import {
   getRecommendedInstructorsForShift,
   calculateSuggestedRate,
+  timeToMinutes,
   RecommendationMatch
 } from "@/store/use-app-store";
 import { AnimatedModal } from "@/components/animated-modal";
@@ -540,6 +541,7 @@ export const AcademiaView: React.FC = () => {
               gymId: activeGymId,
               title: newTitle || `${newModality} - Grade`,
               modality: newModality,
+              origin: "grade",
               date: dateStr,
               dateFormatted: `${formatDateDDMMAAAA(dateStr)} · ${slot.start} – ${slot.end}`,
               startTime: slot.start,
@@ -1102,11 +1104,20 @@ export const AcademiaView: React.FC = () => {
                             >
                               <div className="flex justify-between items-start">
                                 <div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="text-xs font-black text-navy-900 dark:text-white">{shift.title}</span>
                                     <span className="text-[10px] bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold">
                                       {shift.modality}
                                     </span>
+                                    {shift.origin === "grade" || shift.title?.toLowerCase().includes("grade") ? (
+                                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
+                                        Grade semanal
+                                      </span>
+                                    ) : !shift.confirmedInstructorId && !shift.confirmedInstructorName ? (
+                                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
+                                        Vaga avulsa
+                                      </span>
+                                    ) : null}
                                   </div>
                                   <span className="text-[11px] text-muted dark:text-slate-400 block mt-0.5">
                                     {formatDateDDMMAAAA(shift.date)} · {shift.startTime} – {shift.endTime}
@@ -3540,9 +3551,20 @@ export const AcademiaView: React.FC = () => {
                               )}
                               <div className="flex justify-between items-start">
                                 <div>
-                                  <span className="text-xs font-black text-navy-900 dark:text-white block">
-                                    {shift.title}
-                                  </span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-black text-navy-900 dark:text-white">
+                                      {shift.title}
+                                    </span>
+                                    {shift.origin === "grade" || shift.title?.toLowerCase().includes("grade") ? (
+                                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
+                                        Grade semanal
+                                      </span>
+                                    ) : !shift.confirmedInstructorId && !shift.confirmedInstructorName ? (
+                                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
+                                        Vaga avulsa
+                                      </span>
+                                    ) : null}
+                                  </div>
                                   <span className="text-[11px] text-muted dark:text-slate-400 mt-0.5 block">
                                     {shift.modality} · {formatDateDDMMAAAA(shift.date)}
                                   </span>
@@ -5090,6 +5112,23 @@ export const AcademiaView: React.FC = () => {
             { day: 0, label: "Dom", full: "Domingo" }
           ];
 
+          // Detecção de sobreposição de horários da academia para a mesma modalidade
+          const gymShiftConflict = gymShifts.find((s) => {
+            if (s.date !== newDate) return false;
+            if (s.status === "cancelado") return false;
+            if (s.modality !== newModality) return false;
+            const startMin = timeToMinutes(newStartTime);
+            const endMin = timeToMinutes(newEndTime);
+            const sStartMin = timeToMinutes(s.startTime);
+            const sEndMin = timeToMinutes(s.endTime);
+            return Math.max(startMin, sStartMin) < Math.min(endMin, sEndMin);
+          });
+          const isExactDuplicate = Boolean(
+            gymShiftConflict &&
+            gymShiftConflict.startTime === newStartTime &&
+            gymShiftConflict.endTime === newEndTime
+          );
+
           return (
             <>
               
@@ -5243,6 +5282,21 @@ export const AcademiaView: React.FC = () => {
                         <div>
                           <strong className="block font-bold">Horário no passado não permitido</strong>
                           O horário de início ({newStartTime}) já passou para o dia de hoje ({formatDateDDMMAAAA(newDate)}). Escolha um horário futuro para cadastrar.
+                        </div>
+                      </div>
+                    )}
+
+                    {gymShiftConflict && (
+                      <div className="mt-2.5 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded-xl flex items-start gap-2 text-amber-800 dark:text-amber-200 text-xs">
+                        <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                        <div>
+                          <strong className="block font-bold">
+                            {isExactDuplicate ? "Turno Duplicado Detectado" : "Sobreposição de Horário Detectada"}
+                          </strong>
+                          A unidade já possui uma aula de <strong>{gymShiftConflict.modality}</strong> cadastrada para este mesmo período ({gymShiftConflict.startTime} às {gymShiftConflict.endTime}).
+                          {isExactDuplicate
+                            ? " Não é permitido cadastrar turnos idênticos duplicados para a mesma modalidade."
+                            : " Verifique se deseja manter múltiplos horários para a mesma modalidade."}
                         </div>
                       </div>
                     )}
@@ -5552,6 +5606,7 @@ export const AcademiaView: React.FC = () => {
                         gymId: activeGymId,
                         title: newTitle,
                         modality: newModality,
+                        origin: "avulso",
                         date: newDate,
                         dateFormatted: `${formatDateDDMMAAAA(newDate)} · ${newStartTime} – ${newEndTime}`,
                         startTime: newStartTime,
@@ -5562,7 +5617,7 @@ export const AcademiaView: React.FC = () => {
                       setGridCreationFeedback("Horário de aula cadastrado com sucesso!");
                       setTimeout(() => setGridCreationFeedback(null), 4000);
                     }}
-                    disabled={isTimeInPastForDate(newDate, newStartTime)}
+                    disabled={isTimeInPastForDate(newDate, newStartTime) || isExactDuplicate}
                     className="flex-1 py-2.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all active:scale-95"
                   >
                     Salvar Horário de Aula
