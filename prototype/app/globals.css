@@ -117,3 +117,32 @@ html.dark ::-webkit-scrollbar-thumb {
 .animate-backdrop-out {
   animation: backdropFadeOut 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Animação de rotação para aviso de orientação */
+@keyframes phoneTurnPortrait {
+  0%, 15% {
+    transform: rotate(90deg) scale(0.95);
+  }
+  45%, 75% {
+    transform: rotate(0deg) scale(1);
+  }
+  90%, 100% {
+    transform: rotate(90deg) scale(0.95);
+  }
+}
+
+.animate-phone-rotate {
+  animation: phoneTurnPortrait 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transform-origin: center center;
+}
+
+/* Bloqueio visual imediato via CSS ao girar celular para paisagem */
+@media screen and (orientation: landscape) and (max-height: 550px),
+       screen and (orientation: landscape) and (max-width: 950px) and (max-height: 700px) {
+  #orientation-landscape-blocker {
+    display: flex !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    visibility: visible !important;
+  }
+}
