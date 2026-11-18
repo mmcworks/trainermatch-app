@@ -872,15 +872,15 @@ export const ProfessorView: React.FC = () => {
     const dObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
     const dayOfWeekIndex = dObj.getDay();
 
-    // 1. Horários avulsos específicos desta data (que não foram contratados e não estão no passado)
+    // 1. Horários avulsos específicos desta data (que não foram contratados)
     const rawSingleSlots = (currentInstructor.offeredSlots || []).filter(
-      (s) => s.date === dateStr && !isSlotHired(s) && (s.date > todayStr || !isTimeInPastForDate(s.date, s.startTime))
+      (s) => s.date === dateStr && !isSlotHired(s)
     );
 
-    // 2. Grade semanal para este dia da semana (presente apenas para o dia atual e dias futuros)
-    const availList = (rawInstructor.availability && rawInstructor.availability.length > 0) ? rawInstructor.availability : localAvailability;
+    // 2. Grade semanal para este dia da semana (ativa para todos os dias do calendário)
+    const availList = (localAvailability && localAvailability.length > 0) ? localAvailability : (rawInstructor.availability || []);
     const matchingAvail = availList.find((a) => a.dayOfWeek === dayOfWeekIndex);
-    const weeklySlots = (dateStr >= todayStr && matchingAvail?.active && matchingAvail.slots) ? matchingAvail.slots : [];
+    const weeklySlots = (matchingAvail?.active && matchingAvail.slots) ? matchingAvail.slots : [];
 
     const results: {
       id: string;
@@ -894,17 +894,15 @@ export const ProfessorView: React.FC = () => {
       modalities: string[];
       source: "grade" | "avulso";
       isOverride?: boolean;
+      isPast?: boolean;
+      hasExternalConflict?: boolean;
+      externalConflictMessage?: string;
       rawSlot?: OfferedSlot;
     }[] = [];
 
-    // Processa os horários da grade semanal (apenas datas presentes e futuras)
+    // Processa os horários da grade semanal
     for (let i = 0; i < weeklySlots.length; i++) {
       const wSlot = weeklySlots[i];
-
-      // Se for a data de hoje e o horário de início já passou, não exibe
-      if (dateStr === todayStr && isTimeInPastForDate(dateStr, wSlot.start)) {
-        continue;
-      }
 
       // Se foi excluído pontualmente nesta data específica
       const slotKey = `${dateStr}_${wSlot.start}_${wSlot.end}`;
@@ -917,11 +915,6 @@ export const ProfessorView: React.FC = () => {
         continue;
       }
 
-      // Se houver conflito com expediente de atividade externa vigente nesta data e horário
-      if (checkExternalWorkConflict(currentInstructor, dateStr, wSlot.start, wSlot.end).hasConflict) {
-        continue;
-      }
-
       // Se houver um horário avulso nesta data que sobrepõe este slot da grade:
       // Pela Opção A (Substituição pontual), o horário avulso substitui o da grade nesta data!
       const overlappingSingle = rawSingleSlots.find(
@@ -930,6 +923,9 @@ export const ProfessorView: React.FC = () => {
       if (overlappingSingle) {
         continue;
       }
+
+      const isPast = dateStr < todayStr || (dateStr === todayStr && isTimeInPastForDate(dateStr, wSlot.start));
+      const extConflict = checkExternalWorkConflict(currentInstructor, dateStr, wSlot.start, wSlot.end);
 
       results.push({
         id: `weekly-${dateStr}-${wSlot.start}-${wSlot.end}-${i}`,
@@ -941,17 +937,17 @@ export const ProfessorView: React.FC = () => {
         minHourlyRate: (currentInstructor as any).minHourlyRate,
         allowNegotiation: true,
         modalities: currentInstructor.modalities || ["Musculação"],
-        source: "grade"
+        source: "grade",
+        isPast,
+        hasExternalConflict: extConflict.hasConflict,
+        externalConflictMessage: extConflict.conflictMessage
       });
     }
 
     // Processa os horários avulsos
     for (const s of rawSingleSlots) {
-      // Se houver conflito com expediente de atividade externa vigente nesta data e horário
-      if (checkExternalWorkConflict(currentInstructor, dateStr, s.startTime, s.endTime).hasConflict) {
-        continue;
-      }
-
+      const isPast = dateStr < todayStr || (dateStr === todayStr && isTimeInPastForDate(dateStr, s.startTime));
+      const extConflict = checkExternalWorkConflict(currentInstructor, dateStr, s.startTime, s.endTime);
       const isOverride = weeklySlots.some(
         (w) => s.startTime < w.end && s.endTime > w.start
       );
@@ -968,6 +964,9 @@ export const ProfessorView: React.FC = () => {
         modalities: s.modalities || currentInstructor.modalities || ["Musculação"],
         source: "avulso",
         isOverride,
+        isPast,
+        hasExternalConflict: extConflict.hasConflict,
+        externalConflictMessage: extConflict.conflictMessage,
         rawSlot: s
       });
     }
@@ -1006,12 +1005,15 @@ export const ProfessorView: React.FC = () => {
   }, [
     selectedYear,
     selectedMonth,
+    selectedMonthStr,
     selectedDayNumber,
     daysInSelectedMonth,
     localAvailability,
+    rawInstructor.availability,
     rawInstructor.blockedDates,
     rawInstructor.blockedDateSlots,
     currentInstructor.offeredSlots,
+    currentInstructor.workExperiences,
     shifts,
     currentInstructor.id,
     activeInstructorId,
@@ -2796,15 +2798,25 @@ export const ProfessorView: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {myOfferedSlots.map((slot) => (
+                    {myOfferedSlots.map((slot) => {
+                      const isConflict = Boolean(slot.hasExternalConflict);
+                      const isPastSlot = Boolean(slot.isPast);
+
+                      return (
                       <div
                         key={slot.id}
-                        className="bg-card dark:bg-navy-900 border-2 border-amber-300/80 dark:border-amber-700/60 p-4 rounded-2xl shadow-sm space-y-3 relative overflow-hidden animate-fade-in"
+                        className={`bg-card dark:bg-navy-900 border-2 p-4 rounded-2xl shadow-sm space-y-3 relative overflow-hidden animate-fade-in transition-all ${
+                          isConflict
+                            ? "border-purple-300 dark:border-purple-800 bg-purple-50/20 dark:bg-purple-950/20"
+                            : isPastSlot
+                            ? "border-slate-200 dark:border-slate-800 opacity-75"
+                            : "border-amber-300/80 dark:border-amber-700/60"
+                        }`}
                       >
                         <div className="flex justify-between items-start">
                           <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-amber-400" />
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`w-2 h-2 rounded-full ${isConflict ? "bg-purple-500" : isPastSlot ? "bg-slate-400" : "bg-amber-400"}`} />
                               {slot.source === "grade" ? (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
                                   Grade semanal
@@ -2818,22 +2830,39 @@ export const ProfessorView: React.FC = () => {
                                   Horário avulso
                                 </span>
                               )}
+
+                              {isConflict && (
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                  Bloqueado: Expediente Externo
+                                </span>
+                              )}
+                              {isPastSlot && !isConflict && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                  Horário Passado
+                                </span>
+                              )}
                             </div>
                             <h3 className="text-base font-black text-navy-900 dark:text-white flex items-center gap-2">
-                              <Clock size={16} className="text-amber-500" />
+                              <Clock size={16} className={isConflict ? "text-purple-500" : isPastSlot ? "text-slate-400" : "text-amber-500"} />
                               {slot.startTime} às {slot.endTime}
                             </h3>
                             <p className="text-xs text-slate-600 dark:text-slate-300 font-bold flex items-center gap-1.5">
-                              <Calendar size={13} className="text-amber-500" />
+                              <Calendar size={13} className={isConflict ? "text-purple-500" : isPastSlot ? "text-slate-400" : "text-amber-500"} />
                               {formatDateDDMMAAAA(slot.date)}
                             </p>
                           </div>
 
                           <div className="text-right">
-                            <span className="bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-black text-xs px-2.5 py-1 rounded-full block border border-amber-200 dark:border-amber-800">
+                            <span className={`font-black text-xs px-2.5 py-1 rounded-full block border ${
+                              isConflict
+                                ? "bg-purple-100 dark:bg-purple-900/60 text-purple-900 dark:text-purple-200 border-purple-200 dark:border-purple-800"
+                                : isPastSlot
+                                ? "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                                : "bg-amber-100 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border-amber-200 dark:border-amber-800"
+                            }`}>
                               R$ {slot.hourlyRate}/h
                             </span>
-                            {slot.allowNegotiation && slot.minHourlyRate && (
+                            {slot.allowNegotiation && slot.minHourlyRate && !isConflict && !isPastSlot && (
                               <span className="text-[10px] text-muted dark:text-slate-400 block mt-1">
                                 Mín: R$ {slot.minHourlyRate}/h
                               </span>
@@ -2855,8 +2884,18 @@ export const ProfessorView: React.FC = () => {
                         )}
 
                         <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
-                          <span className="text-[11px] text-muted dark:text-slate-400">
-                            Disponível para contratação
+                          <span className={`text-[11px] font-semibold ${
+                            isConflict
+                              ? "text-purple-700 dark:text-purple-300"
+                              : isPastSlot
+                              ? "text-slate-500 dark:text-slate-400"
+                              : "text-muted dark:text-slate-400"
+                          }`}>
+                            {isConflict
+                              ? (slot.externalConflictMessage || "Bloqueado por expediente de trabalho externo")
+                              : isPastSlot
+                              ? "Horário encerrado"
+                              : "Disponível para contratação"}
                           </span>
                           {slot.source === "avulso" ? (
                             <button
@@ -2912,7 +2951,8 @@ export const ProfessorView: React.FC = () => {
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -3013,7 +3053,7 @@ export const ProfessorView: React.FC = () => {
 
                       // Checa se existe aula confirmada nesse dia da semana e horário
                       const conflictingShift = shifts.find((s) => {
-                        const isMyShift = Boolean(myInstId && s.confirmedInstructorId === myInstId);
+                        const isMyShift = isMyInstructorId(s.confirmedInstructorId);
                         if (!isMyShift || s.status !== "confirmado") return false;
                         const [y, m, d] = (s.date || "").split("-").map(Number);
                         const sDate = new Date(y, m - 1, d);
@@ -3033,7 +3073,7 @@ export const ProfessorView: React.FC = () => {
 
                       // Checa se existe proposta ativa/pendente para esse horário
                       const conflictingProposal = proposals.find((p) => {
-                        const isMyProp = Boolean(myInstId && p.instructorId === myInstId);
+                        const isMyProp = isMyInstructorId(p.instructorId);
                         if (!isMyProp || (p.status !== "pendente" && p.status !== "aceita")) return false;
                         const targetShift = shifts.find((s) => s.id === p.shiftId);
                         if (!targetShift) return false;
@@ -3078,17 +3118,6 @@ export const ProfessorView: React.FC = () => {
                       setSlotErrorMsg((prev) => ({
                         ...prev,
                         [weekDay.dayOfWeek]: "O horário de término deve ser posterior ao horário de início."
-                      }));
-                      return;
-                    }
-
-                    // Checa se o horário de início já passou para o dia de hoje
-                    const now = new Date();
-                    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-                    if (weekDay.dayOfWeek === now.getDay() && startMin <= currentMinutes) {
-                      setSlotErrorMsg((prev) => ({
-                        ...prev,
-                        [weekDay.dayOfWeek]: "O horário de início já passou para o dia de hoje. Escolha um horário futuro."
                       }));
                       return;
                     }
@@ -3187,7 +3216,7 @@ export const ProfessorView: React.FC = () => {
                   const currentInputs = slotInputs[weekDay.dayOfWeek] || { start: "07:00", end: "12:00" };
 
                   const confirmedClassesOnWeekday = shifts.filter((s) => {
-                    if (s.confirmedInstructorId !== activeInstructorId) return false;
+                    if (!isMyInstructorId(s.confirmedInstructorId)) return false;
                     if (s.status !== "confirmado" && s.status !== "realizada") return false;
                     const [y, m, d] = (s.date || "").split("-").map(Number);
                     if (!y || !m || !d) return false;
@@ -3239,10 +3268,29 @@ export const ProfessorView: React.FC = () => {
                         </button>
                       </div>
 
-                      {!dayAvail.active && confirmedClassesOnWeekday.length > 0 && (
-                        <div className="mt-2.5 p-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 text-[10px] text-blue-800 dark:text-blue-300 font-bold flex items-center gap-1.5">
-                          <CheckCircle size={12} className="text-blue-600 shrink-0" />
-                          <span>Suas {confirmedClassesOnWeekday.length} aula(s) já contratadas para este dia continuam ativas no calendário.</span>
+                      {/* Aulas Contratadas mantidas neste dia */}
+                      {confirmedClassesOnWeekday.length > 0 && (
+                        <div className="mt-2.5 p-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/50 text-[11px] text-blue-900 dark:text-blue-200 space-y-1.5">
+                          <div className="flex items-center gap-1.5 font-extrabold">
+                            <CheckCircle size={13} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                            <span>Aulas Contratadas mantidas neste dia ({confirmedClassesOnWeekday.length}):</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {confirmedClassesOnWeekday.map((cls) => {
+                              const gym = gyms.find((g) => g.id === cls.gymId);
+                              return (
+                                <span
+                                  key={cls.id}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-navy-900 border border-blue-200 dark:border-blue-800 text-[10px] font-bold text-blue-900 dark:text-blue-200 shadow-2xs"
+                                >
+                                  <Clock size={10} className="text-blue-500" />
+                                  <span>{cls.startTime} às {cls.endTime}</span>
+                                  <span className="text-muted dark:text-slate-400 font-normal">·</span>
+                                  <span className="truncate max-w-[140px]">{cls.title || cls.modality}{gym ? ` (${gym.name})` : ""}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
 
