@@ -198,6 +198,7 @@ export const ProfessorView: React.FC = () => {
   const [showCalendarYearModal, setShowCalendarYearModal] = useState<boolean>(false);
   const [showMonthOverviewModal, setShowMonthOverviewModal] = useState<boolean>(false);
   const [navYear, setNavYear] = useState<number>(2026);
+  const [isScheduleInfoOpen, setIsScheduleInfoOpen] = useState<boolean>(false);
   const [saveAvailabilityMsg, setSaveAvailabilityMsg] = useState<string | null>(null);
   const [slotInputs, setSlotInputs] = useState<Record<number, { start: string; end: string }>>({
     1: { start: "07:00", end: "12:00" },
@@ -2923,28 +2924,41 @@ export const ProfessorView: React.FC = () => {
           {/* SUB-ABA 2: GRADE DE DISPONIBILIDADE DO PROFESSOR */}
           {agendaSubTab === "grade" && (
             <div className="space-y-4">
-              {/* Card Informativo com Destaque de Compatibilidade e Preservação */}
-              <div className="bg-primary/10 dark:bg-primary/20 border border-primary/20 p-4 rounded-squircle space-y-2">
-                <div className="flex items-center gap-2">
-                  <Clock className="text-primary flex-shrink-0" size={16} strokeWidth={1.5} />
-                  <h3 className="text-xs font-black text-navy-900 dark:text-white uppercase tracking-wider">
-                    Grade Semanal & Compatibilidade com Calendário
-                  </h3>
-                </div>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Defina os horários em que você está livre para dar aulas recorrentes.
-                  <strong className="font-extrabold text-navy-900 dark:text-white block mt-1">
-                    💡 Suas aulas já contratadas permanecem sempre confirmadas no calendário, mesmo se você desativar o dia da semana na grade.
-                  </strong>
-                </p>
-              </div>
+              {/* Card Informativo com Destaque de Compatibilidade e Preservação (Colapsável) */}
+              <div className="bg-primary/10 dark:bg-primary/20 border border-primary/20 rounded-2xl overflow-hidden transition-all">
+                <button
+                  type="button"
+                  onClick={() => setIsScheduleInfoOpen((prev) => !prev)}
+                  className="w-full p-3.5 flex items-center justify-between text-left cursor-pointer hover:bg-primary/15 transition-colors select-none"
+                  aria-expanded={isScheduleInfoOpen}
+                >
+                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                    <Clock className="text-primary flex-shrink-0" size={16} strokeWidth={1.5} />
+                    <h3 className="text-xs font-black text-navy-900 dark:text-white uppercase tracking-wider truncate">
+                      Grade Semanal & Compatibilidade com Calendário
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 text-slate-500 dark:text-slate-400">
+                    <span className="text-[10px] font-bold hidden sm:inline">
+                      {isScheduleInfoOpen ? "Recolher" : "Saiba mais"}
+                    </span>
+                    <span className="w-5 h-5 rounded-md bg-white/60 dark:bg-navy-800/60 flex items-center justify-center text-primary">
+                      {isScheduleInfoOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    </span>
+                  </div>
+                </button>
 
-              {saveAvailabilityMsg && (
-                <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 p-3 rounded-2xl text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2 animate-fade-in">
-                  <CheckCircle size={15} />
-                  <span>{saveAvailabilityMsg}</span>
-                </div>
-              )}
+                {isScheduleInfoOpen && (
+                  <div className="px-3.5 pb-3.5 pt-0 border-t border-primary/15 space-y-1.5 animate-fade-in text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                    <p className="pt-2">
+                      Defina os horários em que você está livre para dar aulas recorrentes.
+                    </p>
+                    <p className="font-extrabold text-navy-900 dark:text-white">
+                      💡 Suas aulas já contratadas permanecem sempre confirmadas no calendário, mesmo se você desativar o dia da semana na grade.
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {/* Lista dos 7 Dias da Semana */}
               <div className="space-y-3">
@@ -5747,20 +5761,22 @@ export const ProfessorView: React.FC = () => {
       </AnimatedModal>
 
       {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO NO TOPO ===================== */}
-      {(profileSuccessMsg || offerSuccessMsg) && (
-        <div className="fixed top-[max(0.75rem,env(safe-area-inset-top,12px))] left-4 right-4 max-w-md mx-auto z-[100] animate-bounce">
+      {(profileSuccessMsg || offerSuccessMsg || saveAvailabilityMsg) && (
+        <div className="fixed top-[max(0.75rem,env(safe-area-inset-top,12px))] left-4 right-4 max-w-md landscape:max-w-xl mx-auto z-[100] animate-bounce">
           <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-floating border border-emerald-400/40 backdrop-blur-md flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <CheckCircle size={18} className="text-white shrink-0" />
-              <span className="text-xs font-bold leading-snug">{profileSuccessMsg || offerSuccessMsg}</span>
+              <span className="text-xs font-bold leading-snug">{profileSuccessMsg || offerSuccessMsg || saveAvailabilityMsg}</span>
             </div>
             <button
               type="button"
               onClick={() => {
                 setProfileSuccessMsg(null);
                 setOfferSuccessMsg(null);
+                setSaveAvailabilityMsg(null);
               }}
               className="text-white/80 hover:text-white p-1 shrink-0"
+              title="Fechar notificação"
             >
               <X size={15} />
             </button>
