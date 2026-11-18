@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { BRAZIL_STATES, CITIES_BY_STATE, NEIGHBORHOODS_BY_CITY } from "@/store/brazil-locations";
-import { ChevronDown, MapPin, Building2, Check } from "lucide-react";
+import { BRAZIL_STATES, CITIES_BY_STATE, NEIGHBORHOODS_BY_CITY, fetchCitiesForUf } from "@/store/brazil-locations";
+import { ChevronDown, Check, Loader2 } from "lucide-react";
 
 interface LocationComboboxProps {
   state: string;
@@ -19,9 +19,12 @@ export function LocationCombobox({
   onChange,
   disabled = false
 }: LocationComboboxProps) {
-  const [selectedUf, setSelectedUf] = useState<string>(state || "ES");
-  const [selectedCity, setSelectedCity] = useState<string>(city || "Vitória");
+  const [selectedUf, setSelectedUf] = useState<string>(state || "");
+  const [selectedCity, setSelectedCity] = useState<string>(city || "");
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string>(neighborhood || "");
+
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
+  const [isLoadingCities, setIsLoadingCities] = useState<boolean>(false);
 
   const [cityOpen, setCityOpen] = useState(false);
   const [citySearch, setCitySearch] = useState(city || "");
@@ -32,18 +35,52 @@ export function LocationCombobox({
   const cityRef = useRef<HTMLDivElement>(null);
   const neighborhoodRef = useRef<HTMLDivElement>(null);
 
-  // Sincroniza props externas
+  // Sincroniza props externas quando mudam (ex: ao selecionar academia cadastrada ou editar)
   useEffect(() => {
-    if (state && state !== selectedUf) setSelectedUf(state);
-    if (city && city !== selectedCity) {
-      setSelectedCity(city);
-      setCitySearch(city);
+    setSelectedUf(state || "");
+  }, [state]);
+
+  useEffect(() => {
+    setSelectedCity(city || "");
+    setCitySearch(city || "");
+  }, [city]);
+
+  useEffect(() => {
+    setSelectedNeighborhood(neighborhood || "");
+    setNeighborhoodSearch(neighborhood || "");
+  }, [neighborhood]);
+
+  // Carrega cidades da UF selecionada (com suporte a todas as cidades de qualquer estado via IBGE e fallback)
+  useEffect(() => {
+    let isCancelled = false;
+    if (!selectedUf) {
+      setAvailableCities([]);
+      setIsLoadingCities(false);
+      return;
     }
-    if (neighborhood && neighborhood !== selectedNeighborhood) {
-      setSelectedNeighborhood(neighborhood);
-      setNeighborhoodSearch(neighborhood);
-    }
-  }, [state, city, neighborhood]);
+
+    // Carrega instantaneamente o fallback estático se disponível
+    const initialFallback = CITIES_BY_STATE[selectedUf] || [];
+    setAvailableCities(initialFallback);
+    setIsLoadingCities(true);
+
+    fetchCitiesForUf(selectedUf)
+      .then((cities) => {
+        if (!isCancelled) {
+          if (cities && cities.length > 0) {
+            setAvailableCities(cities);
+          }
+          setIsLoadingCities(false);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) setIsLoadingCities(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedUf]);
 
   // Fecha dropdowns ao clicar fora
   useEffect(() => {
@@ -58,11 +95,6 @@ export function LocationCombobox({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const availableCities = CITIES_BY_STATE[selectedUf] || [
-    "Capital / Região Central",
-    "Outra Cidade"
-  ];
 
   const filteredCities = availableCities.filter((c) =>
     c.toLowerCase().includes((citySearch || "").toLowerCase())
@@ -80,12 +112,11 @@ export function LocationCombobox({
 
   const handleUfChange = (newUf: string) => {
     setSelectedUf(newUf);
-    const firstCity = (CITIES_BY_STATE[newUf] && CITIES_BY_STATE[newUf][0]) || "";
-    setSelectedCity(firstCity);
-    setCitySearch(firstCity);
+    setSelectedCity("");
+    setCitySearch("");
     setSelectedNeighborhood("");
     setNeighborhoodSearch("");
-    onChange({ state: newUf, city: firstCity, neighborhood: "" });
+    onChange({ state: newUf, city: "", neighborhood: "" });
   };
 
   const handleSelectCity = (c: string) => {
@@ -128,10 +159,13 @@ export function LocationCombobox({
             value={selectedUf}
             disabled={disabled}
             onChange={(e) => handleUfChange(e.target.value)}
-            className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none pr-8 cursor-pointer disabled:opacity-60"
+            className={`w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none pr-8 cursor-pointer disabled:opacity-60 ${
+              !selectedUf ? "text-slate-400 dark:text-slate-500" : "text-navy-900 dark:text-white"
+            }`}
           >
+            <option value="">Digite ou selecione</option>
             {BRAZIL_STATES.map((st) => (
-              <option key={st.uf} value={st.uf}>
+              <option key={st.uf} value={st.uf} className="text-navy-900 dark:text-white">
                 {st.uf} - {st.name}
               </option>
             ))}
@@ -145,8 +179,13 @@ export function LocationCombobox({
 
       {/* 2. Cidade - Combobox (4 colunas) */}
       <div className="sm:col-span-4 relative" ref={cityRef}>
-        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
-          Cidade
+        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1 flex items-center justify-between">
+          <span>Cidade</span>
+          {isLoadingCities && (
+            <span className="text-[10px] text-primary flex items-center gap-1 font-normal">
+              <Loader2 size={10} className="animate-spin" /> Carregando...
+            </span>
+          )}
         </label>
         <div className="relative">
           <input
@@ -155,8 +194,8 @@ export function LocationCombobox({
             disabled={disabled}
             onFocus={() => setCityOpen(true)}
             onChange={(e) => handleCustomCityInput(e.target.value)}
-            placeholder="Selecione ou digite..."
-            className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40 pr-8 disabled:opacity-60"
+            placeholder="Digite ou selecione"
+            className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/40 pr-8 disabled:opacity-60"
           />
           <button
             type="button"
@@ -170,8 +209,12 @@ export function LocationCombobox({
 
         {/* Dropdown de Cidades */}
         {cityOpen && !disabled && (
-          <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl shadow-xl py-1 text-xs">
-            {filteredCities.length > 0 ? (
+          <div className="absolute z-50 left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl shadow-xl py-1 text-xs">
+            {!selectedUf ? (
+              <div className="px-3 py-2 text-slate-500 dark:text-slate-400 text-[11px]">
+                Selecione primeiro o Estado (UF) para carregar as cidades ou digite o nome diretamente.
+              </div>
+            ) : filteredCities.length > 0 ? (
               filteredCities.map((c) => (
                 <button
                   key={c}
@@ -191,7 +234,7 @@ export function LocationCombobox({
               ))
             ) : (
               <div className="px-3 py-2 text-slate-400 text-[11px]">
-                Nenhuma sugestão. Pressione fora para manter "{citySearch}".
+                Nenhuma cidade encontrada na lista. Pressione fora para manter "{citySearch}".
               </div>
             )}
           </div>
@@ -210,8 +253,8 @@ export function LocationCombobox({
             disabled={disabled}
             onFocus={() => setNeighborhoodOpen(true)}
             onChange={(e) => handleCustomNeighborhoodInput(e.target.value)}
-            placeholder="Selecione ou digite..."
-            className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40 pr-8 disabled:opacity-60"
+            placeholder="Digite ou selecione"
+            className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/40 pr-8 disabled:opacity-60"
           />
           <button
             type="button"
@@ -225,7 +268,7 @@ export function LocationCombobox({
 
         {/* Dropdown de Bairros */}
         {neighborhoodOpen && !disabled && (
-          <div className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl shadow-xl py-1 text-xs">
+          <div className="absolute z-50 left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl shadow-xl py-1 text-xs">
             {filteredNeighborhoods.length > 0 ? (
               filteredNeighborhoods.map((n) => (
                 <button
@@ -246,7 +289,7 @@ export function LocationCombobox({
               ))
             ) : (
               <div className="px-3 py-2 text-slate-400 text-[11px]">
-                Bairro não listado. Digite livremente e clique fora para confirmar.
+                Digite livremente o nome do bairro e clique fora para confirmar.
               </div>
             )}
           </div>

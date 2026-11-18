@@ -35,32 +35,98 @@ export const BRAZIL_STATES: StateOption[] = [
   { uf: "AC", name: "Acre" }
 ];
 
+// Fallback estático com todos os 78 municípios do ES e principais cidades de cada UF
 export const CITIES_BY_STATE: Record<string, string[]> = {
   ES: [
-    "Vitória",
-    "Vila Velha",
-    "Serra",
-    "Cariacica",
-    "Guarapari",
-    "Viana",
-    "Cachoeiro de Itapemirim",
-    "Linhares",
-    "Colatina",
-    "São Mateus",
-    "Aracruz",
-    "Marataízes",
-    "Domingos Martins",
-    "Nova Venécia",
-    "Anchieta",
-    "Itapemirim",
-    "Santa Maria de Jetibá",
-    "Castelo"
+    "Afonso Cláudio", "Água Doce do Norte", "Águia Branca", "Alegre", "Alfredo Chaves",
+    "Alto Rio Novo", "Anchieta", "Apiacá", "Aracruz", "Atilio Vivacqua",
+    "Baixo Guandu", "Barra de São Francisco", "Boa Esperança", "Bom Jesus do Norte", "Brejetuba",
+    "Cachoeiro de Itapemirim", "Cariacica", "Castelo", "Colatina", "Conceição da Barra",
+    "Conceição do Castelo", "Divino de São Lourenço", "Domingos Martins", "Dores do Rio Preto", "Ecoporanga",
+    "Fundão", "Governador Lindenberg", "Guaçuí", "Guarapari", "Ibatiba",
+    "Ibiraçu", "Ibitirama", "Iconha", "Irupi", "Itaguaçu",
+    "Itapemirim", "Itarana", "Iúna", "Jaguaré", "Jerônimo Monteiro",
+    "João Neiva", "Laranja da Terra", "Linhares", "Mantenópolis", "Marataízes",
+    "Marechal Floriano", "Marilândia", "Mimoso do Sul", "Montanha", "Mucurici",
+    "Muniz Freire", "Muqui", "Nova Venécia", "Pancas", "Pedro Canário",
+    "Pinheiros", "Piúma", "Ponto Belo", "Presidente Kennedy", "Rio Bananal",
+    "Rio Novo do Sul", "Santa Leopoldina", "Santa Maria de Jetibá", "Santa Teresa", "São Domingos do Norte",
+    "São Gabriel da Palha", "São José do Calçado", "São Mateus", "São Roque do Canaã", "Serra",
+    "Sooretama", "Vargem Alta", "Venda Nova do Imigrante", "Viana", "Vila Pavão",
+    "Vila Valério", "Vila Velha", "Vitória"
   ],
-  RJ: ["Rio de Janeiro", "Niterói", "São Gonçalo", "Duque de Caxias", "Nova Iguaçu", "Petrópolis", "Campos dos Goytacazes", "Cabo Frio"],
-  SP: ["São Paulo", "Campinas", "Santos", "São Bernardo do Campo", "Santo André", "Osasco", "Ribeirão Preto", "Sorocaba"],
-  MG: ["Belo Horizonte", "Uberlândia", "Contagem", "Juiz de Fora", "Betim", "Montes Claros"],
-  BA: ["Salvador", "Feira de Santana", "Vitória da Conquista", "Camaçari", "Itabuna"]
+  RJ: ["Rio de Janeiro", "Niterói", "São Gonçalo", "Duque de Caxias", "Nova Iguaçu", "Petrópolis", "Campos dos Goytacazes", "Cabo Frio", "Volta Redonda", "Macaé", "Angra dos Reis", "Teresópolis", "Resende", "Nova Friburgo"],
+  SP: ["São Paulo", "Campinas", "Santos", "São Bernardo do Campo", "Santo André", "Osasco", "Ribeirão Preto", "Sorocaba", "São José dos Campos", "Guarulhos", "Piracicaba", "Bauru", "Jundiaí", "Franca", "Praia Grande"],
+  MG: ["Belo Horizonte", "Uberlândia", "Contagem", "Juiz de Fora", "Betim", "Montes Claros", "Uberaba", "Governador Valadares", "Ipatinga", "Sete Lagoas", "Divinópolis", "Poços de Caldas"],
+  BA: ["Salvador", "Feira de Santana", "Vitória da Conquista", "Camaçari", "Itabuna", "Juazeiro", "Lauro de Freitas", "Ilhéus", "Jequié", "Teixeira de Freitas", "Porto Seguro"],
+  PR: ["Curitiba", "Londrina", "Maringá", "Ponta Grossa", "Cascavel", "São José dos Pinhais", "Foz do Iguaçu", "Colombo", "Guarapuava", "Paranaguá"],
+  RS: ["Porto Alegre", "Caxias do Sul", "Canoas", "Pelotas", "Santa Maria", "Gravataí", "Viamão", "Novo Hamburgo", "São Leopoldo", "Rio Grande", "Passo Fundo"],
+  SC: ["Florianópolis", "Joinville", "Blumenau", "São José", "Chapecó", "Itajaí", "Criciúma", "Jaraguá do Sul", "Palhoça", "Balneário Camboriú", "Brusque"],
+  GO: ["Goiânia", "Aparecida de Goiânia", "Anápolis", "Rio Verde", "Luziânia", "Águas Lindas de Goiás", "Valparaíso de Goiás", "Trindade", "Formosa", "Itumbiara"],
+  DF: ["Brasília", "Taguatinga", "Ceilândia", "Águas Claras", "Guará", "Samambaia", "Sobradinho", "Planaltina"],
+  PE: ["Recife", "Jaboatão dos Guararapes", "Olinda", "Caruaru", "Petrolina", "Paulista", "Cabo de Santo Agostinho", "Camaragibe", "Garanhuns", "Vitória de Santo Antão"],
+  CE: ["Fortaleza", "Caucaia", "Juazeiro do Norte", "Maracanaú", "Sobral", "Crato", "Itapipoca", "Maranguape", "Iguatu"],
+  AL: ["Maceió", "Arapiraca", "Rio Largo", "Palmeira dos Índios", "União dos Palmares", "Penedo"],
+  AM: ["Manaus", "Parintins", "Itacoatiara", "Manacapuru", "Coari", "Tabatinga"],
+  AP: ["Macapá", "Santana", "Laranjal do Jari", "Oiapoque"],
+  MA: ["São Luís", "Imperatriz", "São José de Ribamar", "Timon", "Caxias", "Codó", "Paço do Lumiar"],
+  MT: ["Cuiabá", "Várzea Grande", "Rondonópolis", "Sinop", "Tangará da Serra", "Sorriso"],
+  MS: ["Campo Grande", "Dourados", "Três Lagoas", "Corumbá", "Ponta Porã"],
+  PA: ["Belém", "Ananindeua", "Santarém", "Marabá", "Parauapebas", "Castanhal"],
+  PB: ["João Pessoa", "Campina Grande", "Santa Rita", "Patos", "Bayeux", "Sousa"],
+  PI: ["Teresina", "Parnaíba", "Picos", "Piripiri", "Floriano"],
+  RN: ["Natal", "Mossoró", "Parnamirim", "São Gonçalo do Amarante", "Ceará-Mirim", "Caicó"],
+  RO: ["Porto Velho", "Ji-Paraná", "Ariquemes", "Vilhena", "Cacoal"],
+  RR: ["Boa Vista", "Rorainópolis", "Caracaraí"],
+  SE: ["Aracaju", "Nossa Senhora do Socorro", "Lagarto", "Itabaiana", "São Cristóvão", "Estância"],
+  TO: ["Palmas", "Araguaína", "Gurupi", "Porto Nacional", "Paraíso do Tocantins"],
+  AC: ["Rio Branco", "Cruzeiro do Sul", "Sena Madureira", "Tarauacá", "Feijó"]
 };
+
+// Cache em memória para requisições dinâmicas da API do IBGE
+const ibgeCityCache: Record<string, string[]> = {};
+
+/**
+ * Carrega a lista completa de cidades para a UF selecionada.
+ * Utiliza o cache local / fallback estático e enriquece dinamicamente com a API pública do IBGE.
+ */
+export async function fetchCitiesForUf(uf: string): Promise<string[]> {
+  const cleanUf = (uf || "").toUpperCase().trim();
+  if (!cleanUf) return [];
+
+  // Se já tiver em cache na memória da sessão
+  if (ibgeCityCache[cleanUf] && ibgeCityCache[cleanUf].length > 0) {
+    return ibgeCityCache[cleanUf];
+  }
+
+  // Cidades do fallback estático inicial
+  const fallback = CITIES_BY_STATE[cleanUf] || [];
+
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  try {
+    const res = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${cleanUf}/municipios`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const cityNames = data
+          .map((item: { nome?: string }) => item.nome || "")
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+        ibgeCityCache[cleanUf] = cityNames;
+        return cityNames;
+      }
+    }
+  } catch {
+    // Em caso de falha de rede/offline, retorna o fallback estático
+  }
+
+  ibgeCityCache[cleanUf] = fallback;
+  return fallback;
+}
 
 export const NEIGHBORHOODS_BY_CITY: Record<string, string[]> = {
   // Vitória

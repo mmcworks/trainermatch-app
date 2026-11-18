@@ -27,6 +27,7 @@ import {
   X,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Key,
   Lock,
   Check,
@@ -72,6 +73,58 @@ import { CancelShiftModal } from "@/components/cancel-shift-modal";
 import { cropAndCompressImage } from "@/lib/image-utils";
 import { LocationCombobox } from "@/components/location-combobox";
 
+const EXP_MONTH_OPTIONS = [
+  { value: "01", label: "01 - Janeiro" },
+  { value: "02", label: "02 - Fevereiro" },
+  { value: "03", label: "03 - Março" },
+  { value: "04", label: "04 - Abril" },
+  { value: "05", label: "05 - Maio" },
+  { value: "06", label: "06 - Junho" },
+  { value: "07", label: "07 - Julho" },
+  { value: "08", label: "08 - Agosto" },
+  { value: "09", label: "09 - Setembro" },
+  { value: "10", label: "10 - Outubro" },
+  { value: "11", label: "11 - Novembro" },
+  { value: "12", label: "12 - Dezembro" }
+];
+
+const EXP_YEAR_OPTIONS = Array.from({ length: 45 }, (_, i) => String(new Date().getFullYear() - i));
+
+function parseExpMonthYear(dateStr?: string): { month: string; year: string } {
+  if (!dateStr) return { month: "", year: "" };
+  const str = dateStr.trim();
+  if (str.includes("/")) {
+    const [part1, part2] = str.split("/").map((s) => s.trim());
+    if (part1 && part1.length === 4) return { month: (part2 || "").padStart(2, "0"), year: part1 };
+    let m = part1 || "";
+    if (isNaN(Number(m))) {
+      const lower = m.toLowerCase();
+      if (lower.startsWith("jan")) m = "01";
+      else if (lower.startsWith("fev")) m = "02";
+      else if (lower.startsWith("mar")) m = "03";
+      else if (lower.startsWith("abr")) m = "04";
+      else if (lower.startsWith("mai")) m = "05";
+      else if (lower.startsWith("jun")) m = "06";
+      else if (lower.startsWith("jul")) m = "07";
+      else if (lower.startsWith("ago")) m = "08";
+      else if (lower.startsWith("set")) m = "09";
+      else if (lower.startsWith("out")) m = "10";
+      else if (lower.startsWith("nov")) m = "11";
+      else if (lower.startsWith("dez")) m = "12";
+    } else if (m.length > 0) {
+      m = m.padStart(2, "0");
+    }
+    return { month: m, year: part2 || "" };
+  }
+  if (str.includes("-")) {
+    const [part1, part2] = str.split("-").map((s) => s.trim());
+    if (part1 && part1.length === 4) return { month: (part2 || "").padStart(2, "0"), year: part1 };
+  }
+  if (str.length === 4 && !isNaN(Number(str))) {
+    return { month: "", year: str };
+  }
+  return { month: "", year: str };
+}
 
 export const ProfessorView: React.FC = () => {
   const {
@@ -527,14 +580,16 @@ export const ProfessorView: React.FC = () => {
   const [showExperienceModal, setShowExperienceModal] = useState<boolean>(false);
   const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
   const [expCompanyName, setExpCompanyName] = useState<string>("");
-  const [expState, setExpState] = useState<string>("ES");
-  const [expCity, setExpCity] = useState<string>("Vitória");
+  const [expState, setExpState] = useState<string>("");
+  const [expCity, setExpCity] = useState<string>("");
   const [expNeighborhood, setExpNeighborhood] = useState<string>("");
   const [expRole, setExpRole] = useState<string>("Instrutor de Musculação");
   const [expModalities, setExpModalities] = useState<string[]>(["Musculação"]);
   const [expIsCurrent, setExpIsCurrent] = useState<boolean>(false);
-  const [expStartDate, setExpStartDate] = useState<string>("");
-  const [expEndDate, setExpEndDate] = useState<string>("");
+  const [expStartMonth, setExpStartMonth] = useState<string>("");
+  const [expStartYear, setExpStartYear] = useState<string>("");
+  const [expEndMonth, setExpEndMonth] = useState<string>("");
+  const [expEndYear, setExpEndYear] = useState<string>("");
   const [expSchedule, setExpSchedule] = useState<DayAvailability[]>(
     DEFAULT_WEEK_DAYS.map((d) => ({ ...d, active: false, slots: [] }))
   );
@@ -571,14 +626,16 @@ export const ProfessorView: React.FC = () => {
   const handleOpenNewExperienceModal = () => {
     setEditingExperienceId(null);
     setExpCompanyName("");
-    setExpState("ES");
-    setExpCity("Vitória");
+    setExpState("");
+    setExpCity("");
     setExpNeighborhood("");
     setExpRole("Instrutor de Musculação");
     setExpModalities(["Musculação"]);
     setExpIsCurrent(false);
-    setExpStartDate("");
-    setExpEndDate("");
+    setExpStartMonth("");
+    setExpStartYear("");
+    setExpEndMonth("");
+    setExpEndYear("");
     setExpSchedule(DEFAULT_WEEK_DAYS.map((d) => ({ ...d, active: false, slots: [] })));
     setExpDescription("");
     setShowGymAutocomplete(false);
@@ -588,14 +645,21 @@ export const ProfessorView: React.FC = () => {
   const handleOpenEditExperienceModal = (exp: WorkExperience) => {
     setEditingExperienceId(exp.id);
     setExpCompanyName(exp.companyName || "");
-    setExpState(exp.state || "ES");
-    setExpCity(exp.city || "Vitória");
+    setExpState(exp.state || "");
+    setExpCity(exp.city || "");
     setExpNeighborhood(exp.neighborhood || "");
     setExpRole(exp.role || "Instrutor de Musculação");
     setExpModalities(exp.modalities || ["Musculação"]);
     setExpIsCurrent(Boolean(exp.isCurrent));
-    setExpStartDate(exp.startDate || "");
-    setExpEndDate(exp.endDate || "");
+
+    const startParsed = parseExpMonthYear(exp.startDate);
+    setExpStartMonth(startParsed.month);
+    setExpStartYear(startParsed.year);
+
+    const endParsed = parseExpMonthYear(exp.endDate);
+    setExpEndMonth(endParsed.month);
+    setExpEndYear(endParsed.year);
+
     setExpSchedule(
       exp.schedule && exp.schedule.length > 0
         ? exp.schedule
@@ -611,21 +675,32 @@ export const ProfessorView: React.FC = () => {
       alert("Por favor, informe o nome da academia ou local.");
       return;
     }
+    if (!expStartYear) {
+      alert("Por favor, selecione ao menos o ano de início da experiência.");
+      return;
+    }
 
     const currentList: WorkExperience[] = currentInstructor.workExperiences || [];
     const expId = editingExperienceId || `exp-${Date.now()}`;
 
+    const formattedStartDate = expStartMonth && expStartYear ? `${expStartMonth}/${expStartYear}` : expStartYear;
+    const formattedEndDate = expIsCurrent
+      ? undefined
+      : expEndMonth && expEndYear
+      ? `${expEndMonth}/${expEndYear}`
+      : expEndYear || undefined;
+
     const newExp: WorkExperience = {
       id: expId,
       companyName: expCompanyName.trim(),
-      state: expState,
-      city: expCity,
+      state: expState || "",
+      city: expCity || "",
       neighborhood: expNeighborhood.trim(),
       role: expRole.trim() || "Instrutor",
       modalities: expModalities.length > 0 ? expModalities : ["Musculação"],
       isCurrent: expIsCurrent,
-      startDate: expStartDate.trim() || new Date().getFullYear().toString(),
-      endDate: expIsCurrent ? undefined : (expEndDate.trim() || undefined),
+      startDate: formattedStartDate,
+      endDate: formattedEndDate,
       schedule: expIsCurrent ? expSchedule : undefined,
       description: expDescription.trim() || undefined
     };
@@ -3380,7 +3455,43 @@ export const ProfessorView: React.FC = () => {
               <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
             </button>
 
-            {/* Opção 3: Minhas Habilidades */}
+            {/* Opção 3: Experiências Profissionais (acima de Minhas Habilidades) */}
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById("experiencias-profissionais-section");
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth" });
+                } else {
+                  handleOpenNewExperienceModal();
+                }
+              }}
+              className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50/80 dark:hover:bg-navy-700/50 transition-colors group"
+            >
+              <div className="flex items-center gap-3.5 min-w-0">
+                <Building2 size={20} strokeWidth={1.5} className="text-slate-800 dark:text-slate-200 shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">
+                    Experiências Profissionais
+                  </span>
+                  <span className="text-[11px] text-muted dark:text-slate-400 block truncate">
+                    {(currentInstructor.workExperiences || []).length > 0
+                      ? `${(currentInstructor.workExperiences || []).length} cadastrada(s) · ${(currentInstructor.workExperiences || []).find((e) => e.isCurrent)?.companyName || "Sem atividade vigente"}`
+                      : "Locais onde já atuou ou atua hoje"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                {(currentInstructor.workExperiences || []).length > 0 && (
+                  <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                    {(currentInstructor.workExperiences || []).length}
+                  </span>
+                )}
+                <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 dark:text-slate-500 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
+
+            {/* Opção 4: Minhas Habilidades */}
             <button
               type="button"
               onClick={() => {
@@ -3401,7 +3512,7 @@ export const ProfessorView: React.FC = () => {
               <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
             </button>
 
-            {/* Opção 4: Documentos Profissionais */}
+            {/* Opção 5: Documentos Profissionais */}
             <button
               type="button"
               onClick={() => setShowDocumentsModal(true)}
@@ -3419,34 +3530,7 @@ export const ProfessorView: React.FC = () => {
               <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
             </button>
 
-            {/* Opção: Minhas Experiências Profissionais */}
-            <button
-              type="button"
-              onClick={handleOpenNewExperienceModal}
-              className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50/80 dark:hover:bg-navy-700/50 transition-colors group"
-            >
-              <div className="flex items-center gap-3.5 min-w-0">
-                <Building2 size={20} strokeWidth={1.5} className="text-slate-800 dark:text-slate-200 shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">
-                    Experiências & Atividades
-                  </span>
-                  <span className="text-[11px] text-muted dark:text-slate-400 block truncate">
-                    {(currentInstructor.workExperiences || []).length > 0
-                      ? `${(currentInstructor.workExperiences || []).length} local(is) cadastrado(s) · ${(currentInstructor.workExperiences || []).find((e) => e.isCurrent)?.companyName || "Sem trabalho ativo"}`
-                      : "Adicionar locais onde já atuou ou atua hoje"}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                  {(currentInstructor.workExperiences || []).length}
-                </span>
-                <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 dark:text-slate-500 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </button>
-
-            {/* Opção 5: Senha */}
+            {/* Opção 6: Senha */}
             <button
               type="button"
               onClick={() => {
@@ -3600,7 +3684,10 @@ export const ProfessorView: React.FC = () => {
           </div>
 
           {/* 4. SEÇÃO DE EXPERIÊNCIAS PROFISSIONAIS E ATIVIDADES EXTERNAS (CARDS SEPARADOS) */}
-          <div className="bg-card dark:bg-navy-800 rounded-squircle p-5 shadow-soft border border-slate-100 dark:border-slate-800 space-y-3.5">
+          <div
+            id="experiencias-profissionais-section"
+            className="bg-card dark:bg-navy-800 rounded-squircle p-5 shadow-soft border border-slate-100 dark:border-slate-800 space-y-3.5 scroll-mt-20"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-extrabold text-navy-900 dark:text-white flex items-center gap-1.5">
@@ -7799,6 +7886,36 @@ export const ProfessorView: React.FC = () => {
         </div>
 
         <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+          {/* Toggle de Atividade Vigente (Trabalhando atualmente) - NO TOPO DO MODAL */}
+          <div className="p-3.5 bg-slate-50 dark:bg-navy-900/70 rounded-2xl border border-slate-200/80 dark:border-navy-700 flex items-center justify-between gap-3">
+            <div>
+              <span className="text-xs font-bold text-navy-900 dark:text-white flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${expIsCurrent ? "bg-emerald-500 animate-pulse" : "bg-slate-300 dark:bg-slate-600"}`} />
+                Trabalhando atualmente neste local
+              </span>
+              <span className="text-[11px] text-muted dark:text-slate-400 block mt-0.5">
+                {expIsCurrent
+                  ? "Atividade vigente: informe seus horários de expediente para bloquear conflitos de agenda."
+                  : "Experiência prévia já encerrada."}
+              </span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={expIsCurrent}
+              onClick={() => setExpIsCurrent(!expIsCurrent)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                expIsCurrent ? "bg-emerald-500" : "bg-slate-300 dark:bg-navy-700"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  expIsCurrent ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
           {/* Nome da Academia / Empresa com Autocomplete das Academias da Plataforma */}
           <div className="relative">
             <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
@@ -7864,32 +7981,115 @@ export const ProfessorView: React.FC = () => {
             />
           </div>
 
-          {/* Cargo / Função e Modalidades */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
-                Cargo / Função
-              </label>
-              <input
-                type="text"
-                value={expRole}
-                onChange={(e) => setExpRole(e.target.value)}
-                placeholder="Ex: Instrutor de Musculação, Personal..."
-                className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
+          {/* Cargo / Função */}
+          <div>
+            <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
+              Cargo / Função
+            </label>
+            <input
+              type="text"
+              value={expRole}
+              onChange={(e) => setExpRole(e.target.value)}
+              placeholder="Ex: Instrutor de Musculação, Personal, Professor de Spinning..."
+              className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
 
+          {/* Período de Início e Término (Lado a Lado / Next to each other) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Período de Início */}
             <div>
               <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
                 Período de Início *
               </label>
-              <input
-                type="text"
-                value={expStartDate}
-                onChange={(e) => setExpStartDate(e.target.value)}
-                placeholder="Ex: 2022 ou Mar/2022"
-                className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <select
+                    value={expStartMonth}
+                    onChange={(e) => setExpStartMonth(e.target.value)}
+                    className={`w-full h-10 px-2.5 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none pr-7 cursor-pointer ${
+                      !expStartMonth ? "text-slate-400 dark:text-slate-500" : "text-navy-900 dark:text-white"
+                    }`}
+                  >
+                    <option value="">Mês</option>
+                    {EXP_MONTH_OPTIONS.map((m) => (
+                      <option key={m.value} value={m.value} className="text-navy-900 dark:text-white">
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+
+                <div className="relative">
+                  <select
+                    value={expStartYear}
+                    onChange={(e) => setExpStartYear(e.target.value)}
+                    className={`w-full h-10 px-2.5 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none pr-7 cursor-pointer ${
+                      !expStartYear ? "text-slate-400 dark:text-slate-500" : "text-navy-900 dark:text-white"
+                    }`}
+                  >
+                    <option value="">Ano</option>
+                    {EXP_YEAR_OPTIONS.map((y) => (
+                      <option key={y} value={y} className="text-navy-900 dark:text-white">
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+
+            {/* Período de Término */}
+            <div>
+              <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
+                Período de Término
+              </label>
+              {expIsCurrent ? (
+                <div className="h-10 px-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Até o momento (Atual)
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <select
+                      value={expEndMonth}
+                      onChange={(e) => setExpEndMonth(e.target.value)}
+                      className={`w-full h-10 px-2.5 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none pr-7 cursor-pointer ${
+                        !expEndMonth ? "text-slate-400 dark:text-slate-500" : "text-navy-900 dark:text-white"
+                      }`}
+                    >
+                      <option value="">Mês</option>
+                      {EXP_MONTH_OPTIONS.map((m) => (
+                        <option key={m.value} value={m.value} className="text-navy-900 dark:text-white">
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+
+                  <div className="relative">
+                    <select
+                      value={expEndYear}
+                      onChange={(e) => setExpEndYear(e.target.value)}
+                      className={`w-full h-10 px-2.5 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none pr-7 cursor-pointer ${
+                        !expEndYear ? "text-slate-400 dark:text-slate-500" : "text-navy-900 dark:text-white"
+                      }`}
+                    >
+                      <option value="">Ano</option>
+                      {EXP_YEAR_OPTIONS.map((y) => (
+                        <option key={y} value={y} className="text-navy-900 dark:text-white">
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -7924,42 +8124,6 @@ export const ProfessorView: React.FC = () => {
               })}
             </div>
           </div>
-
-          {/* Toggle de Atividade Vigente */}
-          <div className="p-3 bg-slate-50 dark:bg-navy-900/60 rounded-xl border border-slate-200/80 dark:border-navy-700">
-            <label className="flex items-center gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={expIsCurrent}
-                onChange={(e) => setExpIsCurrent(e.target.checked)}
-                className="w-4 h-4 rounded text-primary focus:ring-primary border-slate-300"
-              />
-              <div>
-                <span className="text-xs font-bold text-navy-900 dark:text-white block">
-                  Trabalho aqui atualmente (Atividade Vigente)
-                </span>
-                <span className="text-[11px] text-muted dark:text-slate-400 block">
-                  Seus horários de expediente bloquearão automaticamente choques na sua agenda do TrainerMatch.
-                </span>
-              </div>
-            </label>
-          </div>
-
-          {/* Se NÃO for vigente: Data de Término */}
-          {!expIsCurrent && (
-            <div>
-              <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
-                Período de Término
-              </label>
-              <input
-                type="text"
-                value={expEndDate}
-                onChange={(e) => setExpEndDate(e.target.value)}
-                placeholder="Ex: 2024 ou Dez/2023"
-                className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
-          )}
 
           {/* Se FOR vigente: Grade de Horários Semanais do Trabalho Ativo */}
           {expIsCurrent && (
