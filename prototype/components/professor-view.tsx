@@ -434,7 +434,8 @@ export const ProfessorView: React.FC = () => {
     rawInstructor.phone,
     rawInstructor.avatar,
     JSON.stringify(rawInstructor.modalities || []),
-    JSON.stringify(rawInstructor.pixKeys || [])
+    JSON.stringify(rawInstructor.pixKeys || []),
+    JSON.stringify(rawInstructor.availability || [])
   ]);
 
   const [professorDocuments, setProfessorDocuments] = useState<{
@@ -579,6 +580,14 @@ export const ProfessorView: React.FC = () => {
 
   // Estados para Gerenciamento de Experiências Profissionais e Atividades Externas
   const [showExperiencesScreen, setShowExperiencesScreen] = useState<boolean>(false);
+  const [isClosingExperiencesScreen, setIsClosingExperiencesScreen] = useState<boolean>(false);
+  const handleCloseExperiencesScreen = () => {
+    setIsClosingExperiencesScreen(true);
+    setTimeout(() => {
+      setShowExperiencesScreen(false);
+      setIsClosingExperiencesScreen(false);
+    }, 280);
+  };
   const [expandedExpIds, setExpandedExpIds] = useState<string[]>([]);
   const toggleExpandExp = (id: string) => {
     setExpandedExpIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
@@ -868,7 +877,8 @@ export const ProfessorView: React.FC = () => {
     );
 
     // 2. Grade semanal para este dia da semana (presente apenas para o dia atual e dias futuros)
-    const matchingAvail = localAvailability.find((a) => a.dayOfWeek === dayOfWeekIndex);
+    const availList = (rawInstructor.availability && rawInstructor.availability.length > 0) ? rawInstructor.availability : localAvailability;
+    const matchingAvail = availList.find((a) => a.dayOfWeek === dayOfWeekIndex);
     const weeklySlots = (dateStr >= todayStr && matchingAvail?.active && matchingAvail.slots) ? matchingAvail.slots : [];
 
     const results: {
@@ -2717,6 +2727,52 @@ export const ProfessorView: React.FC = () => {
                   </p>
                 </div>
 
+                {/* Card informativo de Expediente Externo neste dia, se houver */}
+                {(() => {
+                  if (selectedDayNumber === null || !selectedDayInfo) return null;
+                  const currentExps = (currentInstructor.workExperiences || []).filter((e) => e.isCurrent);
+                  const activeExpsOnThisDay = currentExps.flatMap((exp) => {
+                    const dSched = (exp.schedule || []).find((s) => s.dayOfWeek === selectedDayInfo.dayOfWeekIndex && s.active);
+                    if (!dSched || !dSched.slots || dSched.slots.length === 0) return [];
+                    return dSched.slots.map((s) => ({
+                      companyName: exp.companyName,
+                      location: [exp.neighborhood, exp.city].filter(Boolean).join(", "),
+                      start: s.start,
+                      end: s.end
+                    }));
+                  });
+                  if (activeExpsOnThisDay.length === 0) return null;
+                  return (
+                    <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200/70 dark:border-purple-900/50 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-black text-purple-900 dark:text-purple-200">
+                        <span className="flex items-center gap-1.5">
+                          <Building2 size={14} className="text-purple-600 dark:text-purple-400" />
+                          Expediente Externo Cadastrado
+                        </span>
+                        <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-200/70 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 font-extrabold">
+                          Ocupado
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {activeExpsOnThisDay.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-xs text-purple-950 dark:text-purple-100 bg-white/70 dark:bg-navy-900/70 px-3 py-2 rounded-xl border border-purple-100 dark:border-purple-900/30">
+                            <div>
+                              <span className="font-extrabold block">{item.companyName}</span>
+                              {item.location && <span className="text-[10px] text-purple-700 dark:text-purple-300 block">{item.location}</span>}
+                            </div>
+                            <span className="font-black text-purple-700 dark:text-purple-300 flex items-center gap-1 text-[11px]">
+                              <Clock size={11} /> {item.start} às {item.end}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-purple-700/80 dark:text-purple-300/80 italic">
+                        Estes horários não são ofertados para contratação para evitar conflito com seu trabalho externo.
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 {myOfferedSlots.length === 0 ? (
                   <div className="bg-card dark:bg-navy-800 rounded-squircle p-7 text-center shadow-soft border border-slate-100 dark:border-slate-800 space-y-3 animate-fade-in">
                     <Clock className="mx-auto text-slate-300 dark:text-slate-600" size={32} />
@@ -3023,6 +3079,25 @@ export const ProfessorView: React.FC = () => {
                       return;
                     }
 
+                    // Checa conflito com atividade externa vigente cadastrada para este dia da semana
+                    const currentExps = (currentInstructor.workExperiences || []).filter((e) => e.isCurrent);
+                    for (const exp of currentExps) {
+                      const expDay = (exp.schedule || []).find((s) => s.dayOfWeek === weekDay.dayOfWeek);
+                      if (expDay && expDay.active && expDay.slots) {
+                        for (const eSlot of expDay.slots) {
+                          const eStartMin = timeToMinutes(eSlot.start);
+                          const eEndMin = timeToMinutes(eSlot.end);
+                          if (Math.max(startMin, eStartMin) < Math.min(endMin, eEndMin)) {
+                            setSlotErrorMsg((prev) => ({
+                              ...prev,
+                              [weekDay.dayOfWeek]: `⚠️ Conflito de Expediente: Você já possui atividade externa vigente cadastrada na ${exp.companyName || "outra academia"} das ${eSlot.start} às ${eSlot.end} neste dia.`
+                            }));
+                            return;
+                          }
+                        }
+                      }
+                    }
+
                     // Checa conflito com qualquer horário já cadastrado neste dia
                     const currentSlots = dayAvail.slots || [];
                     for (const existing of currentSlots) {
@@ -3156,6 +3231,34 @@ export const ProfessorView: React.FC = () => {
                           <span>Suas {confirmedClassesOnWeekday.length} aula(s) já contratadas para este dia continuam ativas no calendário.</span>
                         </div>
                       )}
+
+                      {/* Expediente Externo Ativo cadastrado para este dia da semana */}
+                      {(() => {
+                        const currentExps = (currentInstructor.workExperiences || []).filter((e) => e.isCurrent);
+                        const activeExpsOnDay = currentExps.flatMap((exp) => {
+                          const dSched = (exp.schedule || []).find((s) => s.dayOfWeek === weekDay.dayOfWeek && s.active);
+                          if (!dSched || !dSched.slots || dSched.slots.length === 0) return [];
+                          return dSched.slots.map((s) => ({
+                            companyName: exp.companyName,
+                            start: s.start,
+                            end: s.end
+                          }));
+                        });
+                        if (activeExpsOnDay.length === 0) return null;
+                        return (
+                          <div className="mt-2.5 p-2.5 rounded-xl bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200/70 dark:border-purple-900/50 text-[11px] text-purple-900 dark:text-purple-200 flex items-start gap-2">
+                            <Building2 size={13} className="shrink-0 text-purple-600 dark:text-purple-400 mt-0.5" />
+                            <div>
+                              <span className="font-extrabold">Expediente Externo Cadastrado: </span>
+                              {activeExpsOnDay.map((e, idx) => (
+                                <span key={idx} className="font-semibold">
+                                  {e.companyName} ({e.start} às {e.end}){idx < activeExpsOnDay.length - 1 ? ", " : ""}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Se Ativo: Lista de Faixas e Adicionadores */}
                       {dayAvail.active ? (
@@ -3464,7 +3567,10 @@ export const ProfessorView: React.FC = () => {
             {/* Opção 3: Experiências Profissionais (acima de Minhas Habilidades) */}
             <button
               type="button"
-              onClick={() => setShowExperiencesScreen(true)}
+              onClick={() => {
+                setIsClosingExperiencesScreen(false);
+                setShowExperiencesScreen(true);
+              }}
               className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50/80 dark:hover:bg-navy-700/50 transition-colors group"
             >
               <div className="flex items-center gap-3.5 min-w-0">
@@ -7699,229 +7805,239 @@ export const ProfessorView: React.FC = () => {
         })()}
       </AnimatedModal>
 
-      {/* ===================== TELA ESPECÍFICA DE EXPERIÊNCIAS PROFISSIONAIS ===================== */}
-      <AnimatedModal
-        isOpen={showExperiencesScreen}
-        onClose={() => setShowExperiencesScreen(false)}
-        className="p-5 sm:p-6 space-y-4 max-w-xl"
-      >
-        {/* Cabeçalho da Tela */}
-        <div className="flex justify-between items-start border-b border-slate-100 dark:border-navy-700 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
-              <Building2 size={20} />
+      {/* ===================== TELA ESPECÍFICA DE EXPERIÊNCIAS PROFISSIONAIS (FULL SCREEN SLIDE) ===================== */}
+      {showExperiencesScreen && (
+        <div
+          className={`fixed inset-y-0 left-0 right-0 max-w-md landscape:max-w-3xl mx-auto z-50 bg-background dark:bg-navy-950 flex flex-col shadow-2xl ${
+            isClosingExperiencesScreen ? "animate-screen-out-right" : "animate-screen-in-right"
+          }`}
+        >
+          {/* Top Header com botão < Voltar ao lado do título */}
+          <div className="sticky top-0 z-10 bg-card/95 dark:bg-navy-900/95 backdrop-blur-md border-b border-slate-100 dark:border-navy-800 px-4 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={handleCloseExperiencesScreen}
+                className="inline-flex items-center gap-1 text-sm font-bold text-primary hover:text-primary-hover active:scale-95 transition-all cursor-pointer py-1 pr-2 rounded-lg"
+                title="Voltar para o Perfil"
+              >
+                <ChevronLeft size={18} strokeWidth={2.5} />
+                <span>Voltar</span>
+              </button>
+              <div className="h-4 w-px bg-slate-200 dark:bg-navy-700" />
+              <div className="min-w-0">
+                <h2 className="text-base font-extrabold text-navy-900 dark:text-white truncate">
+                  Experiências Profissionais
+                </h2>
+              </div>
             </div>
-            <div>
-              <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
-                Experiências Profissionais
-              </h3>
-              <p className="text-xs text-muted dark:text-slate-400">
-                Histórico de atuação e suas atividades externas vigentes
-              </p>
+            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Building2 size={16} />
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowExperiencesScreen(false)}
-            className="w-7 h-7 rounded-full bg-slate-100 dark:bg-navy-800 text-slate-500 hover:text-navy-900 dark:hover:text-white flex items-center justify-center transition-colors"
-          >
-            <X size={15} />
-          </button>
-        </div>
 
-        {/* Barra superior de ações */}
-        <div className="flex items-center justify-between pt-0.5">
-          <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
-            {(currentInstructor.workExperiences || []).length} experiência(s) cadastrada(s)
-          </span>
-          <button
-            type="button"
-            onClick={handleOpenNewExperienceModal}
-            className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-black px-3.5 py-2 rounded-xl hover:bg-primary-hover shadow-xs transition-all active:scale-95"
-          >
-            <Plus size={14} strokeWidth={2.5} />
-            Adicionar experiência
-          </button>
-        </div>
-
-        {/* Lista de Experiências ou Estado Vazio */}
-        <div className="space-y-3 max-h-[68vh] overflow-y-auto pr-1">
-          {(!currentInstructor.workExperiences || currentInstructor.workExperiences.length === 0) ? (
-            /* Estado Vazio (Empty State) */
-            <div className="text-center py-10 px-4 bg-slate-50 dark:bg-navy-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-navy-700 space-y-3">
-              <div className="w-12 h-12 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                <Building2 size={24} strokeWidth={1.5} />
-              </div>
+          {/* Conteúdo Rolável da Tela */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+            {/* Barra superior de ações */}
+            <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-extrabold text-navy-900 dark:text-white">
-                  Nenhuma experiência cadastrada
-                </h4>
-                <p className="text-xs text-muted dark:text-slate-400 mt-1 max-w-sm mx-auto">
-                  Adicione as academias ou estúdios onde você já atuou ou atua atualmente para enriquecer seu perfil e proteger sua agenda.
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                  {(currentInstructor.workExperiences || []).length} experiência(s) cadastrada(s)
+                </span>
+                <p className="text-[11px] text-muted dark:text-slate-400">
+                  Histórico de atuação e suas atividades externas vigentes
                 </p>
               </div>
               <button
                 type="button"
                 onClick={handleOpenNewExperienceModal}
-                className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-primary-hover shadow-xs transition-all active:scale-95"
+                className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-black px-3.5 py-2.5 rounded-xl hover:bg-primary-hover shadow-xs transition-all active:scale-95 shrink-0"
               >
-                <Plus size={14} /> Cadastrar primeira experiência
+                <Plus size={14} strokeWidth={2.5} />
+                Adicionar experiência
               </button>
             </div>
-          ) : (
-            /* Lista de Cards Colapsados / Expansíveis */
-            <div className="space-y-2.5">
-              {currentInstructor.workExperiences.map((exp) => {
-                const isExpanded = expandedExpIds.includes(exp.id);
-                return (
-                  <div
-                    key={exp.id}
-                    className={`rounded-2xl border transition-all ${
-                      isExpanded
-                        ? "bg-white dark:bg-navy-900 border-primary/40 shadow-xs"
-                        : "bg-slate-50 dark:bg-navy-900/60 border-slate-200/80 dark:border-navy-700 hover:border-slate-300 dark:hover:border-navy-600"
-                    }`}
+
+            {/* Lista de Experiências ou Estado Vazio */}
+            <div className="space-y-3 pb-8">
+              {(!currentInstructor.workExperiences || currentInstructor.workExperiences.length === 0) ? (
+                /* Estado Vazio (Empty State) */
+                <div className="text-center py-12 px-4 bg-slate-50 dark:bg-navy-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-navy-700 space-y-3">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                    <Building2 size={26} strokeWidth={1.5} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-extrabold text-navy-900 dark:text-white">
+                      Nenhuma experiência cadastrada
+                    </h4>
+                    <p className="text-xs text-muted dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                      Adicione as academias ou estúdios onde você já atuou ou atua atualmente para enriquecer seu perfil e proteger sua agenda.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenNewExperienceModal}
+                    className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-primary-hover shadow-xs transition-all active:scale-95"
                   >
-                    {/* Cabeçalho do Card Colapsado - Toque para expandir/recolher */}
-                    <div
-                      onClick={() => toggleExpandExp(exp.id)}
-                      className="p-3.5 flex items-center justify-between cursor-pointer select-none"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                        <Building2 size={18} className="text-primary shrink-0" />
-                        <div className="min-w-0">
-                          <span className="text-xs font-extrabold text-navy-900 dark:text-white block truncate">
-                            {exp.companyName}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {exp.isCurrent ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/40">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Atividade Vigente
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/70 text-slate-700 dark:bg-navy-800 dark:text-slate-300">
-                            Anterior
-                          </span>
-                        )}
-                        <span className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-navy-800 flex items-center justify-center text-slate-500 dark:text-slate-400">
-                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Detalhes do Card Expandido */}
-                    {isExpanded && (
-                      <div className="px-4 pb-4 pt-1 border-t border-slate-100 dark:border-navy-800 space-y-3 text-xs">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-                          {/* Cargo */}
-                          {exp.role && (
-                            <div>
-                              <span className="text-[10px] font-black uppercase text-slate-400 block">Cargo / Função</span>
-                              <span className="font-bold text-navy-900 dark:text-white">{exp.role}</span>
-                            </div>
-                          )}
-
-                          {/* Localização */}
-                          {(exp.city || exp.state || exp.neighborhood) && (
-                            <div>
-                              <span className="text-[10px] font-black uppercase text-slate-400 block">Localização</span>
-                              <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                                <MapPin size={12} className="text-primary shrink-0" />
-                                {[exp.neighborhood, exp.city ? `${exp.city}${exp.state ? ` - ${exp.state}` : ""}` : exp.state].filter(Boolean).join(", ")}
+                    <Plus size={14} /> Cadastrar primeira experiência
+                  </button>
+                </div>
+              ) : (
+                /* Lista de Cards Colapsados / Expansíveis */
+                <div className="space-y-2.5">
+                  {currentInstructor.workExperiences.map((exp) => {
+                    const isExpanded = expandedExpIds.includes(exp.id);
+                    return (
+                      <div
+                        key={exp.id}
+                        className={`rounded-2xl border transition-all ${
+                          isExpanded
+                            ? "bg-white dark:bg-navy-900 border-primary/40 shadow-xs"
+                            : "bg-slate-50 dark:bg-navy-900/60 border-slate-200/80 dark:border-navy-700 hover:border-slate-300 dark:hover:border-navy-600"
+                        }`}
+                      >
+                        {/* Cabeçalho do Card Colapsado - Toque para expandir/recolher */}
+                        <div
+                          onClick={() => toggleExpandExp(exp.id)}
+                          className="p-3.5 flex items-center justify-between cursor-pointer select-none"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                            <Building2 size={18} className="text-primary shrink-0" />
+                            <div className="min-w-0">
+                              <span className="text-xs font-extrabold text-navy-900 dark:text-white block truncate">
+                                {exp.companyName}
                               </span>
                             </div>
-                          )}
+                          </div>
 
-                          {/* Período */}
-                          <div>
-                            <span className="text-[10px] font-black uppercase text-slate-400 block">Período</span>
-                            <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                              <Calendar size={12} className="text-primary shrink-0" />
-                              {exp.startDate} – {exp.isCurrent ? "Atual" : exp.endDate || "Presente"}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {exp.isCurrent ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/40">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Atividade Vigente
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/70 text-slate-700 dark:bg-navy-800 dark:text-slate-300">
+                                Anterior
+                              </span>
+                            )}
+                            <span className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-navy-800 flex items-center justify-center text-slate-500 dark:text-slate-400">
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                             </span>
                           </div>
-
-                          {/* Modalidades */}
-                          {exp.modalities && exp.modalities.length > 0 && (
-                            <div>
-                              <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">Modalidades</span>
-                              <div className="flex flex-wrap gap-1">
-                                {exp.modalities.map((m) => (
-                                  <span
-                                    key={m}
-                                    className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary dark:bg-primary/20"
-                                  >
-                                    {m}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
                         </div>
 
-                        {/* Se for atividade vigente e possuir turnos: Expediente Semanal */}
-                        {exp.isCurrent && exp.schedule && exp.schedule.some((d) => d.active && d.slots?.length > 0) && (
-                          <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/40 dark:border-emerald-900/40 space-y-1.5">
-                            <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
-                              <span className="flex items-center gap-1">
-                                <Clock size={12} /> Horários Ocupados no Expediente:
-                              </span>
-                              <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded-md font-bold">
-                                Bloqueio Ativo
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {exp.schedule
-                                .filter((d) => d.active && d.slots?.length > 0)
-                                .map((d) => (
-                                  <div
-                                    key={d.dayOfWeek}
-                                    className="text-[10px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-navy-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-navy-700 shadow-2xs"
-                                  >
-                                    <span className="text-primary mr-1">{d.shortDay}:</span>
-                                    <span>{d.slots.map((s) => `${s.start}-${s.end}`).join(", ")}</span>
+                        {/* Detalhes do Card Expandido */}
+                        {isExpanded && (
+                          <div className="px-4 pb-4 pt-1 border-t border-slate-100 dark:border-navy-800 space-y-3 text-xs">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                              {/* Cargo */}
+                              {exp.role && (
+                                <div>
+                                  <span className="text-[10px] font-black uppercase text-slate-400 block">Cargo / Função</span>
+                                  <span className="font-bold text-navy-900 dark:text-white">{exp.role}</span>
+                                </div>
+                              )}
+
+                              {/* Localização */}
+                              {(exp.city || exp.state || exp.neighborhood) && (
+                                <div>
+                                  <span className="text-[10px] font-black uppercase text-slate-400 block">Localização</span>
+                                  <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                                    <MapPin size={12} className="text-primary shrink-0" />
+                                    {[exp.neighborhood, exp.city ? `${exp.city}${exp.state ? ` - ${exp.state}` : ""}` : exp.state].filter(Boolean).join(", ")}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Período */}
+                              <div>
+                                <span className="text-[10px] font-black uppercase text-slate-400 block">Período</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                                  <Calendar size={12} className="text-primary shrink-0" />
+                                  {exp.startDate} – {exp.isCurrent ? "Atual" : exp.endDate || "Presente"}
+                                </span>
+                              </div>
+
+                              {/* Modalidades */}
+                              {exp.modalities && exp.modalities.length > 0 && (
+                                <div>
+                                  <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">Modalidades</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {exp.modalities.map((m) => (
+                                      <span
+                                        key={m}
+                                        className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary dark:bg-primary/20"
+                                      >
+                                        {m}
+                                      </span>
+                                    ))}
                                   </div>
-                                ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Se for atividade vigente e possuir turnos: Expediente Semanal */}
+                            {exp.isCurrent && exp.schedule && exp.schedule.some((d) => d.active && d.slots?.length > 0) && (
+                              <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/40 dark:border-emerald-900/40 space-y-1.5">
+                                <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+                                  <span className="flex items-center gap-1">
+                                    <Clock size={12} /> Horários Ocupados no Expediente:
+                                  </span>
+                                  <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded-md font-bold">
+                                    Bloqueio Ativo
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {exp.schedule
+                                    .filter((d) => d.active && d.slots?.length > 0)
+                                    .map((d) => (
+                                      <div
+                                        key={d.dayOfWeek}
+                                        className="text-[10px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-navy-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-navy-700 shadow-2xs"
+                                      >
+                                        <span className="text-primary mr-1">{d.shortDay}:</span>
+                                        <span>{d.slots.map((s) => `${s.start}-${s.end}`).join(", ")}</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {exp.description && (
+                              <p className="text-[11px] text-muted dark:text-slate-400 italic pt-1">
+                                "{exp.description}"
+                              </p>
+                            )}
+
+                            {/* Botões de Ação: Editar e Excluir */}
+                            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-navy-800">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditExperienceModal(exp)}
+                                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-navy-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-navy-800 flex items-center gap-1 transition-colors"
+                              >
+                                <Edit3 size={13} /> Editar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setShowDeleteExperienceModal(exp.id)}
+                                className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-1 transition-colors"
+                              >
+                                <Trash2 size={13} /> Excluir
+                              </button>
                             </div>
                           </div>
                         )}
-
-                        {exp.description && (
-                          <p className="text-[11px] text-muted dark:text-slate-400 italic pt-1">
-                            "{exp.description}"
-                          </p>
-                        )}
-
-                        {/* Botões de Ação: Editar e Excluir */}
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-navy-800">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditExperienceModal(exp)}
-                            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-navy-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-navy-800 flex items-center gap-1 transition-colors"
-                          >
-                            <Edit3 size={13} /> Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShowDeleteExperienceModal(exp.id)}
-                            className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-1 transition-colors"
-                          >
-                            <Trash2 size={13} /> Excluir
-                          </button>
-                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-      </AnimatedModal>
+      )}
 
       {/* ===================== MODAL DE CADASTRO / EDIÇÃO DE EXPERIÊNCIA PROFISSIONAL ===================== */}
       <AnimatedModal

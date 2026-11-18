@@ -117,3 +117,31 @@ html.dark ::-webkit-scrollbar-thumb {
 .animate-backdrop-out {
   animation: backdropFadeOut 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+@keyframes screenSlideInRight {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes screenSlideOutRight {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-screen-in-right {
+  animation: screenSlideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform;
+}
+
+.animate-screen-out-right {
+  animation: screenSlideOutRight 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform;
+}
