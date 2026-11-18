@@ -28,6 +28,7 @@ import {
   ChevronRight,
   ChevronLeft,
   ChevronDown,
+  ChevronUp,
   Key,
   Lock,
   Check,
@@ -577,6 +578,11 @@ export const ProfessorView: React.FC = () => {
   );
 
   // Estados para Gerenciamento de Experiências Profissionais e Atividades Externas
+  const [showExperiencesScreen, setShowExperiencesScreen] = useState<boolean>(false);
+  const [expandedExpIds, setExpandedExpIds] = useState<string[]>([]);
+  const toggleExpandExp = (id: string) => {
+    setExpandedExpIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
+  };
   const [showExperienceModal, setShowExperienceModal] = useState<boolean>(false);
   const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
   const [expCompanyName, setExpCompanyName] = useState<string>("");
@@ -3458,14 +3464,7 @@ export const ProfessorView: React.FC = () => {
             {/* Opção 3: Experiências Profissionais (acima de Minhas Habilidades) */}
             <button
               type="button"
-              onClick={() => {
-                const el = document.getElementById("experiencias-profissionais-section");
-                if (el) {
-                  el.scrollIntoView({ behavior: "smooth" });
-                } else {
-                  handleOpenNewExperienceModal();
-                }
-              }}
+              onClick={() => setShowExperiencesScreen(true)}
               className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50/80 dark:hover:bg-navy-700/50 transition-colors group"
             >
               <div className="flex items-center gap-3.5 min-w-0">
@@ -3681,166 +3680,6 @@ export const ProfessorView: React.FC = () => {
               </div>
               <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
             </button>
-          </div>
-
-          {/* 4. SEÇÃO DE EXPERIÊNCIAS PROFISSIONAIS E ATIVIDADES EXTERNAS (CARDS SEPARADOS) */}
-          <div
-            id="experiencias-profissionais-section"
-            className="bg-card dark:bg-navy-800 rounded-squircle p-5 shadow-soft border border-slate-100 dark:border-slate-800 space-y-3.5 scroll-mt-20"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-extrabold text-navy-900 dark:text-white flex items-center gap-1.5">
-                  <Building2 size={16} className="text-primary" />
-                  Experiências & Atividades
-                </h2>
-                <p className="text-[11px] text-muted dark:text-slate-400">
-                  Locais de trabalho prévios e sua atividade externa vigente
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleOpenNewExperienceModal}
-                className="inline-flex items-center gap-1 bg-primary text-white text-xs font-black px-3 py-1.5 rounded-full hover:bg-primary-hover shadow-xs transition-all active:scale-95"
-              >
-                <Plus size={13} strokeWidth={2.5} />
-                Adicionar
-              </button>
-            </div>
-
-            {/* Lista de Cards Separados */}
-            {(!currentInstructor.workExperiences || currentInstructor.workExperiences.length === 0) ? (
-              <div className="text-center py-6 px-4 bg-slate-50 dark:bg-navy-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-navy-700">
-                <Building2 size={28} className="mx-auto text-slate-400 dark:text-slate-500 mb-2" strokeWidth={1.5} />
-                <p className="text-xs font-bold text-navy-900 dark:text-white">
-                  Nenhuma experiência cadastrada
-                </p>
-                <p className="text-[11px] text-muted dark:text-slate-400 mt-0.5 max-w-xs mx-auto">
-                  Informe as academias onde já atuou ou sua atividade atual para enriquecer seu currículo e proteger sua agenda.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleOpenNewExperienceModal}
-                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
-                >
-                  <Plus size={13} /> Cadastrar primeira experiência
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {currentInstructor.workExperiences.map((exp) => (
-                  <div
-                    key={exp.id}
-                    className="p-4 bg-slate-50 dark:bg-navy-900/60 rounded-2xl border border-slate-200/70 dark:border-navy-700 space-y-2.5 transition-all hover:border-primary/40"
-                  >
-                    {/* Linha Superior: Status de Atividade e Ações */}
-                    <div className="flex items-center justify-between">
-                      {exp.isCurrent ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/40">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Atividade Vigente (Atual)
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/70 text-slate-700 dark:bg-navy-800 dark:text-slate-300">
-                          Experiência Anterior
-                        </span>
-                      )}
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditExperienceModal(exp)}
-                          className="p-1.5 text-slate-500 hover:text-primary dark:text-slate-400 dark:hover:text-primary rounded-lg hover:bg-white dark:hover:bg-navy-800 transition-colors"
-                          title="Editar experiência"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowDeleteExperienceModal(exp.id)}
-                          className="p-1.5 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-navy-800 transition-colors"
-                          title="Excluir experiência"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Nome da Empresa e Localização */}
-                    <div>
-                      <h3 className="text-sm font-extrabold text-navy-900 dark:text-white flex items-center gap-1.5">
-                        {exp.companyName}
-                      </h3>
-                      <p className="text-xs text-muted dark:text-slate-400 flex items-center gap-1 mt-0.5">
-                        <MapPin size={12} className="text-slate-400 flex-shrink-0" />
-                        <span>
-                          {exp.neighborhood ? `${exp.neighborhood}, ` : ""}
-                          {exp.city} - {exp.state}
-                        </span>
-                      </p>
-                    </div>
-
-                    {/* Cargo e Modalidades */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      {exp.role && (
-                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-navy-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-navy-700">
-                          {exp.role}
-                        </span>
-                      )}
-                      {(exp.modalities || []).map((m) => (
-                        <span
-                          key={m}
-                          className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full"
-                        >
-                          {m}
-                        </span>
-                      ))}
-                    </div>
-
-                    {/* Período */}
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 pt-1 border-t border-slate-200/50 dark:border-navy-800">
-                      <Calendar size={12} />
-                      <span>
-                        {exp.startDate} {exp.isCurrent ? "· Atual" : exp.endDate ? `até ${exp.endDate}` : ""}
-                      </span>
-                    </div>
-
-                    {/* Se for atividade vigente e possuir horários ocupados: Resumo dos Turnos */}
-                    {exp.isCurrent && exp.schedule && exp.schedule.some((d) => d.active && d.slots?.length > 0) && (
-                      <div className="mt-2 p-2.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/40 dark:border-emerald-900/40 space-y-1.5">
-                        <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
-                          <span className="flex items-center gap-1">
-                            <Clock size={12} /> Horários Ocupados no Expediente:
-                          </span>
-                          <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.2 rounded-md">
-                            Bloqueio Ativo
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {exp.schedule
-                            .filter((d) => d.active && d.slots?.length > 0)
-                            .map((d) => (
-                              <div
-                                key={d.dayOfWeek}
-                                className="text-[10px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-navy-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-navy-700 shadow-2xs"
-                              >
-                                <span className="text-primary mr-1">{d.shortDay}:</span>
-                                <span>{d.slots.map((s) => `${s.start}-${s.end}`).join(", ")}</span>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {exp.description && (
-                      <p className="text-[11px] text-muted dark:text-slate-400 italic pt-1">
-                        "{exp.description}"
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </main>
       )}
@@ -7860,10 +7699,235 @@ export const ProfessorView: React.FC = () => {
         })()}
       </AnimatedModal>
 
+      {/* ===================== TELA ESPECÍFICA DE EXPERIÊNCIAS PROFISSIONAIS ===================== */}
+      <AnimatedModal
+        isOpen={showExperiencesScreen}
+        onClose={() => setShowExperiencesScreen(false)}
+        className="p-5 sm:p-6 space-y-4 max-w-xl"
+      >
+        {/* Cabeçalho da Tela */}
+        <div className="flex justify-between items-start border-b border-slate-100 dark:border-navy-700 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Building2 size={20} />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
+                Experiências Profissionais
+              </h3>
+              <p className="text-xs text-muted dark:text-slate-400">
+                Histórico de atuação e suas atividades externas vigentes
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowExperiencesScreen(false)}
+            className="w-7 h-7 rounded-full bg-slate-100 dark:bg-navy-800 text-slate-500 hover:text-navy-900 dark:hover:text-white flex items-center justify-center transition-colors"
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Barra superior de ações */}
+        <div className="flex items-center justify-between pt-0.5">
+          <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+            {(currentInstructor.workExperiences || []).length} experiência(s) cadastrada(s)
+          </span>
+          <button
+            type="button"
+            onClick={handleOpenNewExperienceModal}
+            className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-black px-3.5 py-2 rounded-xl hover:bg-primary-hover shadow-xs transition-all active:scale-95"
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            Adicionar experiência
+          </button>
+        </div>
+
+        {/* Lista de Experiências ou Estado Vazio */}
+        <div className="space-y-3 max-h-[68vh] overflow-y-auto pr-1">
+          {(!currentInstructor.workExperiences || currentInstructor.workExperiences.length === 0) ? (
+            /* Estado Vazio (Empty State) */
+            <div className="text-center py-10 px-4 bg-slate-50 dark:bg-navy-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-navy-700 space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                <Building2 size={24} strokeWidth={1.5} />
+              </div>
+              <div>
+                <h4 className="text-sm font-extrabold text-navy-900 dark:text-white">
+                  Nenhuma experiência cadastrada
+                </h4>
+                <p className="text-xs text-muted dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                  Adicione as academias ou estúdios onde você já atuou ou atua atualmente para enriquecer seu perfil e proteger sua agenda.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenNewExperienceModal}
+                className="inline-flex items-center gap-1.5 bg-primary text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-primary-hover shadow-xs transition-all active:scale-95"
+              >
+                <Plus size={14} /> Cadastrar primeira experiência
+              </button>
+            </div>
+          ) : (
+            /* Lista de Cards Colapsados / Expansíveis */
+            <div className="space-y-2.5">
+              {currentInstructor.workExperiences.map((exp) => {
+                const isExpanded = expandedExpIds.includes(exp.id);
+                return (
+                  <div
+                    key={exp.id}
+                    className={`rounded-2xl border transition-all ${
+                      isExpanded
+                        ? "bg-white dark:bg-navy-900 border-primary/40 shadow-xs"
+                        : "bg-slate-50 dark:bg-navy-900/60 border-slate-200/80 dark:border-navy-700 hover:border-slate-300 dark:hover:border-navy-600"
+                    }`}
+                  >
+                    {/* Cabeçalho do Card Colapsado - Toque para expandir/recolher */}
+                    <div
+                      onClick={() => toggleExpandExp(exp.id)}
+                      className="p-3.5 flex items-center justify-between cursor-pointer select-none"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                        <Building2 size={18} className="text-primary shrink-0" />
+                        <div className="min-w-0">
+                          <span className="text-xs font-extrabold text-navy-900 dark:text-white block truncate">
+                            {exp.companyName}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {exp.isCurrent ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/40">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Atividade Vigente
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/70 text-slate-700 dark:bg-navy-800 dark:text-slate-300">
+                            Anterior
+                          </span>
+                        )}
+                        <span className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-navy-800 flex items-center justify-center text-slate-500 dark:text-slate-400">
+                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Detalhes do Card Expandido */}
+                    {isExpanded && (
+                      <div className="px-4 pb-4 pt-1 border-t border-slate-100 dark:border-navy-800 space-y-3 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                          {/* Cargo */}
+                          {exp.role && (
+                            <div>
+                              <span className="text-[10px] font-black uppercase text-slate-400 block">Cargo / Função</span>
+                              <span className="font-bold text-navy-900 dark:text-white">{exp.role}</span>
+                            </div>
+                          )}
+
+                          {/* Localização */}
+                          {(exp.city || exp.state || exp.neighborhood) && (
+                            <div>
+                              <span className="text-[10px] font-black uppercase text-slate-400 block">Localização</span>
+                              <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                                <MapPin size={12} className="text-primary shrink-0" />
+                                {[exp.neighborhood, exp.city ? `${exp.city}${exp.state ? ` - ${exp.state}` : ""}` : exp.state].filter(Boolean).join(", ")}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Período */}
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-slate-400 block">Período</span>
+                            <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                              <Calendar size={12} className="text-primary shrink-0" />
+                              {exp.startDate} – {exp.isCurrent ? "Atual" : exp.endDate || "Presente"}
+                            </span>
+                          </div>
+
+                          {/* Modalidades */}
+                          {exp.modalities && exp.modalities.length > 0 && (
+                            <div>
+                              <span className="text-[10px] font-black uppercase text-slate-400 block mb-1">Modalidades</span>
+                              <div className="flex flex-wrap gap-1">
+                                {exp.modalities.map((m) => (
+                                  <span
+                                    key={m}
+                                    className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary dark:bg-primary/20"
+                                  >
+                                    {m}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Se for atividade vigente e possuir turnos: Expediente Semanal */}
+                        {exp.isCurrent && exp.schedule && exp.schedule.some((d) => d.active && d.slots?.length > 0) && (
+                          <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/40 dark:border-emerald-900/40 space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+                              <span className="flex items-center gap-1">
+                                <Clock size={12} /> Horários Ocupados no Expediente:
+                              </span>
+                              <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded-md font-bold">
+                                Bloqueio Ativo
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {exp.schedule
+                                .filter((d) => d.active && d.slots?.length > 0)
+                                .map((d) => (
+                                  <div
+                                    key={d.dayOfWeek}
+                                    className="text-[10px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-navy-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-navy-700 shadow-2xs"
+                                  >
+                                    <span className="text-primary mr-1">{d.shortDay}:</span>
+                                    <span>{d.slots.map((s) => `${s.start}-${s.end}`).join(", ")}</span>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {exp.description && (
+                          <p className="text-[11px] text-muted dark:text-slate-400 italic pt-1">
+                            "{exp.description}"
+                          </p>
+                        )}
+
+                        {/* Botões de Ação: Editar e Excluir */}
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-navy-800">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditExperienceModal(exp)}
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-navy-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-navy-800 flex items-center gap-1 transition-colors"
+                          >
+                            <Edit3 size={13} /> Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowDeleteExperienceModal(exp.id)}
+                            className="px-3 py-1.5 rounded-lg border border-red-200 dark:border-red-900/50 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-1 transition-colors"
+                          >
+                            <Trash2 size={13} /> Excluir
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </AnimatedModal>
+
       {/* ===================== MODAL DE CADASTRO / EDIÇÃO DE EXPERIÊNCIA PROFISSIONAL ===================== */}
       <AnimatedModal
         isOpen={showExperienceModal}
         onClose={() => setShowExperienceModal(false)}
+        overlayClassName="z-[60]"
         className="p-5 sm:p-6 space-y-4 max-w-xl"
       >
         <div className="flex justify-between items-start border-b border-slate-100 dark:border-navy-700 pb-3">
@@ -8275,6 +8339,7 @@ export const ProfessorView: React.FC = () => {
       <AnimatedModal
         isOpen={Boolean(showDeleteExperienceModal)}
         onClose={() => setShowDeleteExperienceModal(null)}
+        overlayClassName="z-[70]"
         className="p-5 space-y-4 max-w-sm"
       >
         <div className="text-center space-y-2">
