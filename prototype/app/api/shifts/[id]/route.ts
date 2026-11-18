@@ -43,7 +43,8 @@ export async function GET(
         availability: JSON.parse(shift.confirmedInstructor.availability || "[]"),
         blockedDates: JSON.parse((shift.confirmedInstructor as any).blockedDates || "[]"),
         blockedDateSlots: JSON.parse((shift.confirmedInstructor as any).blockedDateSlots || "[]"),
-        offeredSlots: JSON.parse((shift.confirmedInstructor as any).offeredSlots || "[]")
+        offeredSlots: JSON.parse((shift.confirmedInstructor as any).offeredSlots || "[]"),
+        workExperiences: JSON.parse((shift.confirmedInstructor as any).workExperiences || "[]")
       } : undefined,
       proposals: shift.proposals.map((p) => ({
         ...p,

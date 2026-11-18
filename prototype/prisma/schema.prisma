@@ -75,6 +75,7 @@ model Instructor {
   blockedDateSlots     String?     @default("[]") // JSON (exclusões pontuais de slots da grade: YYYY-MM-DD_HH:mm_HH:mm)
   offeredSlots         String?     @default("[]") // JSON (horários avulsos oferecidos)
   notificationsEnabled String?     @default("{\"push\":true,\"whatsapp\":true,\"email\":true}") // JSON
+  workExperiences      String?     @default("[]") // JSON (experiências profissionais e atividades vigentes)
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 

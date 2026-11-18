@@ -62,14 +62,15 @@ import {
   Edit3,
   CalendarCheck
 } from "lucide-react";
-import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, maskDate, formatToDDMMAAAA, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString, OfferedSlot, MODALITY_CATEGORIES } from "@/store/mock-data";
-import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility } from "@/store/use-app-store";
+import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, maskDate, formatToDDMMAAAA, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString, OfferedSlot, MODALITY_CATEGORIES, WorkExperience } from "@/store/mock-data";
+import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility, checkExternalWorkConflict, checkExternalWorkDisplacementWarning } from "@/store/use-app-store";
 import { TimeStepperInput } from "@/components/time-stepper-input";
 import { AnimatedModal } from "@/components/animated-modal";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import { ReviewModal } from "@/components/review-modal";
 import { CancelShiftModal } from "@/components/cancel-shift-modal";
 import { cropAndCompressImage } from "@/lib/image-utils";
+import { LocationCombobox } from "@/components/location-combobox";
 
 
 export const ProfessorView: React.FC = () => {
@@ -522,6 +523,146 @@ export const ProfessorView: React.FC = () => {
     (p) => isMyInstructorId(p.instructorId) && p.status === "pendente"
   );
 
+  // Estados para Gerenciamento de Experiências Profissionais e Atividades Externas
+  const [showExperienceModal, setShowExperienceModal] = useState<boolean>(false);
+  const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
+  const [expCompanyName, setExpCompanyName] = useState<string>("");
+  const [expState, setExpState] = useState<string>("ES");
+  const [expCity, setExpCity] = useState<string>("Vitória");
+  const [expNeighborhood, setExpNeighborhood] = useState<string>("");
+  const [expRole, setExpRole] = useState<string>("Instrutor de Musculação");
+  const [expModalities, setExpModalities] = useState<string[]>(["Musculação"]);
+  const [expIsCurrent, setExpIsCurrent] = useState<boolean>(false);
+  const [expStartDate, setExpStartDate] = useState<string>("");
+  const [expEndDate, setExpEndDate] = useState<string>("");
+  const [expSchedule, setExpSchedule] = useState<DayAvailability[]>(
+    DEFAULT_WEEK_DAYS.map((d) => ({ ...d, active: false, slots: [] }))
+  );
+  const [expDescription, setExpDescription] = useState<string>("");
+  const [showGymAutocomplete, setShowGymAutocomplete] = useState<boolean>(false);
+  const [showDeleteExperienceModal, setShowDeleteExperienceModal] = useState<string | null>(null);
+
+  // Modal de Aviso de Deslocamento (Informativo, não-bloqueante)
+  const [displacementWarning, setDisplacementWarning] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    fromLocation?: string;
+    toLocation?: string;
+    distanceKm?: number;
+    transitMinutes?: number;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {}
+  });
+
+  // Modal de Bloqueio Rígido de Sobreposição de Expediente
+  const [workConflictAlert, setWorkConflictAlert] = useState<{
+    isOpen: boolean;
+    message: string;
+  }>({
+    isOpen: false,
+    message: ""
+  });
+
+  const handleOpenNewExperienceModal = () => {
+    setEditingExperienceId(null);
+    setExpCompanyName("");
+    setExpState("ES");
+    setExpCity("Vitória");
+    setExpNeighborhood("");
+    setExpRole("Instrutor de Musculação");
+    setExpModalities(["Musculação"]);
+    setExpIsCurrent(false);
+    setExpStartDate("");
+    setExpEndDate("");
+    setExpSchedule(DEFAULT_WEEK_DAYS.map((d) => ({ ...d, active: false, slots: [] })));
+    setExpDescription("");
+    setShowGymAutocomplete(false);
+    setShowExperienceModal(true);
+  };
+
+  const handleOpenEditExperienceModal = (exp: WorkExperience) => {
+    setEditingExperienceId(exp.id);
+    setExpCompanyName(exp.companyName || "");
+    setExpState(exp.state || "ES");
+    setExpCity(exp.city || "Vitória");
+    setExpNeighborhood(exp.neighborhood || "");
+    setExpRole(exp.role || "Instrutor de Musculação");
+    setExpModalities(exp.modalities || ["Musculação"]);
+    setExpIsCurrent(Boolean(exp.isCurrent));
+    setExpStartDate(exp.startDate || "");
+    setExpEndDate(exp.endDate || "");
+    setExpSchedule(
+      exp.schedule && exp.schedule.length > 0
+        ? exp.schedule
+        : DEFAULT_WEEK_DAYS.map((d) => ({ ...d, active: false, slots: [] }))
+    );
+    setExpDescription(exp.description || "");
+    setShowGymAutocomplete(false);
+    setShowExperienceModal(true);
+  };
+
+  const handleSaveExperience = () => {
+    if (!expCompanyName.trim()) {
+      alert("Por favor, informe o nome da academia ou local.");
+      return;
+    }
+
+    const currentList: WorkExperience[] = currentInstructor.workExperiences || [];
+    const expId = editingExperienceId || `exp-${Date.now()}`;
+
+    const newExp: WorkExperience = {
+      id: expId,
+      companyName: expCompanyName.trim(),
+      state: expState,
+      city: expCity,
+      neighborhood: expNeighborhood.trim(),
+      role: expRole.trim() || "Instrutor",
+      modalities: expModalities.length > 0 ? expModalities : ["Musculação"],
+      isCurrent: expIsCurrent,
+      startDate: expStartDate.trim() || new Date().getFullYear().toString(),
+      endDate: expIsCurrent ? undefined : (expEndDate.trim() || undefined),
+      schedule: expIsCurrent ? expSchedule : undefined,
+      description: expDescription.trim() || undefined
+    };
+
+    let updatedList: WorkExperience[];
+    if (editingExperienceId) {
+      updatedList = currentList.map((item) => (item.id === editingExperienceId ? newExp : item));
+    } else {
+      updatedList = [...currentList, newExp];
+    }
+
+    updateInstructorProfile(currentInstructor.id || activeInstructorId, {
+      workExperiences: updatedList
+    });
+
+    setShowExperienceModal(false);
+    setProfileSuccessMsg(
+      editingExperienceId
+        ? "Experiência profissional atualizada com sucesso!"
+        : "Nova experiência profissional adicionada com sucesso!"
+    );
+    setTimeout(() => setProfileSuccessMsg(null), 3000);
+  };
+
+  const handleDeleteExperience = (expId: string) => {
+    const currentList: WorkExperience[] = currentInstructor.workExperiences || [];
+    const updatedList = currentList.filter((item) => item.id !== expId);
+
+    updateInstructorProfile(currentInstructor.id || activeInstructorId, {
+      workExperiences: updatedList
+    });
+
+    setShowDeleteExperienceModal(null);
+    setProfileSuccessMsg("Experiência removida com sucesso!");
+    setTimeout(() => setProfileSuccessMsg(null), 3000);
+  };
+
   // Turno selecionado para a modal de detalhes
   const detailShift = shifts.find((s) => s.id === detailShiftId);
   const detailGym = gyms.find((g) => g.id === detailShift?.gymId);
@@ -684,6 +825,11 @@ export const ProfessorView: React.FC = () => {
         continue;
       }
 
+      // Se houver conflito com expediente de atividade externa vigente nesta data e horário
+      if (checkExternalWorkConflict(currentInstructor, dateStr, wSlot.start, wSlot.end).hasConflict) {
+        continue;
+      }
+
       // Se houver um horário avulso nesta data que sobrepõe este slot da grade:
       // Pela Opção A (Substituição pontual), o horário avulso substitui o da grade nesta data!
       const overlappingSingle = rawSingleSlots.find(
@@ -709,6 +855,11 @@ export const ProfessorView: React.FC = () => {
 
     // Processa os horários avulsos
     for (const s of rawSingleSlots) {
+      // Se houver conflito com expediente de atividade externa vigente nesta data e horário
+      if (checkExternalWorkConflict(currentInstructor, dateStr, s.startTime, s.endTime).hasConflict) {
+        continue;
+      }
+
       const isOverride = weeklySlots.some(
         (w) => s.startTime < w.end && s.endTime > w.start
       );
@@ -1787,6 +1938,50 @@ export const ProfessorView: React.FC = () => {
 
                           <button
                             onClick={() => {
+                              if (shift) {
+                                // 1. Checa conflito rígido com atividade externa ativa
+                                const extConflict = checkExternalWorkConflict(
+                                  currentInstructor,
+                                  shift.date,
+                                  shift.startTime,
+                                  shift.endTime
+                                );
+                                if (extConflict.hasConflict) {
+                                  setWorkConflictAlert({
+                                    isOpen: true,
+                                    message: extConflict.conflictMessage || "Você possui expediente externo ativo cadastrado neste horário."
+                                  });
+                                  return;
+                                }
+
+                                // 2. Checa deslocamento com atividade externa (não-bloqueante)
+                                const dispWarn = checkExternalWorkDisplacementWarning(
+                                  currentInstructor,
+                                  gym,
+                                  shift.date,
+                                  shift.startTime,
+                                  shift.endTime
+                                );
+                                if (dispWarn.needsWarning) {
+                                  setDisplacementWarning({
+                                    isOpen: true,
+                                    title: "Atenção ao Deslocamento",
+                                    message: dispWarn.message || "",
+                                    fromLocation: dispWarn.fromLocation,
+                                    toLocation: dispWarn.toLocation,
+                                    distanceKm: dispWarn.distanceKm,
+                                    transitMinutes: dispWarn.transitMinutes,
+                                    onConfirm: () => {
+                                      const res = acceptProposal(prop.id);
+                                      if (res.hasConflict) {
+                                        alert(`⚠️ Atenção: ${res.conflictMessage}`);
+                                      }
+                                    }
+                                  });
+                                  return;
+                                }
+                              }
+
                               const res = acceptProposal(prop.id);
                               if (res.hasConflict) {
                                 alert(`⚠️ Atenção: ${res.conflictMessage}`);
@@ -3224,6 +3419,33 @@ export const ProfessorView: React.FC = () => {
               <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
             </button>
 
+            {/* Opção: Minhas Experiências Profissionais */}
+            <button
+              type="button"
+              onClick={handleOpenNewExperienceModal}
+              className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50/80 dark:hover:bg-navy-700/50 transition-colors group"
+            >
+              <div className="flex items-center gap-3.5 min-w-0">
+                <Building2 size={20} strokeWidth={1.5} className="text-slate-800 dark:text-slate-200 shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block">
+                    Experiências & Atividades
+                  </span>
+                  <span className="text-[11px] text-muted dark:text-slate-400 block truncate">
+                    {(currentInstructor.workExperiences || []).length > 0
+                      ? `${(currentInstructor.workExperiences || []).length} local(is) cadastrado(s) · ${(currentInstructor.workExperiences || []).find((e) => e.isCurrent)?.companyName || "Sem trabalho ativo"}`
+                      : "Adicionar locais onde já atuou ou atua hoje"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                  {(currentInstructor.workExperiences || []).length}
+                </span>
+                <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 dark:text-slate-500 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </button>
+
             {/* Opção 5: Senha */}
             <button
               type="button"
@@ -3376,6 +3598,163 @@ export const ProfessorView: React.FC = () => {
               <ChevronRight size={16} strokeWidth={1.5} className="text-slate-400 dark:text-slate-500 shrink-0 ml-2 group-hover:translate-x-0.5 transition-transform" />
             </button>
           </div>
+
+          {/* 4. SEÇÃO DE EXPERIÊNCIAS PROFISSIONAIS E ATIVIDADES EXTERNAS (CARDS SEPARADOS) */}
+          <div className="bg-card dark:bg-navy-800 rounded-squircle p-5 shadow-soft border border-slate-100 dark:border-slate-800 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-extrabold text-navy-900 dark:text-white flex items-center gap-1.5">
+                  <Building2 size={16} className="text-primary" />
+                  Experiências & Atividades
+                </h2>
+                <p className="text-[11px] text-muted dark:text-slate-400">
+                  Locais de trabalho prévios e sua atividade externa vigente
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenNewExperienceModal}
+                className="inline-flex items-center gap-1 bg-primary text-white text-xs font-black px-3 py-1.5 rounded-full hover:bg-primary-hover shadow-xs transition-all active:scale-95"
+              >
+                <Plus size={13} strokeWidth={2.5} />
+                Adicionar
+              </button>
+            </div>
+
+            {/* Lista de Cards Separados */}
+            {(!currentInstructor.workExperiences || currentInstructor.workExperiences.length === 0) ? (
+              <div className="text-center py-6 px-4 bg-slate-50 dark:bg-navy-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-navy-700">
+                <Building2 size={28} className="mx-auto text-slate-400 dark:text-slate-500 mb-2" strokeWidth={1.5} />
+                <p className="text-xs font-bold text-navy-900 dark:text-white">
+                  Nenhuma experiência cadastrada
+                </p>
+                <p className="text-[11px] text-muted dark:text-slate-400 mt-0.5 max-w-xs mx-auto">
+                  Informe as academias onde já atuou ou sua atividade atual para enriquecer seu currículo e proteger sua agenda.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleOpenNewExperienceModal}
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
+                >
+                  <Plus size={13} /> Cadastrar primeira experiência
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {currentInstructor.workExperiences.map((exp) => (
+                  <div
+                    key={exp.id}
+                    className="p-4 bg-slate-50 dark:bg-navy-900/60 rounded-2xl border border-slate-200/70 dark:border-navy-700 space-y-2.5 transition-all hover:border-primary/40"
+                  >
+                    {/* Linha Superior: Status de Atividade e Ações */}
+                    <div className="flex items-center justify-between">
+                      {exp.isCurrent ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/40">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Atividade Vigente (Atual)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200/70 text-slate-700 dark:bg-navy-800 dark:text-slate-300">
+                          Experiência Anterior
+                        </span>
+                      )}
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditExperienceModal(exp)}
+                          className="p-1.5 text-slate-500 hover:text-primary dark:text-slate-400 dark:hover:text-primary rounded-lg hover:bg-white dark:hover:bg-navy-800 transition-colors"
+                          title="Editar experiência"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowDeleteExperienceModal(exp.id)}
+                          className="p-1.5 text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 rounded-lg hover:bg-white dark:hover:bg-navy-800 transition-colors"
+                          title="Excluir experiência"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Nome da Empresa e Localização */}
+                    <div>
+                      <h3 className="text-sm font-extrabold text-navy-900 dark:text-white flex items-center gap-1.5">
+                        {exp.companyName}
+                      </h3>
+                      <p className="text-xs text-muted dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                        <MapPin size={12} className="text-slate-400 flex-shrink-0" />
+                        <span>
+                          {exp.neighborhood ? `${exp.neighborhood}, ` : ""}
+                          {exp.city} - {exp.state}
+                        </span>
+                      </p>
+                    </div>
+
+                    {/* Cargo e Modalidades */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {exp.role && (
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-navy-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-navy-700">
+                          {exp.role}
+                        </span>
+                      )}
+                      {(exp.modalities || []).map((m) => (
+                        <span
+                          key={m}
+                          className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full"
+                        >
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Período */}
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 pt-1 border-t border-slate-200/50 dark:border-navy-800">
+                      <Calendar size={12} />
+                      <span>
+                        {exp.startDate} {exp.isCurrent ? "· Atual" : exp.endDate ? `até ${exp.endDate}` : ""}
+                      </span>
+                    </div>
+
+                    {/* Se for atividade vigente e possuir horários ocupados: Resumo dos Turnos */}
+                    {exp.isCurrent && exp.schedule && exp.schedule.some((d) => d.active && d.slots?.length > 0) && (
+                      <div className="mt-2 p-2.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/40 dark:border-emerald-900/40 space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+                          <span className="flex items-center gap-1">
+                            <Clock size={12} /> Horários Ocupados no Expediente:
+                          </span>
+                          <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.2 rounded-md">
+                            Bloqueio Ativo
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {exp.schedule
+                            .filter((d) => d.active && d.slots?.length > 0)
+                            .map((d) => (
+                              <div
+                                key={d.dayOfWeek}
+                                className="text-[10px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-navy-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-navy-700 shadow-2xs"
+                              >
+                                <span className="text-primary mr-1">{d.shortDay}:</span>
+                                <span>{d.slots.map((s) => `${s.start}-${s.end}`).join(", ")}</span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {exp.description && (
+                      <p className="text-[11px] text-muted dark:text-slate-400 italic pt-1">
+                        "{exp.description}"
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </main>
       )}
 
@@ -3447,6 +3826,49 @@ export const ProfessorView: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
+                    if (shift) {
+                      // 1. Checa sobreposição rígida com atividade externa ativa
+                      const extConflict = checkExternalWorkConflict(
+                        currentInstructor,
+                        shift.date,
+                        shift.startTime,
+                        shift.endTime
+                      );
+                      if (extConflict.hasConflict) {
+                        setWorkConflictAlert({
+                          isOpen: true,
+                          message: extConflict.conflictMessage || "Você possui expediente externo ativo cadastrado neste horário."
+                        });
+                        return;
+                      }
+
+                      // 2. Checa deslocamento com atividade externa ativa (não-bloqueante)
+                      const dispWarn = checkExternalWorkDisplacementWarning(
+                        currentInstructor,
+                        gym,
+                        shift.date,
+                        shift.startTime,
+                        shift.endTime
+                      );
+                      if (dispWarn.needsWarning) {
+                        setDisplacementWarning({
+                          isOpen: true,
+                          title: "Atenção ao Deslocamento",
+                          message: dispWarn.message || "",
+                          fromLocation: dispWarn.fromLocation,
+                          toLocation: dispWarn.toLocation,
+                          distanceKm: dispWarn.distanceKm,
+                          transitMinutes: dispWarn.transitMinutes,
+                          onConfirm: () => {
+                            createProposal(selectedShiftId, activeInstructorId, fixedRate);
+                            setSelectedShiftId(null);
+                            setActiveTab("propostas");
+                          }
+                        });
+                        return;
+                      }
+                    }
+
                     createProposal(selectedShiftId, activeInstructorId, fixedRate);
                     setSelectedShiftId(null);
                     setActiveTab("propostas");
@@ -6606,13 +7028,26 @@ export const ProfessorView: React.FC = () => {
             );
           })();
 
+          // 4. Conflito com Atividade Externa Vigente
+          const externalWorkConflict = checkExternalWorkConflict(
+            currentInstructor,
+            offerDate,
+            offerStartTime,
+            offerEndTime
+          );
+
           type OfferConflict =
             | { type: "confirmed_error"; message: string }
             | { type: "duplicate_error"; message: string }
             | { type: "weekly_override"; message: string; weeklySlot: { start: string; end: string } }
             | null;
 
-          const offerConflict: OfferConflict = confirmedShiftConflict
+          const offerConflict: OfferConflict = externalWorkConflict.hasConflict
+            ? {
+                type: "confirmed_error",
+                message: externalWorkConflict.conflictMessage || "Você possui expediente externo ativo cadastrado neste horário."
+              }
+            : confirmedShiftConflict
             ? {
                 type: "confirmed_error",
                 message: `Você já possui uma aula confirmada nesta data das ${confirmedShiftConflict.startTime} às ${confirmedShiftConflict.endTime} (${confirmedShiftConflict.modality || confirmedShiftConflict.title}). Não é possível disponibilizar um horário concorrente.`
@@ -7336,6 +7771,478 @@ export const ProfessorView: React.FC = () => {
             </div>
           );
         })()}
+      </AnimatedModal>
+
+      {/* ===================== MODAL DE CADASTRO / EDIÇÃO DE EXPERIÊNCIA PROFISSIONAL ===================== */}
+      <AnimatedModal
+        isOpen={showExperienceModal}
+        onClose={() => setShowExperienceModal(false)}
+        className="p-5 sm:p-6 space-y-4 max-w-xl"
+      >
+        <div className="flex justify-between items-start border-b border-slate-100 dark:border-navy-700 pb-3">
+          <div>
+            <h3 className="text-base font-extrabold text-navy-900 dark:text-white flex items-center gap-2">
+              <Building2 size={18} className="text-primary" />
+              {editingExperienceId ? "Editar Experiência Profissional" : "Adicionar Experiência Profissional"}
+            </h3>
+            <p className="text-xs text-muted dark:text-slate-400 mt-0.5">
+              Informe a academia onde atuou ou atua hoje para enriquecer seu perfil
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowExperienceModal(false)}
+            className="w-7 h-7 rounded-full bg-slate-100 dark:bg-navy-800 text-slate-500 hover:text-navy-900 dark:hover:text-white flex items-center justify-center transition-colors"
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+          {/* Nome da Academia / Empresa com Autocomplete das Academias da Plataforma */}
+          <div className="relative">
+            <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
+              Nome da Academia ou Local *
+            </label>
+            <input
+              type="text"
+              value={expCompanyName}
+              onChange={(e) => {
+                setExpCompanyName(e.target.value);
+                setShowGymAutocomplete(true);
+              }}
+              onFocus={() => setShowGymAutocomplete(true)}
+              placeholder="Ex: Academia Mova, Smart Fit, Estúdio Funcional..."
+              className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+
+            {/* Dropdown de Sugestões de Academias Cadastradas */}
+            {showGymAutocomplete && expCompanyName.trim().length > 0 && (() => {
+              const matches = gyms.filter((g) =>
+                g.name.toLowerCase().includes(expCompanyName.toLowerCase())
+              );
+              if (matches.length === 0) return null;
+              return (
+                <div className="absolute z-50 left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-white dark:bg-navy-800 border border-slate-200 dark:border-navy-700 rounded-xl shadow-xl py-1 text-xs">
+                  <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Academias cadastradas na plataforma
+                  </div>
+                  {matches.map((g) => (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => {
+                        setExpCompanyName(g.name);
+                        if (g.city) setExpCity(g.city);
+                        if (g.neighborhood) setExpNeighborhood(g.neighborhood);
+                        setShowGymAutocomplete(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors flex items-center justify-between"
+                    >
+                      <span className="font-bold text-slate-800 dark:text-slate-100">{g.name}</span>
+                      <span className="text-[11px] text-muted dark:text-slate-400">
+                        {g.neighborhood ? `${g.neighborhood}, ` : ""}{g.city}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Localização Simplificada com Comboboxes em Cascata (UF -> Cidade -> Bairro) */}
+          <div className="space-y-1">
+            <LocationCombobox
+              state={expState}
+              city={expCity}
+              neighborhood={expNeighborhood}
+              onChange={({ state, city, neighborhood }) => {
+                setExpState(state);
+                setExpCity(city);
+                setExpNeighborhood(neighborhood);
+              }}
+            />
+          </div>
+
+          {/* Cargo / Função e Modalidades */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
+                Cargo / Função
+              </label>
+              <input
+                type="text"
+                value={expRole}
+                onChange={(e) => setExpRole(e.target.value)}
+                placeholder="Ex: Instrutor de Musculação, Personal..."
+                className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
+                Período de Início *
+              </label>
+              <input
+                type="text"
+                value={expStartDate}
+                onChange={(e) => setExpStartDate(e.target.value)}
+                placeholder="Ex: 2022 ou Mar/2022"
+                className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+          </div>
+
+          {/* Modalidades de Atuação */}
+          <div>
+            <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1.5">
+              Modalidades Ministradas neste Local
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {["Musculação", "Spinning", "Funcional", "Pilates", "Crossfit", "Natação", "Dança", "Lutas", "Alongamento"].map((mod) => {
+                const isSelected = expModalities.includes(mod);
+                return (
+                  <button
+                    key={mod}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        setExpModalities(expModalities.filter((m) => m !== mod));
+                      } else {
+                        setExpModalities([...expModalities, mod]);
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
+                      isSelected
+                        ? "bg-primary text-white shadow-2xs"
+                        : "bg-slate-100 dark:bg-navy-900 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-navy-700"
+                    }`}
+                  >
+                    {mod}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Toggle de Atividade Vigente */}
+          <div className="p-3 bg-slate-50 dark:bg-navy-900/60 rounded-xl border border-slate-200/80 dark:border-navy-700">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={expIsCurrent}
+                onChange={(e) => setExpIsCurrent(e.target.checked)}
+                className="w-4 h-4 rounded text-primary focus:ring-primary border-slate-300"
+              />
+              <div>
+                <span className="text-xs font-bold text-navy-900 dark:text-white block">
+                  Trabalho aqui atualmente (Atividade Vigente)
+                </span>
+                <span className="text-[11px] text-muted dark:text-slate-400 block">
+                  Seus horários de expediente bloquearão automaticamente choques na sua agenda do TrainerMatch.
+                </span>
+              </div>
+            </label>
+          </div>
+
+          {/* Se NÃO for vigente: Data de Término */}
+          {!expIsCurrent && (
+            <div>
+              <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
+                Período de Término
+              </label>
+              <input
+                type="text"
+                value={expEndDate}
+                onChange={(e) => setExpEndDate(e.target.value)}
+                placeholder="Ex: 2024 ou Dez/2023"
+                className="w-full h-10 px-3 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+          )}
+
+          {/* Se FOR vigente: Grade de Horários Semanais do Trabalho Ativo */}
+          {expIsCurrent && (
+            <div className="space-y-3 pt-2 border-t border-slate-200/60 dark:border-navy-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-extrabold text-navy-900 dark:text-white flex items-center gap-1.5">
+                    <Clock size={14} className="text-primary" />
+                    Horários do seu Expediente Semanal
+                  </h4>
+                  <p className="text-[10px] text-muted dark:text-slate-400">
+                    Defina os turnos ocupados para proteção automática contra choques de agenda
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {expSchedule.map((day, dIdx) => (
+                  <div
+                    key={day.dayOfWeek}
+                    className={`p-3 rounded-xl border transition-all ${
+                      day.active
+                        ? "bg-white dark:bg-navy-800 border-primary/30 shadow-xs"
+                        : "bg-slate-50 dark:bg-navy-900/40 border-slate-200/50 dark:border-navy-800 opacity-70"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={day.active}
+                          onChange={(e) => {
+                            const updated = [...expSchedule];
+                            updated[dIdx].active = e.target.checked;
+                            if (e.target.checked && (!updated[dIdx].slots || updated[dIdx].slots.length === 0)) {
+                              updated[dIdx].slots = [{ start: "07:00", end: "11:00" }];
+                            }
+                            setExpSchedule(updated);
+                          }}
+                          className="w-3.5 h-3.5 rounded text-primary focus:ring-primary"
+                        />
+                        <span className="text-xs font-bold text-navy-900 dark:text-white">
+                          {day.dayName}
+                        </span>
+                      </label>
+
+                      {day.active && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = [...expSchedule];
+                            updated[dIdx].slots = [
+                              ...(updated[dIdx].slots || []),
+                              { start: "17:00", end: "20:00" }
+                            ];
+                            setExpSchedule(updated);
+                          }}
+                          className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                        >
+                          <Plus size={11} /> + Horário
+                        </button>
+                      )}
+                    </div>
+
+                    {day.active && (
+                      <div className="space-y-1.5 mt-2 pt-2 border-t border-slate-100 dark:border-navy-700/60">
+                        {(day.slots || []).map((slot, sIdx) => (
+                          <div key={sIdx} className="flex items-center gap-2">
+                            <span className="text-[11px] font-bold text-slate-500">De:</span>
+                            <input
+                              type="time"
+                              value={slot.start}
+                              onChange={(e) => {
+                                const updated = [...expSchedule];
+                                updated[dIdx].slots[sIdx].start = e.target.value;
+                                setExpSchedule(updated);
+                              }}
+                              className="px-2 py-1 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-lg text-xs font-semibold"
+                            />
+                            <span className="text-[11px] font-bold text-slate-500">Até:</span>
+                            <input
+                              type="time"
+                              value={slot.end}
+                              onChange={(e) => {
+                                const updated = [...expSchedule];
+                                updated[dIdx].slots[sIdx].end = e.target.value;
+                                setExpSchedule(updated);
+                              }}
+                              className="px-2 py-1 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-lg text-xs font-semibold"
+                            />
+                            {(day.slots || []).length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...expSchedule];
+                                  updated[dIdx].slots = updated[dIdx].slots.filter((_, idx) => idx !== sIdx);
+                                  setExpSchedule(updated);
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-500 rounded"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Descrição Adicional */}
+          <div>
+            <label className="block text-xs font-bold text-navy-900 dark:text-white mb-1">
+              Observações / Principais Atividades (Opcional)
+            </label>
+            <textarea
+              rows={2}
+              value={expDescription}
+              onChange={(e) => setExpDescription(e.target.value)}
+              placeholder="Ex: Aulas coletivas de spinning, atendimento na musculação e treinos periodizados."
+              className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-navy-700 rounded-xl text-xs font-semibold text-navy-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+        </div>
+
+        {/* Rodapé com Ações */}
+        <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-navy-700">
+          <button
+            type="button"
+            onClick={() => setShowExperienceModal(false)}
+            className="flex-1 py-2.5 rounded-full text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveExperience}
+            className="flex-1 py-2.5 rounded-full text-xs font-black bg-primary text-white hover:bg-primary-hover shadow-sm transition-all"
+          >
+            {editingExperienceId ? "Salvar Alterações" : "Salvar Experiência"}
+          </button>
+        </div>
+      </AnimatedModal>
+
+      {/* ===================== MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE EXPERIÊNCIA ===================== */}
+      <AnimatedModal
+        isOpen={Boolean(showDeleteExperienceModal)}
+        onClose={() => setShowDeleteExperienceModal(null)}
+        className="p-5 space-y-4 max-w-sm"
+      >
+        <div className="text-center space-y-2">
+          <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center mx-auto">
+            <Trash2 size={22} />
+          </div>
+          <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
+            Excluir Experiência?
+          </h3>
+          <p className="text-xs text-muted dark:text-slate-400">
+            Esta experiência será removida do seu perfil e seus eventuais bloqueios de horário serão liberados.
+          </p>
+        </div>
+
+        <div className="flex gap-2 pt-2">
+          <button
+            type="button"
+            onClick={() => setShowDeleteExperienceModal(null)}
+            className="flex-1 py-2.5 rounded-full text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (showDeleteExperienceModal) handleDeleteExperience(showDeleteExperienceModal);
+            }}
+            className="flex-1 py-2.5 rounded-full text-xs font-black bg-red-600 hover:bg-red-700 text-white shadow-sm transition-all"
+          >
+            Sim, Excluir
+          </button>
+        </div>
+      </AnimatedModal>
+
+      {/* ===================== MODAL DE ALERTA DE DESLOCAMENTO (INFORMATIVO, NÃO-BLOQUEANTE) ===================== */}
+      <AnimatedModal
+        isOpen={displacementWarning.isOpen}
+        onClose={() => setDisplacementWarning((prev) => ({ ...prev, isOpen: false }))}
+        className="p-5 sm:p-6 space-y-4 max-w-md"
+      >
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+            <Compass size={22} strokeWidth={2} />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
+              {displacementWarning.title}
+            </h3>
+            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
+              Aviso informativo de trânsito e distância
+            </span>
+          </div>
+        </div>
+
+        {/* Card do Trajeto */}
+        <div className="p-3.5 bg-slate-50 dark:bg-navy-900/60 rounded-2xl border border-slate-200/80 dark:border-navy-700 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 dark:text-slate-400">Origem:</span>
+            <span className="font-bold text-navy-900 dark:text-white text-right truncate max-w-[200px]">
+              {displacementWarning.fromLocation}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 dark:text-slate-400">Destino:</span>
+            <span className="font-bold text-navy-900 dark:text-white text-right truncate max-w-[200px]">
+              {displacementWarning.toLocation}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/50 dark:border-navy-800">
+            <span className="text-slate-500 dark:text-slate-400">Distância estimada:</span>
+            <span className="font-black text-primary">
+              ~{displacementWarning.distanceKm} km ({displacementWarning.transitMinutes} min de trânsito)
+            </span>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+          {displacementWarning.message}
+        </p>
+
+        <p className="text-[11px] text-muted dark:text-slate-400 italic">
+          O TrainerMatch preza pela pontualidade das aulas. A decisão final de aceitar cabe a você, avaliando seu trajeto com segurança.
+        </p>
+
+        <div className="flex gap-2 pt-2">
+          <button
+            type="button"
+            onClick={() => setDisplacementWarning((prev) => ({ ...prev, isOpen: false }))}
+            className="flex-1 py-2.5 rounded-full text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-800 transition-colors"
+          >
+            Revisar Horário
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const action = displacementWarning.onConfirm;
+              setDisplacementWarning((prev) => ({ ...prev, isOpen: false }));
+              action();
+            }}
+            className="flex-1 py-2.5 rounded-full text-xs font-black bg-primary hover:bg-primary-hover text-white shadow-sm transition-all"
+          >
+            Confirmar Mesmo Assim
+          </button>
+        </div>
+      </AnimatedModal>
+
+      {/* ===================== MODAL DE BLOQUEIO RÍGIDO DE SOBREPOSIÇÃO DE EXPEDIENTE ===================== */}
+      <AnimatedModal
+        isOpen={workConflictAlert.isOpen}
+        onClose={() => setWorkConflictAlert({ isOpen: false, message: "" })}
+        className="p-5 space-y-4 max-w-sm text-center"
+      >
+        <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center mx-auto">
+          <XCircle size={24} />
+        </div>
+        <div>
+          <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
+            Choque com Atividade Externa
+          </h3>
+          <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+            {workConflictAlert.message}
+          </p>
+        </div>
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setWorkConflictAlert({ isOpen: false, message: "" })}
+            className="w-full py-2.5 rounded-full text-xs font-black bg-navy-900 dark:bg-white text-white dark:text-navy-900 shadow-sm transition-all"
+          >
+            Entendi
+          </button>
+        </div>
       </AnimatedModal>
 
     </div>

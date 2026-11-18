@@ -105,7 +105,8 @@ export async function POST(req: NextRequest) {
               availability: JSON.stringify([]),
               blockedDateSlots: JSON.stringify([]),
               offeredSlots: JSON.stringify([]),
-              notificationsEnabled: JSON.stringify({ push: true, whatsapp: true, email: true })
+              notificationsEnabled: JSON.stringify({ push: true, whatsapp: true, email: true }),
+              workExperiences: JSON.stringify([])
             }
           }
         },
@@ -158,7 +159,8 @@ export async function POST(req: NextRequest) {
           blockedDates: JSON.parse((createdUser.instructor as any).blockedDates || "[]"),
           blockedDateSlots: JSON.parse((createdUser.instructor as any).blockedDateSlots || "[]"),
           offeredSlots: JSON.parse((createdUser.instructor as any).offeredSlots || "[]"),
-          notificationsEnabled: JSON.parse((createdUser.instructor as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}")
+          notificationsEnabled: JSON.parse((createdUser.instructor as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
+          workExperiences: JSON.parse((createdUser.instructor as any).workExperiences || "[]")
         } : null
       }
     });

@@ -14,8 +14,10 @@ import {
   MOCK_GYMS,
   MOCK_INSTRUCTORS,
   formatDateDDMMAAAA,
-  canCancelShift
+  canCancelShift,
+  WorkExperience
 } from "./mock-data";
+import { estimateDistanceBetweenLocations } from "./brazil-locations";
 
 export const MIN_TRANSIT_MINUTES = 30;
 
@@ -105,6 +107,136 @@ export function checkInstructorShiftConflict(
   }
 
   return { hasConflict: false };
+}
+
+// Verifica se há sobreposição direta de horário com atividade externa vigente do professor
+export function checkExternalWorkConflict(
+  instructor: Instructor | undefined,
+  dateStr: string,
+  startTime: string,
+  endTime: string
+): { hasConflict: boolean; conflictMessage?: string; experience?: WorkExperience } {
+  if (!instructor?.workExperiences || !dateStr || !startTime || !endTime) {
+    return { hasConflict: false };
+  }
+
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const dateObj = new Date(year, month - 1, day);
+  const dayOfWeek = dateObj.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+
+  const targetStart = timeToMinutes(startTime);
+  const targetEnd = timeToMinutes(endTime);
+
+  const activeExperiences = instructor.workExperiences.filter(
+    (exp) => exp.isCurrent && exp.schedule && exp.schedule.length > 0
+  );
+
+  for (const exp of activeExperiences) {
+    const daySchedule = exp.schedule?.find((d) => d.dayOfWeek === dayOfWeek && d.active);
+    if (!daySchedule || !daySchedule.slots) continue;
+
+    for (const slot of daySchedule.slots) {
+      const slotStart = timeToMinutes(slot.start);
+      const slotEnd = timeToMinutes(slot.end);
+
+      const overlapStart = Math.max(targetStart, slotStart);
+      const overlapEnd = Math.min(targetEnd, slotEnd);
+
+      if (overlapStart < overlapEnd) {
+        return {
+          hasConflict: true,
+          conflictMessage: `Conflito de agenda: você possui expediente externo ativo cadastrado na academia ${exp.companyName} (${exp.neighborhood || exp.city}) das ${slot.start} às ${slot.end}.`,
+          experience: exp
+        };
+      }
+    }
+  }
+
+  return { hasConflict: false };
+}
+
+// Verifica se a aula é próxima ao expediente externo e requer aviso de deslocamento (não bloqueante)
+export function checkExternalWorkDisplacementWarning(
+  instructor: Instructor | undefined,
+  targetGym: Gym | undefined,
+  dateStr: string,
+  startTime: string,
+  endTime: string,
+  warningThresholdMinutes = 60
+): {
+  needsWarning: boolean;
+  fromLocation?: string;
+  toLocation?: string;
+  distanceKm?: number;
+  transitMinutes?: number;
+  message?: string;
+  experience?: WorkExperience;
+} {
+  if (!instructor?.workExperiences || !targetGym || !dateStr || !startTime || !endTime) {
+    return { needsWarning: false };
+  }
+
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const dateObj = new Date(year, month - 1, day);
+  const dayOfWeek = dateObj.getDay();
+
+  const targetStart = timeToMinutes(startTime);
+  const targetEnd = timeToMinutes(endTime);
+
+  const activeExperiences = instructor.workExperiences.filter(
+    (exp) => exp.isCurrent && exp.schedule && exp.schedule.length > 0
+  );
+
+  for (const exp of activeExperiences) {
+    const daySchedule = exp.schedule?.find((d) => d.dayOfWeek === dayOfWeek && d.active);
+    if (!daySchedule || !daySchedule.slots) continue;
+
+    for (const slot of daySchedule.slots) {
+      const slotStart = timeToMinutes(slot.start);
+      const slotEnd = timeToMinutes(slot.end);
+
+      const { distanceKm, transitMinutes } = estimateDistanceBetweenLocations(
+        exp.neighborhood || "",
+        exp.city || "Vitória",
+        targetGym.neighborhood || "",
+        targetGym.city || "Vitória"
+      );
+
+      // Caso 1: Expediente externo termina pouco antes da aula começar
+      if (targetStart >= slotEnd) {
+        const gap = targetStart - slotEnd;
+        if (gap < Math.max(warningThresholdMinutes, transitMinutes + 10)) {
+          return {
+            needsWarning: true,
+            fromLocation: `${exp.companyName} (${exp.neighborhood || exp.city})`,
+            toLocation: `${targetGym.name} (${targetGym.neighborhood || targetGym.city})`,
+            distanceKm,
+            transitMinutes,
+            message: `Seu expediente na ${exp.companyName} (${exp.neighborhood || exp.city}) encerra às ${slot.end} e a aula na ${targetGym.name} começa às ${startTime}. O intervalo é de ${gap} min para uma distância estimada de ${distanceKm} km (~${transitMinutes} min de trânsito).`,
+            experience: exp
+          };
+        }
+      }
+
+      // Caso 2: Aula termina pouco antes do expediente externo começar
+      if (slotStart >= targetEnd) {
+        const gap = slotStart - targetEnd;
+        if (gap < Math.max(warningThresholdMinutes, transitMinutes + 10)) {
+          return {
+            needsWarning: true,
+            fromLocation: `${targetGym.name} (${targetGym.neighborhood || targetGym.city})`,
+            toLocation: `${exp.companyName} (${exp.neighborhood || exp.city})`,
+            distanceKm,
+            transitMinutes,
+            message: `Esta aula na ${targetGym.name} termina às ${endTime} e seu expediente externo na ${exp.companyName} começa às ${slot.start}. O intervalo é de ${gap} min para uma distância estimada de ${distanceKm} km (~${transitMinutes} min de trânsito).`,
+            experience: exp
+          };
+        }
+      }
+    }
+  }
+
+  return { needsWarning: false };
 }
 
 export interface RecommendationMatch {
@@ -307,6 +439,15 @@ export function getInstructorMatchForShift(
       hasConflict = true;
       conflictType = conflict.conflictType;
       conflictMessage = conflict.conflictMessage;
+    }
+  }
+
+  if (!hasConflict) {
+    const externalConflict = checkExternalWorkConflict(instructor, shift.date, shift.startTime, shift.endTime);
+    if (externalConflict.hasConflict) {
+      hasConflict = true;
+      conflictType = "overlap";
+      conflictMessage = externalConflict.conflictMessage;
     }
   }
 
@@ -1231,6 +1372,21 @@ export const useAppStore = create<AppState>()(
           requiresSubscription: false,
           hasConflict: true,
           conflictMessage: conflict.conflictMessage
+        };
+      }
+
+      const instructor = state.instructors.find((i) => i.id === proposal.instructorId);
+      const externalConflict = checkExternalWorkConflict(
+        instructor,
+        targetShift.date,
+        targetShift.startTime,
+        targetShift.endTime
+      );
+      if (externalConflict.hasConflict) {
+        return {
+          requiresSubscription: false,
+          hasConflict: true,
+          conflictMessage: externalConflict.conflictMessage
         };
       }
     }

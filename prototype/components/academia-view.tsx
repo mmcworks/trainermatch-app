@@ -7313,6 +7313,66 @@ export const AcademiaView: React.FC = () => {
             </div>
           )}
 
+          {/* Experiências Profissionais e Atividades Vigentes */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-navy-700">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+              <Building2 size={13} className="text-primary" />
+              Experiência Profissional & Histórico
+            </h4>
+
+            {(!instructorDetailModal.workExperiences || instructorDetailModal.workExperiences.length === 0) ? (
+              <div className="p-3 bg-slate-50 dark:bg-navy-900/60 rounded-xl border border-slate-200/60 dark:border-navy-800 text-center">
+                <p className="text-[11px] text-muted dark:text-slate-400">
+                  Nenhuma experiência anterior ou atividade externa informada pelo professor.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                {instructorDetailModal.workExperiences.map((exp: any) => (
+                  <div
+                    key={exp.id}
+                    className="p-3 bg-slate-50 dark:bg-navy-900/60 rounded-xl border border-slate-200/70 dark:border-navy-700 space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-xs font-black text-navy-900 dark:text-white">
+                        {exp.companyName}
+                      </h5>
+                      {exp.isCurrent ? (
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                          Atividade Vigente
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-200/70 text-slate-700 dark:bg-navy-800 dark:text-slate-300">
+                          Anterior
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-[11px] text-muted dark:text-slate-400 flex items-center gap-1">
+                      <MapPin size={11} className="text-slate-400 flex-shrink-0" />
+                      <span>{exp.neighborhood ? `${exp.neighborhood}, ` : ""}{exp.city} - {exp.state}</span>
+                    </p>
+
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
+                      <span>{exp.role || "Instrutor"}</span>
+                      <span>{exp.startDate} {exp.isCurrent ? "· Atual" : exp.endDate ? `até ${exp.endDate}` : ""}</span>
+                    </div>
+
+                    {exp.modalities && exp.modalities.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {exp.modalities.map((m: string) => (
+                          <span key={m} className="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded-md">
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Close button */}
           <div className="pt-2">
             <button

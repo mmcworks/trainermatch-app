@@ -31,6 +31,7 @@ export async function GET() {
       blockedDateSlots: JSON.parse((i as any).blockedDateSlots || "[]"),
       offeredSlots: JSON.parse((i as any).offeredSlots || "[]"),
       notificationsEnabled: JSON.parse((i as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
+      workExperiences: JSON.parse((i as any).workExperiences || "[]"),
       criteria: {
         pontualidade: i.rating,
         tecnica: i.rating,

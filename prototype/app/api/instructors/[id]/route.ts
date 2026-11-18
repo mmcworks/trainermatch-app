@@ -40,6 +40,7 @@ export async function GET(
       blockedDateSlots: JSON.parse((instructor as any).blockedDateSlots || "[]"),
       offeredSlots: JSON.parse((instructor as any).offeredSlots || "[]"),
       notificationsEnabled: JSON.parse((instructor as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
+      workExperiences: JSON.parse((instructor as any).workExperiences || "[]"),
       criteria: {
         pontualidade: instructor.rating,
         tecnica: instructor.rating,
@@ -93,6 +94,9 @@ export async function PUT(
     }
     if (body.notificationsEnabled !== undefined) {
       updateData.notificationsEnabled = typeof body.notificationsEnabled === "string" ? body.notificationsEnabled : JSON.stringify(body.notificationsEnabled);
+    }
+    if (body.workExperiences !== undefined) {
+      updateData.workExperiences = typeof body.workExperiences === "string" ? body.workExperiences : JSON.stringify(body.workExperiences);
     }
 
     let targetInstructor = await prisma.instructor.findUnique({
@@ -148,6 +152,7 @@ export async function PUT(
         blockedDateSlots: JSON.parse((updated as any).blockedDateSlots || "[]"),
         offeredSlots: JSON.parse((updated as any).offeredSlots || "[]"),
         notificationsEnabled: JSON.parse((updated as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
+        workExperiences: JSON.parse((updated as any).workExperiences || "[]"),
         criteria: {
           pontualidade: updated.rating,
           tecnica: updated.rating,

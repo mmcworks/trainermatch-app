@@ -125,6 +125,22 @@ export interface Instructor {
   blockedDates?: string[]; // Datas YYYY-MM-DD em que o professor definiu folga pontual
   blockedDateSlots?: string[]; // "YYYY-MM-DD_HH:mm_HH:mm" - exclusões pontuais de slots da grade semanal
   offeredSlots?: OfferedSlot[]; // Horários e turnos avulsos disponibilizados pelo professor para contratação
+  workExperiences?: WorkExperience[]; // Experiências profissionais e atividades vigentes cadastradas pelo professor
+}
+
+export interface WorkExperience {
+  id: string;
+  companyName: string;
+  state: string;                  // Ex: "ES"
+  city: string;                   // Ex: "Vitória"
+  neighborhood: string;           // Ex: "Praia do Canto"
+  role?: string;                  // Ex: "Instrutor de Musculação"
+  modalities: string[];           // Ex: ["Musculação", "Funcional"]
+  isCurrent: boolean;             // Atividade vigente?
+  startDate: string;              // Ex: "2023" ou "03/2023"
+  endDate?: string;               // Ex: "2024" (vazio se isCurrent)
+  schedule?: DayAvailability[];   // Horários ocupados na semana (se isCurrent)
+  description?: string;
 }
 
 export interface OfferedSlot {

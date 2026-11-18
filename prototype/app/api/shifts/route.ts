@@ -50,7 +50,8 @@ export async function GET(req: NextRequest) {
         availability: JSON.parse(s.confirmedInstructor.availability || "[]"),
         blockedDates: JSON.parse((s.confirmedInstructor as any).blockedDates || "[]"),
         blockedDateSlots: JSON.parse((s.confirmedInstructor as any).blockedDateSlots || "[]"),
-        offeredSlots: JSON.parse((s.confirmedInstructor as any).offeredSlots || "[]")
+        offeredSlots: JSON.parse((s.confirmedInstructor as any).offeredSlots || "[]"),
+        workExperiences: JSON.parse((s.confirmedInstructor as any).workExperiences || "[]")
       } : undefined,
       proposals: s.proposals.map((p) => ({
         ...p,
@@ -65,7 +66,8 @@ export async function GET(req: NextRequest) {
           availability: JSON.parse(p.instructor.availability || "[]"),
           blockedDates: JSON.parse((p.instructor as any).blockedDates || "[]"),
           blockedDateSlots: JSON.parse((p.instructor as any).blockedDateSlots || "[]"),
-          offeredSlots: JSON.parse((p.instructor as any).offeredSlots || "[]")
+          offeredSlots: JSON.parse((p.instructor as any).offeredSlots || "[]"),
+          workExperiences: JSON.parse((p.instructor as any).workExperiences || "[]")
         }
       }))
     }));

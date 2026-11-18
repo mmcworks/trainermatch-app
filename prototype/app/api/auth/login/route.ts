@@ -140,6 +140,7 @@ export async function POST(req: NextRequest) {
           blockedDateSlots: JSON.parse((user.instructor as any).blockedDateSlots || "[]"),
           offeredSlots: JSON.parse((user.instructor as any).offeredSlots || "[]"),
           notificationsEnabled: JSON.parse((user.instructor as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
+          workExperiences: JSON.parse((user.instructor as any).workExperiences || "[]"),
           criteria: {
             pontualidade: user.instructor.rating,
             tecnica: user.instructor.rating,
