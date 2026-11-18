@@ -36,6 +36,10 @@ model Gym {
   city         String?  @default("")
   logo         String?  @default("")
   facadeUrl    String?  @default("")
+  managerName  String?  @default("")
+  managerPhone String?  @default("")
+  managerEmail String?  @default("")
+  managerRole  String?  @default("")
   rating       Float    @default(5.0)
   ratingCount  Int      @default(0)
   plan         String   @default("gratis")
@@ -48,25 +52,31 @@ model Gym {
 }
 
 model Instructor {
-  id              String      @id @default(uuid())
-  userId          String      @unique
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name            String
-  email           String?     @default("")
-  phone           String?     @default("")
-  cpf             String?     @default("")
-  cref            String?     @default("")
-  avatar          String?     @default("")
-  bio             String?     @default("")
-  rating          Float       @default(5.0)
-  ratingCount     Int         @default(0)
-  hourlyRate      Float       @default(45.0)
-  modalities      String      @default("[]") // JSON
-  pixKeys         String      @default("[]") // JSON
-  availability    String      @default("[]") // JSON (grade semanal)
-  blockedDates    String      @default("[]") // JSON (datas bloqueadas pontualmente)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                   String      @id @default(uuid())
+  userId               String      @unique
+  user                 User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                 String
+  displayName          String?     @default("")
+  birthDate            String?     @default("")
+  email                String?     @default("")
+  phone                String?     @default("")
+  cpf                  String?     @default("")
+  cnpj                 String?     @default("")
+  cref                 String?     @default("")
+  avatar               String?     @default("")
+  bio                  String?     @default("")
+  rating               Float       @default(5.0)
+  ratingCount          Int         @default(0)
+  hourlyRate           Float       @default(45.0)
+  modalities           String      @default("[]") // JSON
+  pixKeys              String      @default("[]") // JSON
+  availability         String      @default("[]") // JSON (grade semanal)
+  blockedDates         String      @default("[]") // JSON (datas bloqueadas pontualmente)
+  blockedDateSlots     String?     @default("[]") // JSON (exclusões pontuais de slots da grade: YYYY-MM-DD_HH:mm_HH:mm)
+  offeredSlots         String?     @default("[]") // JSON (horários avulsos oferecidos)
+  notificationsEnabled String?     @default("{\"push\":true,\"whatsapp\":true,\"email\":true}") // JSON
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   confirmedShifts Shift[]
   proposals       Proposal[]

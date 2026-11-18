@@ -19,12 +19,18 @@ export async function GET() {
 
     const parsed = activeInstructors.map((i) => ({
       ...i,
+      displayName: (i as any).displayName || i.name,
+      birthDate: (i as any).birthDate || "",
+      cnpj: (i as any).cnpj || "",
       isActive: true,
       isDeleted: false,
       modalities: JSON.parse(i.modalities || "[]"),
       pixKeys: JSON.parse(i.pixKeys || "[]"),
       availability: JSON.parse(i.availability || "[]"),
       blockedDates: JSON.parse((i as any).blockedDates || "[]"),
+      blockedDateSlots: JSON.parse((i as any).blockedDateSlots || "[]"),
+      offeredSlots: JSON.parse((i as any).offeredSlots || "[]"),
+      notificationsEnabled: JSON.parse((i as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
       criteria: {
         pontualidade: i.rating,
         tecnica: i.rating,

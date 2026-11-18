@@ -38,6 +38,10 @@ export async function GET(
 
     return NextResponse.json({
       ...gym,
+      managerName: (gym as any).managerName || "",
+      managerPhone: (gym as any).managerPhone || "",
+      managerEmail: (gym as any).managerEmail || "",
+      managerRole: (gym as any).managerRole || "",
       modalities: safeJson(gym.modalities, []),
       pricingRules: safeJson(gym.pricingRules, undefined)
     });
@@ -64,6 +68,10 @@ export async function PUT(
     if (body.logo !== undefined) updateData.logo = body.logo;
     if (body.facadeUrl !== undefined) updateData.facadeUrl = body.facadeUrl;
     if (body.plan !== undefined) updateData.plan = body.plan;
+    if (body.managerName !== undefined) updateData.managerName = body.managerName;
+    if (body.managerPhone !== undefined) updateData.managerPhone = body.managerPhone;
+    if (body.managerEmail !== undefined) updateData.managerEmail = body.managerEmail;
+    if (body.managerRole !== undefined) updateData.managerRole = body.managerRole;
 
     if (body.modalities !== undefined) {
       updateData.modalities = typeof body.modalities === "string" ? body.modalities : JSON.stringify(body.modalities);
@@ -115,6 +123,10 @@ export async function PUT(
       success: true,
       gym: {
         ...updated,
+        managerName: (updated as any).managerName || "",
+        managerPhone: (updated as any).managerPhone || "",
+        managerEmail: (updated as any).managerEmail || "",
+        managerRole: (updated as any).managerRole || "",
         modalities: safeJson(updated.modalities, []),
         pricingRules: safeJson(updated.pricingRules, undefined)
       }

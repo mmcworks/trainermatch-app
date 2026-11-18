@@ -30,10 +30,16 @@ export async function GET(
 
     return NextResponse.json({
       ...instructor,
+      displayName: (instructor as any).displayName || instructor.name,
+      birthDate: (instructor as any).birthDate || "",
+      cnpj: (instructor as any).cnpj || "",
       modalities: JSON.parse(instructor.modalities || "[]"),
       pixKeys: JSON.parse(instructor.pixKeys || "[]"),
       availability: JSON.parse(instructor.availability || "[]"),
       blockedDates: JSON.parse((instructor as any).blockedDates || "[]"),
+      blockedDateSlots: JSON.parse((instructor as any).blockedDateSlots || "[]"),
+      offeredSlots: JSON.parse((instructor as any).offeredSlots || "[]"),
+      notificationsEnabled: JSON.parse((instructor as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
       criteria: {
         pontualidade: instructor.rating,
         tecnica: instructor.rating,
@@ -56,7 +62,9 @@ export async function PUT(
     const updateData: any = {};
 
     if (body.name !== undefined) updateData.name = body.name;
-    if (body.displayName !== undefined && updateData.name === undefined) updateData.name = body.displayName;
+    if (body.displayName !== undefined) updateData.displayName = body.displayName;
+    if (body.birthDate !== undefined) updateData.birthDate = body.birthDate;
+    if (body.cnpj !== undefined) updateData.cnpj = body.cnpj;
     if (body.phone !== undefined) updateData.phone = body.phone;
     if (body.email !== undefined) updateData.email = body.email;
     if (body.bio !== undefined) updateData.bio = body.bio;
@@ -76,6 +84,15 @@ export async function PUT(
     }
     if (body.blockedDates !== undefined) {
       updateData.blockedDates = typeof body.blockedDates === "string" ? body.blockedDates : JSON.stringify(body.blockedDates);
+    }
+    if (body.blockedDateSlots !== undefined) {
+      updateData.blockedDateSlots = typeof body.blockedDateSlots === "string" ? body.blockedDateSlots : JSON.stringify(body.blockedDateSlots);
+    }
+    if (body.offeredSlots !== undefined) {
+      updateData.offeredSlots = typeof body.offeredSlots === "string" ? body.offeredSlots : JSON.stringify(body.offeredSlots);
+    }
+    if (body.notificationsEnabled !== undefined) {
+      updateData.notificationsEnabled = typeof body.notificationsEnabled === "string" ? body.notificationsEnabled : JSON.stringify(body.notificationsEnabled);
     }
 
     let targetInstructor = await prisma.instructor.findUnique({
@@ -121,11 +138,16 @@ export async function PUT(
       success: true,
       instructor: {
         ...updated,
-        birthDate: body.birthDate !== undefined ? body.birthDate : (targetInstructor as any).birthDate,
+        displayName: (updated as any).displayName || updated.name,
+        birthDate: (updated as any).birthDate || body.birthDate || "",
+        cnpj: (updated as any).cnpj || "",
         modalities: JSON.parse(updated.modalities || "[]"),
         pixKeys: JSON.parse(updated.pixKeys || "[]"),
         availability: JSON.parse(updated.availability || "[]"),
         blockedDates: JSON.parse((updated as any).blockedDates || "[]"),
+        blockedDateSlots: JSON.parse((updated as any).blockedDateSlots || "[]"),
+        offeredSlots: JSON.parse((updated as any).offeredSlots || "[]"),
+        notificationsEnabled: JSON.parse((updated as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
         criteria: {
           pontualidade: updated.rating,
           tecnica: updated.rating,

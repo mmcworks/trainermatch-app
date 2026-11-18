@@ -35,9 +35,15 @@ export async function GET(
       } : undefined,
       confirmedInstructor: shift.confirmedInstructor ? {
         ...shift.confirmedInstructor,
+        displayName: (shift.confirmedInstructor as any).displayName || shift.confirmedInstructor.name,
+        birthDate: (shift.confirmedInstructor as any).birthDate || "",
+        cnpj: (shift.confirmedInstructor as any).cnpj || "",
         modalities: JSON.parse(shift.confirmedInstructor.modalities || "[]"),
         pixKeys: JSON.parse(shift.confirmedInstructor.pixKeys || "[]"),
-        availability: JSON.parse(shift.confirmedInstructor.availability || "[]")
+        availability: JSON.parse(shift.confirmedInstructor.availability || "[]"),
+        blockedDates: JSON.parse((shift.confirmedInstructor as any).blockedDates || "[]"),
+        blockedDateSlots: JSON.parse((shift.confirmedInstructor as any).blockedDateSlots || "[]"),
+        offeredSlots: JSON.parse((shift.confirmedInstructor as any).offeredSlots || "[]")
       } : undefined,
       proposals: shift.proposals.map((p) => ({
         ...p,

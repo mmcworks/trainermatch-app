@@ -40,15 +40,25 @@ export async function GET(req: NextRequest) {
         document: user.document,
         gym: user.gym ? {
           ...user.gym,
+          managerName: (user.gym as any).managerName || "",
+          managerPhone: (user.gym as any).managerPhone || "",
+          managerEmail: (user.gym as any).managerEmail || "",
+          managerRole: (user.gym as any).managerRole || "",
           modalities: JSON.parse(user.gym.modalities || "[]"),
           pricingRules: user.gym.pricingRules ? JSON.parse(user.gym.pricingRules) : undefined
         } : null,
         instructor: user.instructor ? {
           ...user.instructor,
+          displayName: (user.instructor as any).displayName || user.instructor.name,
+          birthDate: (user.instructor as any).birthDate || "",
+          cnpj: (user.instructor as any).cnpj || "",
           modalities: JSON.parse(user.instructor.modalities || "[]"),
           pixKeys: JSON.parse(user.instructor.pixKeys || "[]"),
           availability: JSON.parse(user.instructor.availability || "[]"),
           blockedDates: JSON.parse((user.instructor as any).blockedDates || "[]"),
+          blockedDateSlots: JSON.parse((user.instructor as any).blockedDateSlots || "[]"),
+          offeredSlots: JSON.parse((user.instructor as any).offeredSlots || "[]"),
+          notificationsEnabled: JSON.parse((user.instructor as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
           criteria: {
             pontualidade: user.instructor.rating,
             tecnica: user.instructor.rating,

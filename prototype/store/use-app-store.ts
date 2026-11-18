@@ -656,10 +656,16 @@ export const useAppStore = create<AppState>()(
               return {
                 ...apiInst,
                 ...loc,
-                // Prioriza disponibilidade, modalidades e nascimento que foram salvas localmente
-                availability: loc.availability && loc.availability.length > 0 ? loc.availability : apiInst.availability,
-                modalities: loc.modalities && loc.modalities.length > 0 ? loc.modalities : apiInst.modalities,
-                birthDate: loc.birthDate || apiInst.birthDate,
+                // Prioriza os dados mais completos e recentes do servidor
+                birthDate: apiInst.birthDate || loc.birthDate || "",
+                displayName: apiInst.displayName || loc.displayName || apiInst.name,
+                cnpj: apiInst.cnpj || loc.cnpj || "",
+                availability: apiInst.availability && apiInst.availability.length > 0 ? apiInst.availability : (loc.availability || []),
+                modalities: apiInst.modalities && apiInst.modalities.length > 0 ? apiInst.modalities : (loc.modalities || []),
+                blockedDates: apiInst.blockedDates && apiInst.blockedDates.length > 0 ? apiInst.blockedDates : (loc.blockedDates || []),
+                blockedDateSlots: apiInst.blockedDateSlots && apiInst.blockedDateSlots.length > 0 ? apiInst.blockedDateSlots : (loc.blockedDateSlots || []),
+                offeredSlots: apiInst.offeredSlots && apiInst.offeredSlots.length > 0 ? apiInst.offeredSlots : (loc.offeredSlots || []),
+                notificationsEnabled: apiInst.notificationsEnabled || loc.notificationsEnabled,
                 avatar: loc.avatar || apiInst.avatar,
                 phone: loc.phone || apiInst.phone,
                 email: loc.email || apiInst.email,
@@ -680,7 +686,16 @@ export const useAppStore = create<AppState>()(
           if (localGyms.length > 0 && apiGyms.length > 0) {
             mergedGyms = apiGyms.map((apiG: any) => {
               const loc = localGyms.find((lg) => lg.id === apiG.id);
-              return loc ? { ...apiG, ...loc } : apiG;
+              return loc ? {
+                ...apiG,
+                ...loc,
+                managerName: apiG.managerName || loc.managerName || "",
+                managerPhone: apiG.managerPhone || loc.managerPhone || "",
+                managerEmail: apiG.managerEmail || loc.managerEmail || "",
+                managerRole: apiG.managerRole || loc.managerRole || "",
+                modalities: apiG.modalities && apiG.modalities.length > 0 ? apiG.modalities : (loc.modalities || []),
+                pricingRules: apiG.pricingRules || loc.pricingRules
+              } : apiG;
             });
             for (const loc of localGyms) {
               if (!mergedGyms.some((m: any) => m.id === loc.id)) {
@@ -831,6 +846,19 @@ export const useAppStore = create<AppState>()(
         instructors: updatedInstructors,
         gyms: updatedGyms
       });
+
+      try {
+        if (typeof window !== "undefined") {
+          if (user.instructor?.id) {
+            localStorage.setItem(`trainermatch_instructor_cache_${user.instructor.id}`, JSON.stringify(user.instructor));
+            localStorage.setItem("trainermatch_instructor_cache_active", JSON.stringify(user.instructor));
+          }
+          if (user.gym?.id) {
+            localStorage.setItem(`trainermatch_gym_cache_${user.gym.id}`, JSON.stringify(user.gym));
+            localStorage.setItem("trainermatch_gym_cache_active", JSON.stringify(user.gym));
+          }
+        }
+      } catch (e) {}
 
       // Recarrega os dados completos do banco
       await get().syncWithBackend();

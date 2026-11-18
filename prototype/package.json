@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "prisma generate && next build",
+    "build": "node ./scripts/db-sync.js && next build",
     "start": "next start -p 3000",
     "postinstall": "prisma generate"
   },

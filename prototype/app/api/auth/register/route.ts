@@ -88,9 +88,12 @@ export async function POST(req: NextRequest) {
           instructor: {
             create: {
               name,
+              displayName: name,
+              birthDate: body.birthDate || "",
               email: cleanEmail,
               phone: phone || "",
               cpf: document || "",
+              cnpj: body.cnpj || "",
               cref: crefOrCnpj || "",
               avatar: logoOrAvatar || "",
               bio: "",
@@ -99,7 +102,10 @@ export async function POST(req: NextRequest) {
               hourlyRate: 45,
               modalities: JSON.stringify([]),
               pixKeys: JSON.stringify(document ? [{ id: "pix-1", type: "cpf", key: document, isDefault: true }] : []),
-              availability: JSON.stringify([]) // 0 horários na grade!
+              availability: JSON.stringify([]),
+              blockedDateSlots: JSON.stringify([]),
+              offeredSlots: JSON.stringify([]),
+              notificationsEnabled: JSON.stringify({ push: true, whatsapp: true, email: true })
             }
           }
         },
@@ -134,14 +140,25 @@ export async function POST(req: NextRequest) {
         document: createdUser.document,
         gym: createdUser.gym ? {
           ...createdUser.gym,
+          managerName: (createdUser.gym as any).managerName || "",
+          managerPhone: (createdUser.gym as any).managerPhone || "",
+          managerEmail: (createdUser.gym as any).managerEmail || "",
+          managerRole: (createdUser.gym as any).managerRole || "",
           modalities: JSON.parse(createdUser.gym.modalities || "[]"),
           pricingRules: createdUser.gym.pricingRules ? JSON.parse(createdUser.gym.pricingRules) : undefined
         } : null,
         instructor: createdUser.instructor ? {
           ...createdUser.instructor,
+          displayName: (createdUser.instructor as any).displayName || createdUser.instructor.name,
+          birthDate: (createdUser.instructor as any).birthDate || "",
+          cnpj: (createdUser.instructor as any).cnpj || "",
           modalities: JSON.parse(createdUser.instructor.modalities || "[]"),
           pixKeys: JSON.parse(createdUser.instructor.pixKeys || "[]"),
-          availability: JSON.parse(createdUser.instructor.availability || "[]")
+          availability: JSON.parse(createdUser.instructor.availability || "[]"),
+          blockedDates: JSON.parse((createdUser.instructor as any).blockedDates || "[]"),
+          blockedDateSlots: JSON.parse((createdUser.instructor as any).blockedDateSlots || "[]"),
+          offeredSlots: JSON.parse((createdUser.instructor as any).offeredSlots || "[]"),
+          notificationsEnabled: JSON.parse((createdUser.instructor as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}")
         } : null
       }
     });

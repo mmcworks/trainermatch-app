@@ -42,18 +42,30 @@ export async function GET(req: NextRequest) {
       } : undefined,
       confirmedInstructor: s.confirmedInstructor ? {
         ...s.confirmedInstructor,
+        displayName: (s.confirmedInstructor as any).displayName || s.confirmedInstructor.name,
+        birthDate: (s.confirmedInstructor as any).birthDate || "",
+        cnpj: (s.confirmedInstructor as any).cnpj || "",
         modalities: JSON.parse(s.confirmedInstructor.modalities || "[]"),
         pixKeys: JSON.parse(s.confirmedInstructor.pixKeys || "[]"),
-        availability: JSON.parse(s.confirmedInstructor.availability || "[]")
+        availability: JSON.parse(s.confirmedInstructor.availability || "[]"),
+        blockedDates: JSON.parse((s.confirmedInstructor as any).blockedDates || "[]"),
+        blockedDateSlots: JSON.parse((s.confirmedInstructor as any).blockedDateSlots || "[]"),
+        offeredSlots: JSON.parse((s.confirmedInstructor as any).offeredSlots || "[]")
       } : undefined,
       proposals: s.proposals.map((p) => ({
         ...p,
         history: JSON.parse(p.history || "[]"),
         instructor: {
           ...p.instructor,
+          displayName: (p.instructor as any).displayName || p.instructor.name,
+          birthDate: (p.instructor as any).birthDate || "",
+          cnpj: (p.instructor as any).cnpj || "",
           modalities: JSON.parse(p.instructor.modalities || "[]"),
           pixKeys: JSON.parse(p.instructor.pixKeys || "[]"),
-          availability: JSON.parse(p.instructor.availability || "[]")
+          availability: JSON.parse(p.instructor.availability || "[]"),
+          blockedDates: JSON.parse((p.instructor as any).blockedDates || "[]"),
+          blockedDateSlots: JSON.parse((p.instructor as any).blockedDateSlots || "[]"),
+          offeredSlots: JSON.parse((p.instructor as any).offeredSlots || "[]")
         }
       }))
     }));
