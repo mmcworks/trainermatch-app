@@ -14,6 +14,7 @@ import {
   Phone,
   Mail,
   AlertCircle,
+  AlertTriangle,
   Star,
   Dumbbell,
   Bike,
@@ -67,6 +68,7 @@ import {
 import { Instructor, Shift, Gym, DayAvailability, DEFAULT_WEEK_DAYS, formatDateDDMMAAAA, PixKeyItem, canCancelShift, maskPhone, maskCpf, maskCnpj, maskDate, formatToDDMMAAAA, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString, OfferedSlot, MODALITY_CATEGORIES, WorkExperience } from "@/store/mock-data";
 import { timeToMinutes, checkInstructorShiftConflict, checkCheckInEligibility, checkExternalWorkConflict, checkExternalWorkDisplacementWarning } from "@/store/use-app-store";
 import { TimeStepperInput } from "@/components/time-stepper-input";
+import { RateStepperInput } from "@/components/rate-stepper-input";
 import { AnimatedModal } from "@/components/animated-modal";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import { ReviewModal } from "@/components/review-modal";
@@ -200,16 +202,43 @@ export const ProfessorView: React.FC = () => {
   const [navYear, setNavYear] = useState<number>(2026);
   const [isScheduleInfoOpen, setIsScheduleInfoOpen] = useState<boolean>(false);
   const [saveAvailabilityMsg, setSaveAvailabilityMsg] = useState<string | null>(null);
-  const [slotInputs, setSlotInputs] = useState<Record<number, { start: string; end: string }>>({
-    1: { start: "07:00", end: "12:00" },
-    2: { start: "07:00", end: "12:00" },
-    3: { start: "07:00", end: "12:00" },
-    4: { start: "07:00", end: "12:00" },
-    5: { start: "07:00", end: "12:00" },
-    6: { start: "08:00", end: "14:00" },
-    0: { start: "08:00", end: "12:00" }
+  const [slotInputs, setSlotInputs] = useState<Record<number, {
+    start: string;
+    end: string;
+    minRate: number;
+    maxRate: number;
+  }>>({
+    1: { start: "07:00", end: "12:00", minRate: 35, maxRate: 45 },
+    2: { start: "07:00", end: "12:00", minRate: 35, maxRate: 45 },
+    3: { start: "07:00", end: "12:00", minRate: 35, maxRate: 45 },
+    4: { start: "07:00", end: "12:00", minRate: 35, maxRate: 45 },
+    5: { start: "07:00", end: "12:00", minRate: 35, maxRate: 45 },
+    6: { start: "08:00", end: "14:00", minRate: 40, maxRate: 50 },
+    0: { start: "08:00", end: "12:00", minRate: 40, maxRate: 50 }
   });
   const [slotErrorMsg, setSlotErrorMsg] = useState<Record<number, string | null>>({});
+  const [touchedDays, setTouchedDays] = useState<Record<number, boolean>>({});
+  const [draftAlertDay, setDraftAlertDay] = useState<{ dayOfWeek: number; dayName: string; shortDay: string } | null>(null);
+  const [isScheduleDirty, setIsScheduleDirty] = useState<boolean>(false);
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState<boolean>(false);
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+
+  const safeNavigate = (navAction: () => void) => {
+    if (agendaSubTab === "grade" && isScheduleDirty) {
+      setPendingNavigation(() => navAction);
+      setShowUnsavedChangesModal(true);
+    } else {
+      navAction();
+    }
+  };
+
+  const safeNavigateTab = (tab: "inicio" | "propostas" | "agenda" | "perfil") => {
+    safeNavigate(() => setActiveTab(tab));
+  };
+
+  const safeNavigateSubTab = (subTab: "aulas" | "grade") => {
+    safeNavigate(() => setAgendaSubTab(subTab));
+  };
 
   // Wizard: Quero Oferecer um Horário (Professor)
   const [showOfferSlotWizard, setShowOfferSlotWizard] = useState<boolean>(false);
@@ -438,6 +467,176 @@ export const ProfessorView: React.FC = () => {
     JSON.stringify(rawInstructor.pixKeys || []),
     JSON.stringify(rawInstructor.availability || [])
   ]);
+
+  const addSlotForDay = (
+    dayOfWeek: number,
+    start: string,
+    end: string,
+    minRateInput?: number,
+    maxRateInput?: number
+  ): boolean => {
+    if (!start || !end) return false;
+
+    const startMin = timeToMinutes(start);
+    const endMin = timeToMinutes(end);
+
+    if (startMin >= endMin) {
+      setSlotErrorMsg((prev) => ({
+        ...prev,
+        [dayOfWeek]: "O horário de término deve ser posterior ao horário de início."
+      }));
+      return false;
+    }
+
+    const currentInputs = slotInputs[dayOfWeek] || { start: "07:00", end: "12:00", minRate: 35, maxRate: 45 };
+    const minR = typeof minRateInput === "number" ? minRateInput : (currentInputs.minRate ?? 35);
+    const maxR = typeof maxRateInput === "number" ? maxRateInput : (currentInputs.maxRate ?? 45);
+
+    if (minR <= 0 || maxR <= 0) {
+      setSlotErrorMsg((prev) => ({
+        ...prev,
+        [dayOfWeek]: "Informe os valores mínimo e máximo da hora/aula (maiores que zero)."
+      }));
+      return false;
+    }
+
+    if (minR > maxR) {
+      setSlotErrorMsg((prev) => ({
+        ...prev,
+        [dayOfWeek]: "O valor mínimo não pode ser superior ao valor máximo."
+      }));
+      return false;
+    }
+
+    // Checa conflito com atividade externa vigente cadastrada para este dia da semana
+    const currentExps = (currentInstructor.workExperiences || []).filter((e) => e.isCurrent);
+    for (const exp of currentExps) {
+      const expDay = (exp.schedule || []).find((s) => s.dayOfWeek === dayOfWeek);
+      if (expDay && expDay.active && expDay.slots) {
+        for (const eSlot of expDay.slots) {
+          const eStartMin = timeToMinutes(eSlot.start);
+          const eEndMin = timeToMinutes(eSlot.end);
+          if (Math.max(startMin, eStartMin) < Math.min(endMin, eEndMin)) {
+            setSlotErrorMsg((prev) => ({
+              ...prev,
+              [dayOfWeek]: `⚠️ Conflito de Expediente: Você já possui atividade externa vigente cadastrada na ${exp.companyName || "outra academia"} das ${eSlot.start} às ${eSlot.end} neste dia.`
+            }));
+            return false;
+          }
+        }
+      }
+    }
+
+    const dayAvail = localAvailability.find((d) => d.dayOfWeek === dayOfWeek);
+    const currentSlots = dayAvail?.slots || [];
+
+    // Checa conflito com qualquer horário já cadastrado neste dia
+    for (const existing of currentSlots) {
+      const eStartMin = timeToMinutes(existing.start);
+      const eEndMin = timeToMinutes(existing.end);
+
+      // 1. Mesmo horário de início
+      if (start === existing.start) {
+        setSlotErrorMsg((prev) => ({
+          ...prev,
+          [dayOfWeek]: `Conflito de horário: já existe um horário iniciando às ${start} (${existing.start} às ${existing.end}).`
+        }));
+        return false;
+      }
+
+      // 2. Mesmo horário de término
+      if (end === existing.end) {
+        setSlotErrorMsg((prev) => ({
+          ...prev,
+          [dayOfWeek]: `Conflito de horário: já existe um horário terminando às ${end} (${existing.start} às ${existing.end}).`
+        }));
+        return false;
+      }
+
+      // 3. Sobreposição de intervalo (parcial ou total)
+      const overlapStart = Math.max(startMin, eStartMin);
+      const overlapEnd = Math.min(endMin, eEndMin);
+      if (overlapStart < overlapEnd) {
+        setSlotErrorMsg((prev) => ({
+          ...prev,
+          [dayOfWeek]: `Conflito de sobreposição: o horário ${start} às ${end} colide com o horário já cadastrado das ${existing.start} às ${existing.end}.`
+        }));
+        return false;
+      }
+    }
+
+    // Sem conflito: limpa mensagem de erro e adiciona ordenado
+    setSlotErrorMsg((prev) => ({ ...prev, [dayOfWeek]: null }));
+
+    const newSlots = [...currentSlots, {
+      start,
+      end,
+      hourlyRate: maxR,
+      minHourlyRate: minR
+    }].sort(
+      (a, b) => timeToMinutes(a.start) - timeToMinutes(b.start)
+    );
+
+    const weekDay = DEFAULT_WEEK_DAYS.find((d) => d.dayOfWeek === dayOfWeek);
+
+    setLocalAvailability((prev) => {
+      const exists = prev.some((d) => d.dayOfWeek === dayOfWeek);
+      let updated: DayAvailability[];
+      if (exists) {
+        updated = prev.map((d) => {
+          if (d.dayOfWeek !== dayOfWeek) return d;
+          return {
+            ...d,
+            active: true,
+            slots: newSlots
+          };
+        });
+      } else {
+        updated = [
+          ...prev,
+          {
+            dayOfWeek,
+            dayName: weekDay?.dayName || "",
+            shortDay: weekDay?.shortDay || "",
+            active: true,
+            slots: newSlots
+          }
+        ];
+      }
+      return updated;
+    });
+    setIsScheduleDirty(true);
+    setTouchedDays((prev) => ({ ...prev, [dayOfWeek]: false }));
+    return true;
+  };
+
+  const executeSaveWeeklySchedule = () => {
+    updateInstructorAvailability(activeInstructorId, localAvailability);
+    setIsScheduleDirty(false);
+    setTouchedDays({});
+    setSaveAvailabilityMsg("Sua grade de horários foi salva e sincronizada com sucesso!");
+    setTimeout(() => setSaveAvailabilityMsg(null), 4000);
+  };
+
+  const handleSaveWeeklySchedule = () => {
+    // Procura se algum dia ativo tem rascunho preenchido não adicionado
+    const unaddedDay = DEFAULT_WEEK_DAYS.find((d) => {
+      const dayAvail = localAvailability.find((a) => a.dayOfWeek === d.dayOfWeek);
+      if (!dayAvail || !dayAvail.active) return false;
+      // Caso 1: usuário mexeu nos inputs e não clicou em adicionar
+      if (touchedDays[d.dayOfWeek]) return true;
+      // Caso 2: dia ativo mas sem nenhum slot adicionado
+      if (!dayAvail.slots || dayAvail.slots.length === 0) return true;
+      return false;
+    });
+
+    if (unaddedDay) {
+      setDraftAlertDay(unaddedDay);
+      return;
+    }
+
+    executeSaveWeeklySchedule();
+  };
 
   const [professorDocuments, setProfessorDocuments] = useState<{
     diploma: { name: string; size: string; status: string } | null;
@@ -933,8 +1132,8 @@ export const ProfessorView: React.FC = () => {
         date: dateStr,
         startTime: wSlot.start,
         endTime: wSlot.end,
-        hourlyRate: currentInstructor.hourlyRate || 45,
-        minHourlyRate: (currentInstructor as any).minHourlyRate,
+        hourlyRate: wSlot.hourlyRate || currentInstructor.hourlyRate || 45,
+        minHourlyRate: wSlot.minHourlyRate || (currentInstructor as any).minHourlyRate,
         allowNegotiation: true,
         modalities: currentInstructor.modalities || ["Musculação"],
         source: "grade",
@@ -2143,7 +2342,7 @@ export const ProfessorView: React.FC = () => {
           {/* Sub-Aba: Alternar entre Agenda Diária e Meus horários semanais */}
           <div className="flex bg-slate-100 dark:bg-navy-800 p-1 rounded-full text-xs font-bold border border-slate-200/60 dark:border-slate-700">
             <button
-              onClick={() => setAgendaSubTab("aulas")}
+              onClick={() => safeNavigateSubTab("aulas")}
               className={`flex-1 py-2 rounded-full transition-all flex items-center justify-center gap-1.5 ${
                 agendaSubTab === "aulas"
                   ? "bg-primary text-white shadow-xs"
@@ -2154,7 +2353,7 @@ export const ProfessorView: React.FC = () => {
               <span>Agenda Diária</span>
             </button>
             <button
-              onClick={() => setAgendaSubTab("grade")}
+              onClick={() => safeNavigateSubTab("grade")}
               className={`flex-1 py-2 rounded-full transition-all flex items-center justify-center gap-1.5 ${
                 agendaSubTab === "grade"
                   ? "bg-primary text-white shadow-xs"
@@ -3000,6 +3199,8 @@ export const ProfessorView: React.FC = () => {
                 )}
               </div>
 
+              {/* Helpers para adicionar slots e salvar grade com validação */}
+              {(() => null)()}
               {/* Lista dos 7 Dias da Semana */}
               <div className="space-y-3">
                 {DEFAULT_WEEK_DAYS.map((weekDay) => {
@@ -3037,9 +3238,9 @@ export const ProfessorView: React.FC = () => {
                           }
                         ];
                       }
-                      updateInstructorAvailability(activeInstructorId, updated);
                       return updated;
                     });
+                    setIsScheduleDirty(true);
                   };
 
                   const removeSlot = (slotIdx: number) => {
@@ -3049,7 +3250,6 @@ export const ProfessorView: React.FC = () => {
                     if (targetSlot) {
                       const slotStartMin = timeToMinutes(targetSlot.start);
                       const slotEndMin = timeToMinutes(targetSlot.end);
-                      const myInstId = currentInstructor.id || activeInstructorId;
 
                       // Checa se existe aula confirmada nesse dia da semana e horário
                       const conflictingShift = shifts.find((s) => {
@@ -3103,117 +3303,16 @@ export const ProfessorView: React.FC = () => {
                           slots: filtered
                         };
                       });
-                      updateInstructorAvailability(activeInstructorId, updated);
                       return updated;
                     });
+                    setIsScheduleDirty(true);
                   };
 
-                  const addSlot = (start: string, end: string) => {
-                    if (!start || !end) return;
+                  const currentInputs = slotInputs[weekDay.dayOfWeek] || { start: "07:00", end: "12:00", minRate: 35, maxRate: 45 };
 
-                    const startMin = timeToMinutes(start);
-                    const endMin = timeToMinutes(end);
-
-                    if (startMin >= endMin) {
-                      setSlotErrorMsg((prev) => ({
-                        ...prev,
-                        [weekDay.dayOfWeek]: "O horário de término deve ser posterior ao horário de início."
-                      }));
-                      return;
-                    }
-
-                    // Checa conflito com atividade externa vigente cadastrada para este dia da semana
-                    const currentExps = (currentInstructor.workExperiences || []).filter((e) => e.isCurrent);
-                    for (const exp of currentExps) {
-                      const expDay = (exp.schedule || []).find((s) => s.dayOfWeek === weekDay.dayOfWeek);
-                      if (expDay && expDay.active && expDay.slots) {
-                        for (const eSlot of expDay.slots) {
-                          const eStartMin = timeToMinutes(eSlot.start);
-                          const eEndMin = timeToMinutes(eSlot.end);
-                          if (Math.max(startMin, eStartMin) < Math.min(endMin, eEndMin)) {
-                            setSlotErrorMsg((prev) => ({
-                              ...prev,
-                              [weekDay.dayOfWeek]: `⚠️ Conflito de Expediente: Você já possui atividade externa vigente cadastrada na ${exp.companyName || "outra academia"} das ${eSlot.start} às ${eSlot.end} neste dia.`
-                            }));
-                            return;
-                          }
-                        }
-                      }
-                    }
-
-                    // Checa conflito com qualquer horário já cadastrado neste dia
-                    const currentSlots = dayAvail.slots || [];
-                    for (const existing of currentSlots) {
-                      const eStartMin = timeToMinutes(existing.start);
-                      const eEndMin = timeToMinutes(existing.end);
-
-                      // 1. Mesmo horário de início
-                      if (start === existing.start) {
-                        setSlotErrorMsg((prev) => ({
-                          ...prev,
-                          [weekDay.dayOfWeek]: `Conflito de horário: já existe um horário iniciando às ${start} (${existing.start} às ${existing.end}).`
-                        }));
-                        return;
-                      }
-
-                      // 2. Mesmo horário de término
-                      if (end === existing.end) {
-                        setSlotErrorMsg((prev) => ({
-                          ...prev,
-                          [weekDay.dayOfWeek]: `Conflito de horário: já existe um horário terminando às ${end} (${existing.start} às ${existing.end}).`
-                        }));
-                        return;
-                      }
-
-                      // 3. Sobreposição de intervalo (parcial ou total)
-                      const overlapStart = Math.max(startMin, eStartMin);
-                      const overlapEnd = Math.min(endMin, eEndMin);
-                      if (overlapStart < overlapEnd) {
-                        setSlotErrorMsg((prev) => ({
-                          ...prev,
-                          [weekDay.dayOfWeek]: `Conflito de sobreposição: o horário ${start} às ${end} colide com o horário já cadastrado das ${existing.start} às ${existing.end}.`
-                        }));
-                        return;
-                      }
-                    }
-
-                    // Sem conflito: limpa mensagem de erro e adiciona ordenado
-                    setSlotErrorMsg((prev) => ({ ...prev, [weekDay.dayOfWeek]: null }));
-
-                    const newSlots = [...currentSlots, { start, end }].sort(
-                      (a, b) => timeToMinutes(a.start) - timeToMinutes(b.start)
-                    );
-
-                    setLocalAvailability((prev) => {
-                      const exists = prev.some((d) => d.dayOfWeek === weekDay.dayOfWeek);
-                      let updated: DayAvailability[];
-                      if (exists) {
-                        updated = prev.map((d) => {
-                          if (d.dayOfWeek !== weekDay.dayOfWeek) return d;
-                          return {
-                            ...d,
-                            active: true,
-                            slots: newSlots
-                          };
-                        });
-                      } else {
-                        updated = [
-                          ...prev,
-                          {
-                            dayOfWeek: weekDay.dayOfWeek,
-                            dayName: weekDay.dayName,
-                            shortDay: weekDay.shortDay,
-                            active: true,
-                            slots: newSlots
-                          }
-                        ];
-                      }
-                      updateInstructorAvailability(activeInstructorId, updated);
-                      return updated;
-                    });
+                  const addSlot = (start: string, end: string, minRateInput?: number, maxRateInput?: number) => {
+                    return addSlotForDay(weekDay.dayOfWeek, start, end, minRateInput, maxRateInput);
                   };
-
-                  const currentInputs = slotInputs[weekDay.dayOfWeek] || { start: "07:00", end: "12:00" };
 
                   const confirmedClassesOnWeekday = shifts.filter((s) => {
                     if (!isMyInstructorId(s.confirmedInstructorId)) return false;
@@ -3339,40 +3438,58 @@ export const ProfessorView: React.FC = () => {
                                 Horários Livres Cadastrados:
                               </span>
                               <div className="flex flex-wrap gap-2">
-                                {dayAvail.slots.map((slot, sIdx) => (
-                                  <div
-                                    key={sIdx}
-                                    className="flex items-center gap-1.5 bg-primary/10 dark:bg-primary/20 text-primary border border-primary/20 px-3 py-1 rounded-full text-xs font-bold"
-                                  >
-                                    <Clock size={11} />
-                                    <span>
-                                      {slot.start} às {slot.end}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => removeSlot(sIdx)}
-                                      className="hover:text-red-500 ml-1 p-0.5 rounded-full hover:bg-white/40 transition-colors"
-                                      title="Remover horário"
+                                {dayAvail.slots.map((slot, sIdx) => {
+                                  const minR = slot.minHourlyRate || slot.hourlyRate;
+                                  const maxR = slot.hourlyRate;
+                                  const priceStr = minR && maxR && minR !== maxR ? `R$ ${minR}–${maxR}/h` : minR ? `R$ ${minR}/h` : "";
+
+                                  return (
+                                    <div
+                                      key={sIdx}
+                                      className="flex items-center gap-1.5 bg-primary/10 dark:bg-primary/20 text-primary border border-primary/20 px-3 py-1 rounded-full text-xs font-bold"
                                     >
-                                      <X size={12} />
-                                    </button>
-                                  </div>
-                                ))}
+                                      <Clock size={11} />
+                                      <span>
+                                        {slot.start} às {slot.end}
+                                      </span>
+                                      {priceStr && (
+                                        <>
+                                          <span className="text-primary/40 font-normal">·</span>
+                                          <span className="text-[11px] font-black">{priceStr}</span>
+                                        </>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => removeSlot(sIdx)}
+                                        className="hover:text-red-500 ml-1 p-0.5 rounded-full hover:bg-white/40 transition-colors"
+                                        title="Remover horário"
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
 
-                          {/* Formulário Personalizado de Horário com Stepper e Digitação Numérica */}
-                          <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                          {/* Formulário Personalizado de Horário com Stepper e Valores */}
+                          <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-700/60">
                             <span className="text-[11px] font-bold text-navy-900 dark:text-white block">
                               Cadastrar Novo Horário:
                             </span>
-                            <div className="flex flex-wrap items-center justify-between gap-2">
+
+                            {/* Linha 1: Seletores de Horário (Início até Término) */}
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold text-muted dark:text-slate-400 block">
+                                Horário (início até término):
+                              </span>
                               <div className="flex items-center gap-1.5">
                                 <TimeStepperInput
                                   value={currentInputs.start}
                                   onChange={(val) => {
                                     setSlotErrorMsg((prev) => ({ ...prev, [weekDay.dayOfWeek]: null }));
+                                    setTouchedDays((prev) => ({ ...prev, [weekDay.dayOfWeek]: true }));
                                     setSlotInputs((prev) => ({
                                       ...prev,
                                       [weekDay.dayOfWeek]: { ...currentInputs, start: val }
@@ -3385,6 +3502,7 @@ export const ProfessorView: React.FC = () => {
                                   value={currentInputs.end}
                                   onChange={(val) => {
                                     setSlotErrorMsg((prev) => ({ ...prev, [weekDay.dayOfWeek]: null }));
+                                    setTouchedDays((prev) => ({ ...prev, [weekDay.dayOfWeek]: true }));
                                     setSlotInputs((prev) => ({
                                       ...prev,
                                       [weekDay.dayOfWeek]: { ...currentInputs, end: val }
@@ -3393,20 +3511,60 @@ export const ProfessorView: React.FC = () => {
                                   ariaLabel="Horário de término"
                                 />
                               </div>
+                            </div>
 
-                              <button
-                                type="button"
-                                onClick={() => addSlot(currentInputs.start, currentInputs.end)}
-                                className="px-3.5 py-2 rounded-xl text-xs font-extrabold bg-navy-900 dark:bg-primary text-white hover:bg-navy-800 dark:hover:bg-primary-hover shadow-xs transition-colors whitespace-nowrap flex items-center gap-1 active:scale-95"
-                              >
-                                <Plus size={13} />
-                                <span>Adicionar</span>
-                              </button>
+                            {/* Linha 2: Valores da Hora/Aula (Mín - Máx) e Botão Adicionar */}
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold text-muted dark:text-slate-400 block">
+                                Valor hora/aula (mín-máx):
+                              </span>
+                              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                                <div className="flex items-center gap-1.5">
+                                  <RateStepperInput
+                                    value={currentInputs.minRate}
+                                    onChange={(val) => {
+                                      setSlotErrorMsg((prev) => ({ ...prev, [weekDay.dayOfWeek]: null }));
+                                      setTouchedDays((prev) => ({ ...prev, [weekDay.dayOfWeek]: true }));
+                                      setSlotInputs((prev) => ({
+                                        ...prev,
+                                        [weekDay.dayOfWeek]: { ...currentInputs, minRate: val }
+                                      }));
+                                    }}
+                                    ariaLabel="Valor mínimo da hora/aula"
+                                    step={5}
+                                    min={0}
+                                  />
+                                  <span className="text-xs font-bold text-muted dark:text-slate-400">até</span>
+                                  <RateStepperInput
+                                    value={currentInputs.maxRate}
+                                    onChange={(val) => {
+                                      setSlotErrorMsg((prev) => ({ ...prev, [weekDay.dayOfWeek]: null }));
+                                      setTouchedDays((prev) => ({ ...prev, [weekDay.dayOfWeek]: true }));
+                                      setSlotInputs((prev) => ({
+                                        ...prev,
+                                        [weekDay.dayOfWeek]: { ...currentInputs, maxRate: val }
+                                      }));
+                                    }}
+                                    ariaLabel="Valor máximo da hora/aula"
+                                    step={5}
+                                    min={0}
+                                  />
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => addSlot(currentInputs.start, currentInputs.end, currentInputs.minRate, currentInputs.maxRate)}
+                                  className="px-4 py-2 rounded-xl text-xs font-extrabold bg-navy-900 dark:bg-primary text-white hover:bg-navy-800 dark:hover:bg-primary-hover shadow-xs transition-colors whitespace-nowrap flex items-center gap-1 active:scale-95"
+                                >
+                                  <Plus size={13} />
+                                  <span>Adicionar</span>
+                                </button>
+                              </div>
                             </div>
 
                             {/* Mensagem de Erro de Conflito de Horário */}
                             {slotErrorMsg[weekDay.dayOfWeek] && (
-                              <div className="p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 text-xs font-semibold flex items-start gap-1.5">
+                              <div className="p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 text-xs font-semibold flex items-start gap-1.5 animate-fade-in">
                                 <AlertCircle size={14} className="shrink-0 mt-0.5 text-red-500" />
                                 <span>{slotErrorMsg[weekDay.dayOfWeek]}</span>
                               </div>
@@ -3430,11 +3588,7 @@ export const ProfessorView: React.FC = () => {
               <div className="fixed bottom-[calc(max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))+4.25rem)] landscape:bottom-14 left-0 right-0 max-w-md landscape:max-w-3xl mx-auto px-4 z-30 pointer-events-none">
                 <button
                   type="button"
-                  onClick={() => {
-                    updateInstructorAvailability(activeInstructorId, localAvailability);
-                    setSaveAvailabilityMsg("Sua grade de horários foi salva e sincronizada com sucesso!");
-                    setTimeout(() => setSaveAvailabilityMsg(null), 4000);
-                  }}
+                  onClick={handleSaveWeeklySchedule}
                   className="pointer-events-auto w-full bg-primary hover:bg-primary-hover text-white text-xs font-extrabold py-3.5 rounded-full shadow-lg shadow-primary/30 active:scale-[0.99] transition-all flex items-center justify-center gap-2 border border-white/20"
                 >
                   <Check size={16} strokeWidth={2.5} />
@@ -6261,7 +6415,7 @@ export const ProfessorView: React.FC = () => {
         } backdrop-blur-md border-t px-6 pt-3.5 pb-[max(2rem,calc(1rem+env(safe-area-inset-bottom,24px)))] landscape:py-2 flex justify-between items-center transition-all duration-300`}
       >
         <button
-          onClick={() => setActiveTab("inicio")}
+          onClick={() => safeNavigateTab("inicio")}
           className={`flex flex-col items-center gap-1 text-xs font-semibold transition-all duration-300 ${
             showOnboarding
               ? activeTab === "inicio"
@@ -6277,7 +6431,7 @@ export const ProfessorView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab("propostas")}
+          onClick={() => safeNavigateTab("propostas")}
           className={`flex flex-col items-center gap-1 text-xs font-semibold relative transition-all duration-300 ${
             showOnboarding
               ? activeTab === "propostas"
@@ -6300,7 +6454,7 @@ export const ProfessorView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab("agenda")}
+          onClick={() => safeNavigateTab("agenda")}
           className={`flex flex-col items-center gap-1 text-xs font-semibold transition-all duration-300 ${
             showOnboarding
               ? activeTab === "agenda"
@@ -6316,7 +6470,7 @@ export const ProfessorView: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab("perfil")}
+          onClick={() => safeNavigateTab("perfil")}
           className={`flex flex-col items-center gap-1 text-xs font-semibold transition-all duration-300 ${
             showOnboarding
               ? activeTab === "perfil"
@@ -8653,6 +8807,171 @@ export const ProfessorView: React.FC = () => {
           </button>
         </div>
       </AnimatedModal>
+
+      {/* Modal 1: Alerta de Horário Não Adicionado ao Salvar Grade */}
+      {draftAlertDay && (
+        <AnimatedModal
+          isOpen={draftAlertDay !== null}
+          onClose={() => setDraftAlertDay(null)}
+          className="p-6 space-y-4 max-w-sm text-center"
+        >
+          <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+            <AlertTriangle size={24} />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
+              Horário não adicionado
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+              {touchedDays[draftAlertDay.dayOfWeek] ? (
+                <>
+                  Você alterou os horários ou valores de{" "}
+                  <strong className="text-navy-900 dark:text-white">
+                    {draftAlertDay.dayName}
+                  </strong>
+                  , mas ainda não clicou em <strong>+ Adicionar</strong> para incluir na sua grade.
+                </>
+              ) : (
+                <>
+                  O dia{" "}
+                  <strong className="text-navy-900 dark:text-white">
+                    {draftAlertDay.dayName}
+                  </strong>{" "}
+                  está ativo, mas não possui nenhum horário adicionado à grade.
+                </>
+              )}
+            </p>
+          </div>
+          <div className="pt-2 flex flex-col gap-2">
+            {touchedDays[draftAlertDay.dayOfWeek] ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const inputs = slotInputs[draftAlertDay.dayOfWeek] || {
+                      start: "07:00",
+                      end: "12:00",
+                      minRate: 35,
+                      maxRate: 45
+                    };
+                    const success = addSlotForDay(
+                      draftAlertDay.dayOfWeek,
+                      inputs.start,
+                      inputs.end,
+                      inputs.minRate,
+                      inputs.maxRate
+                    );
+                    if (success) {
+                      setDraftAlertDay(null);
+                      executeSaveWeeklySchedule();
+                    }
+                  }}
+                  className="w-full py-2.5 rounded-full text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                >
+                  Adicionar e Salvar Grade
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftAlertDay(null);
+                    executeSaveWeeklySchedule();
+                  }}
+                  className="w-full py-2 rounded-full text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-navy-800 transition-all"
+                >
+                  Salvar sem adicionar este horário
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftAlertDay(null);
+                  executeSaveWeeklySchedule();
+                }}
+                className="w-full py-2.5 rounded-full text-xs font-black bg-navy-900 dark:bg-white text-white dark:text-navy-900 shadow-sm transition-all"
+              >
+                Salvar mesmo assim
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setDraftAlertDay(null)}
+              className="w-full py-2 rounded-full text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-all"
+            >
+              Revisar Grade
+            </button>
+          </div>
+        </AnimatedModal>
+      )}
+
+      {/* Modal 2: Alerta de Alterações Não Salvas na Grade ao Trocar de Tela */}
+      {showUnsavedChangesModal && (
+        <AnimatedModal
+          isOpen={showUnsavedChangesModal}
+          onClose={() => {
+            setShowUnsavedChangesModal(false);
+            setPendingNavigation(null);
+          }}
+          className="p-6 space-y-4 max-w-sm text-center"
+        >
+          <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+            <AlertTriangle size={24} />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-navy-900 dark:text-white">
+              Alterações não salvas
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+              Você fez alterações na sua Grade Semanal que ainda não foram salvas. Se sair agora, as novas configurações de horários e valores serão perdidas.
+            </p>
+          </div>
+          <div className="pt-2 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                executeSaveWeeklySchedule();
+                setShowUnsavedChangesModal(false);
+                if (pendingNavigation) {
+                  const nav = pendingNavigation;
+                  setPendingNavigation(null);
+                  nav();
+                }
+              }}
+              className="w-full py-2.5 rounded-full text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+            >
+              Salvar e Continuar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const rawInst = instructors.find((i) => i.id === activeInstructorId);
+                setLocalAvailability(rawInst?.availability ? JSON.parse(JSON.stringify(rawInst.availability)) : []);
+                setIsScheduleDirty(false);
+                setTouchedDays({});
+                setShowUnsavedChangesModal(false);
+                if (pendingNavigation) {
+                  const nav = pendingNavigation;
+                  setPendingNavigation(null);
+                  nav();
+                }
+              }}
+              className="w-full py-2.5 rounded-full text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all"
+            >
+              Descartar Alterações
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowUnsavedChangesModal(false);
+                setPendingNavigation(null);
+              }}
+              className="w-full py-2 rounded-full text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-all"
+            >
+              Continuar Editando
+            </button>
+          </div>
+        </AnimatedModal>
+      )}
 
     </div>
   );

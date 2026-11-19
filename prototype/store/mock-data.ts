@@ -67,6 +67,8 @@ export const GYM_QUALITY_BADGES: QualityBadge[] = [
 export interface TimeInterval {
   start: string; // Ex: '07:00'
   end: string;   // Ex: '12:00'
+  hourlyRate?: number;    // Valor máximo/padrão da hora/aula
+  minHourlyRate?: number; // Valor mínimo negociável da hora/aula
 }
 
 export interface DayAvailability {
