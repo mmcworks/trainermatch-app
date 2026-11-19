@@ -17,6 +17,7 @@ export interface AnimatedModalProps {
   defaultExpanded?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: (expanded: boolean) => void;
+  preserveBottomSpacing?: boolean;
 }
 
 let activeModalsCount = 0;
@@ -57,6 +58,7 @@ export function AnimatedModal({
   defaultExpanded = false,
   isExpanded: controlledExpanded,
   onToggleExpand,
+  preserveBottomSpacing = false,
 }: AnimatedModalProps) {
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [mounted, setMounted] = useState(isOpen);
@@ -159,6 +161,13 @@ export function AnimatedModal({
     ? "overflow-hidden"
     : "overflow-y-auto";
 
+  // Área inferior reforçada para modais que sobem de baixo para cima (estilo bottom-sheet),
+  // garantindo distância confortável da borda física da tela e de barras de gestos mobile
+  const bottomPaddingClass =
+    isBottomAlign && !preserveBottomSpacing
+      ? "pb-8 sm:pb-9 pb-[max(2rem,calc(1.5rem+env(safe-area-inset-bottom,20px)))]"
+      : "";
+
   return (
     <div
       className={`fixed inset-0 z-50 bg-navy-900/60 backdrop-blur-xs flex justify-center ${alignOverlay} ${
@@ -172,7 +181,7 @@ export function AnimatedModal({
       <div
         className={`bg-card dark:bg-navy-800 w-full max-w-md landscape:max-w-xl ${roundedClasses} shadow-floating ${
           isBottomAlign ? "border-t landscape:border" : "border"
-        } border-slate-100 dark:border-slate-700 ${heightClasses} flex flex-col ${overflowClass} transition-all duration-300 ${className} ${
+        } border-slate-100 dark:border-slate-700 ${heightClasses} flex flex-col ${overflowClass} transition-all duration-300 ${className} ${bottomPaddingClass} ${
           isClosing ? "animate-sheet-down" : "animate-sheet-up"
         }`}
         onClick={(e) => e.stopPropagation()}

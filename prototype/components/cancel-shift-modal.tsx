@@ -228,7 +228,7 @@ export const CancelShiftModal: React.FC<CancelShiftModalProps> = ({
         </div>
 
         {/* Rodapé com Ações */}
-        <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-navy-900/50 flex items-center gap-2.5">
+        <div className="p-4 pb-8 sm:p-5 pb-[max(2rem,calc(1.25rem+env(safe-area-inset-bottom,16px)))] border-t border-slate-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-navy-900/50 flex items-center gap-2.5">
           <button
             type="button"
             onClick={onClose}

@@ -7168,6 +7168,7 @@ export const ProfessorView: React.FC = () => {
         onClose={() => setShowOfferSlotWizard(false)}
         maxWidth="max-w-lg"
         defaultExpanded={true}
+        preserveBottomSpacing={true}
         className="p-5 sm:p-6"
       >
         {(() => {
