@@ -1973,7 +1973,7 @@ export const useAppStore = create<AppState>()(
   }
 }),
     {
-      name: "trainermatch-app-storage",
+      name: "trainermatch-storage-v2",
       partialize: (state) => ({
         instructors: state.instructors,
         gyms: state.gyms,

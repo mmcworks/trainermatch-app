@@ -21,7 +21,7 @@ export default function RootLayout({
     }
   }, [isDarkMode]);
 
-  // Previne zoom indesejado (pinch/double-tap) mantendo a fluidez de aplicativo nativo
+  // Previne zoom indesejado (pinch) mantendo a fluidez de aplicativo nativo sem bloquear cliques
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -30,31 +30,14 @@ export default function RootLayout({
       e.preventDefault();
     };
 
-    // Previne double-tap zoom em dispositivos móveis
-    let lastTouchEnd = 0;
-    const handleTouchEnd = (e: TouchEvent) => {
-      // Ignora se estiver interagindo com elementos de texto ou botões normais com múltiplos toques
-      const now = Date.now();
-      if (now - lastTouchEnd <= 300) {
-        // Apenas cancela se o alvo não for um campo de texto selecionável
-        const target = e.target as HTMLElement | null;
-        if (target && !["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) {
-          e.preventDefault();
-        }
-      }
-      lastTouchEnd = now;
-    };
-
     document.addEventListener("gesturestart", handleGesture as any, { passive: false });
     document.addEventListener("gesturechange", handleGesture as any, { passive: false });
     document.addEventListener("gestureend", handleGesture as any, { passive: false });
-    document.addEventListener("touchend", handleTouchEnd, { passive: false });
 
     return () => {
       document.removeEventListener("gesturestart", handleGesture as any);
       document.removeEventListener("gesturechange", handleGesture as any);
       document.removeEventListener("gestureend", handleGesture as any);
-      document.removeEventListener("touchend", handleTouchEnd);
     };
   }, []);
 

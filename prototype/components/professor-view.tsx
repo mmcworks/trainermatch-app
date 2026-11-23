@@ -4972,7 +4972,8 @@ export const ProfessorView: React.FC = () => {
                   type="button"
                   onClick={() => {
                     if (!editFullName.trim()) {
-                      alert("Por favor, preencha o seu nome completo.");
+                      setProfileSuccessMsg("⚠️ Por favor, preencha o seu nome completo.");
+                      setTimeout(() => setProfileSuccessMsg(null), 3500);
                       return;
                     }
                     const targetId = currentInstructor.id || activeInstructorId;

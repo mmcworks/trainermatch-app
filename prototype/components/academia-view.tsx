@@ -7818,7 +7818,8 @@ export const AcademiaView: React.FC = () => {
               type="button"
               onClick={() => {
                 if (!profileName.trim()) {
-                  alert("Por favor, preencha o nome da academia.");
+                  setProfileSuccessMsg("⚠️ Por favor, preencha o nome da academia.");
+                  setTimeout(() => setProfileSuccessMsg(null), 3500);
                   return;
                 }
                 const gymId = currentGym.id || activeGymId;

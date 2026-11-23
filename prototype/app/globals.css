@@ -8,13 +8,17 @@
 
 html,
 body {
-  touch-action: pan-x pan-y;
+  touch-action: manipulation;
   overscroll-behavior-y: none;
   font-family: var(--font-plus-jakarta);
   -webkit-font-smoothing: antialiased;
   background-color: #F4F6F9;
   color: #0F172A;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+button, a, input, select, textarea {
+  touch-action: manipulation;
 }
 
 html.dark body,
