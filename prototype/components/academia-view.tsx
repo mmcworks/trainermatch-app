@@ -59,7 +59,8 @@ import {
   ThumbsUp,
   XCircle,
   Database,
-  CalendarCheck
+  CalendarCheck,
+  Edit3
 } from "lucide-react";
 import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, Proposal, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
 import {
@@ -151,7 +152,19 @@ export const AcademiaView: React.FC = () => {
     }
   };
 
-  const currentGym = gyms.find((g) => g.id === activeGymId) || fallbackGym;
+  const currentGym = (
+    gyms.find((g) => g.id === activeGymId) ||
+    gyms.find((g) => !g.isDeleted && g.id !== "gym-1") ||
+    gyms.find((g) => !g.isDeleted) ||
+    gyms[0] ||
+    fallbackGym
+  );
+
+  useEffect(() => {
+    if (!activeGymId && currentGym?.id && currentGym.id !== "gym-new") {
+      useAppStore.setState({ activeGymId: currentGym.id });
+    }
+  }, [activeGymId, currentGym?.id]);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -320,6 +333,7 @@ export const AcademiaView: React.FC = () => {
   const [showNewModalityModal, setShowNewModalityModal] = useState<boolean>(false);
   const [selectedPredefinedModality, setSelectedPredefinedModality] = useState<string>("Beach Tennis");
   const [customModalityInput, setCustomModalityInput] = useState<string>("");
+  const [showEditUnitModal, setShowEditUnitModal] = useState<boolean>(false);
 
   // Filtros Mobile - Foco inicial no dia atual
   const [mobileSelectedDate, setMobileSelectedDate] = useState<string>("2026-11-11");
@@ -657,7 +671,7 @@ export const AcademiaView: React.FC = () => {
   };
 
   const handleSavePricing = () => {
-    updateGymPricing(activeGymId, {
+    updateGymPricing(currentGym.id || activeGymId, {
       modalityRates: pricingModalityRates,
       peakHourAddition: pricingPeakHourAddition,
       weekendAddition: pricingWeekendAddition
@@ -741,7 +755,7 @@ export const AcademiaView: React.FC = () => {
     if (!profileModalities.includes(modToAdd)) {
       const updated = [...profileModalities, modToAdd];
       setProfileModalities(updated);
-      updateGymProfile(activeGymId, { modalities: updated });
+      updateGymProfile(currentGym.id || activeGymId, { modalities: updated });
     }
     setCustomModalityInput("");
     setShowNewModalityModal(false);
@@ -2137,7 +2151,17 @@ export const AcademiaView: React.FC = () => {
 
                 {/* Dados da Unidade */}
                 <div className="bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-2 text-xs">
-                  <h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider mb-2">Dados da Unidade</h4>
+                  <div className="flex justify-between items-center mb-1">
+                    <h4 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">Dados da Unidade</h4>
+                    <button
+                      type="button"
+                      onClick={() => setShowEditUnitModal(true)}
+                      className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Edit3 size={12} />
+                      <span>Editar</span>
+                    </button>
+                  </div>
                   <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-700/60">
                     <span className="text-muted dark:text-slate-400">CNPJ:</span>
                     <span className="font-bold text-navy-900 dark:text-white">{profileCnpj}</span>
@@ -7639,6 +7663,214 @@ export const AcademiaView: React.FC = () => {
           </div>
         )}
       </AnimatedModal>
+
+      {/* ===================== MODAL DE EDIÇÃO DOS DADOS DA UNIDADE (MOBILE) ===================== */}
+      <AnimatedModal
+        isOpen={showEditUnitModal}
+        onClose={() => setShowEditUnitModal(false)}
+        className="p-5 space-y-4 max-h-[85vh] overflow-y-auto"
+      >
+        <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-700">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+              <Building2 size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-navy-900 dark:text-white">Editar Dados da Unidade</h3>
+              <p className="text-[11px] text-muted dark:text-slate-400">Informações cadastrais e endereço da academia</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowEditUnitModal(false)}
+            className="w-7 h-7 rounded-full bg-slate-100 dark:bg-navy-700 flex items-center justify-center text-slate-500 hover:text-navy-900 dark:hover:text-white transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const gymId = currentGym.id || activeGymId;
+            updateGymProfile(gymId, {
+              name: profileName,
+              cnpj: profileCnpj,
+              phone: profilePhone,
+              email: profileEmail,
+              address: profileAddress,
+              neighborhood: profileNeighborhood,
+              city: profileCity,
+              managerName: profileManagerName,
+              managerRole: profileManagerRole,
+              managerPhone: profileManagerPhone,
+              managerEmail: profileManagerEmail
+            });
+            setShowEditUnitModal(false);
+            setProfileSuccessMsg("Dados cadastrais da unidade atualizados com sucesso!");
+            setTimeout(() => setProfileSuccessMsg(null), 4000);
+          }}
+          className="space-y-3 text-xs"
+        >
+          <div className="space-y-1">
+            <label className="font-bold text-navy-900 dark:text-white">Nome da Academia</label>
+            <input
+              type="text"
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary font-bold"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="font-bold text-navy-900 dark:text-white">CNPJ</label>
+              <input
+                type="text"
+                value={profileCnpj}
+                onChange={(e) => setProfileCnpj(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="font-bold text-navy-900 dark:text-white">Telefone da Unidade</label>
+              <input
+                type="text"
+                value={profilePhone}
+                onChange={(e) => setProfilePhone(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="font-bold text-navy-900 dark:text-white">E-mail de Contato</label>
+            <input
+              type="email"
+              value={profileEmail}
+              onChange={(e) => setProfileEmail(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="font-bold text-navy-900 dark:text-white">Endereço Completo</label>
+            <input
+              type="text"
+              value={profileAddress}
+              onChange={(e) => setProfileAddress(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="font-bold text-navy-900 dark:text-white">Bairro</label>
+              <input
+                type="text"
+                value={profileNeighborhood}
+                onChange={(e) => setProfileNeighborhood(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="font-bold text-navy-900 dark:text-white">Cidade</label>
+              <input
+                type="text"
+                value={profileCity}
+                onChange={(e) => setProfileCity(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary"
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 space-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted dark:text-slate-400 block">
+              Dados do Gestor / Responsável
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="font-bold text-navy-900 dark:text-white">Nome do Responsável</label>
+                <input
+                  type="text"
+                  value={profileManagerName}
+                  onChange={(e) => setProfileManagerName(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-navy-900 dark:text-white">Cargo / Função</label>
+                <input
+                  type="text"
+                  value={profileManagerRole}
+                  onChange={(e) => setProfileManagerRole(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="font-bold text-navy-900 dark:text-white">Telefone Celular</label>
+                <input
+                  type="text"
+                  value={profileManagerPhone}
+                  onChange={(e) => setProfileManagerPhone(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-navy-900 dark:text-white">E-mail do Gestor</label>
+                <input
+                  type="email"
+                  value={profileManagerEmail}
+                  onChange={(e) => setProfileManagerEmail(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-navy-900 dark:text-white focus:outline-primary"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setShowEditUnitModal(false)}
+              className="flex-1 py-2.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-navy-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-navy-600 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-2.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary-hover shadow-sm transition-all"
+            >
+              Salvar Dados
+            </button>
+          </div>
+        </form>
+      </AnimatedModal>
+
+      {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO NO RODAPÉ ===================== */}
+      {(profileSuccessMsg || inviteSuccessMsg) && (
+        <div className="fixed bottom-24 left-4 right-4 max-w-md mx-auto z-[9999] pointer-events-auto animate-bounce">
+          <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-floating border border-emerald-400/40 backdrop-blur-md flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <CheckCircle size={18} className="text-white shrink-0" />
+              <span className="text-xs font-bold leading-snug">{profileSuccessMsg || inviteSuccessMsg}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setProfileSuccessMsg(null);
+                setInviteSuccessMsg(null);
+              }}
+              className="text-white/80 hover:text-white p-1 shrink-0"
+              title="Fechar notificação"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

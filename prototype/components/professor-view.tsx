@@ -404,7 +404,18 @@ export const ProfessorView: React.FC = () => {
     }
   };
 
-  const rawInstructor: Instructor = (instructors.find((i) => i.id === activeInstructorId) || fallbackInstructor) as Instructor;
+  const rawInstructor: Instructor = (
+    instructors.find((i) => i.id === activeInstructorId) ||
+    instructors.find((i) => !i.isDeleted) ||
+    instructors[0] ||
+    fallbackInstructor
+  ) as Instructor;
+
+  useEffect(() => {
+    if (!activeInstructorId && rawInstructor?.id && rawInstructor.id !== "inst-new") {
+      useAppStore.setState({ activeInstructorId: rawInstructor.id });
+    }
+  }, [activeInstructorId, rawInstructor?.id]);
   const currentInstructor = useMemo(() => ({
     ...rawInstructor,
     criteria: rawInstructor.criteria || {
@@ -3637,6 +3648,17 @@ export const ProfessorView: React.FC = () => {
       {/* ===================== TAB: PERFIL (ESTILO IFOOD COM ÍCONES OUTLINE LIGHT NA COR DA FONTE) ===================== */}
       {activeTab === "perfil" && (
         <main className="p-5 space-y-4 animate-fade-in">
+          {profileSuccessMsg && (
+            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center justify-between gap-3 shadow-md animate-fade-in">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="text-xs font-black text-emerald-800 dark:text-emerald-200">{profileSuccessMsg}</span>
+              </div>
+              <button type="button" onClick={() => setProfileSuccessMsg(null)} className="text-emerald-700 dark:text-emerald-300 p-1">
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           {/* 1. Card Superior: Foto Clicável, Nome, CREF e Nota Geral com Estrela */}
           <div className="bg-card dark:bg-navy-800 rounded-squircle p-6 shadow-soft border border-slate-100 dark:border-slate-800 text-center space-y-3">
@@ -4673,7 +4695,7 @@ export const ProfessorView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  updateInstructorProfile(activeInstructorId, { avatar: "" });
+                  updateInstructorProfile(currentInstructor.id || activeInstructorId, { avatar: "" });
                   setShowAvatarModal(false);
                   setProfileSuccessMsg("Foto removida. Avatar padrão com ícone aplicado.");
                   setTimeout(() => setProfileSuccessMsg(null), 3000);
@@ -4697,7 +4719,7 @@ export const ProfessorView: React.FC = () => {
               if (e.key === "Enter") {
                 const val = (e.target as HTMLInputElement).value.trim();
                 if (val) {
-                  updateInstructorProfile(activeInstructorId, { avatar: val });
+                  updateInstructorProfile(currentInstructor.id || activeInstructorId, { avatar: val });
                   setShowAvatarModal(false);
                   setProfileSuccessMsg("Foto personalizada salva com sucesso!");
                   setTimeout(() => setProfileSuccessMsg(null), 3000);
@@ -5155,7 +5177,7 @@ export const ProfessorView: React.FC = () => {
                   const finalList = [...updated, newKeyItem];
                   setPixList(finalList);
 
-                  updateInstructorProfile(activeInstructorId, {
+                  updateInstructorProfile(currentInstructor.id || activeInstructorId, {
                     pixKeys: finalList,
                     pixKey: willBeDefault ? newKeyItem.key : currentInstructor.pixKey || newKeyItem.key,
                     bankInfo: {
@@ -5237,7 +5259,7 @@ export const ProfessorView: React.FC = () => {
                                   isDefault: k.id === item.id
                                 }));
                                 setPixList(updated);
-                                updateInstructorProfile(activeInstructorId, {
+                                updateInstructorProfile(currentInstructor.id || activeInstructorId, {
                                   pixKeys: updated,
                                   pixKey: item.key
                                 });
@@ -5258,7 +5280,7 @@ export const ProfessorView: React.FC = () => {
                                 updated[0].isDefault = true;
                               }
                               setPixList(updated);
-                              updateInstructorProfile(activeInstructorId, {
+                              updateInstructorProfile(currentInstructor.id || activeInstructorId, {
                                 pixKeys: updated,
                                 pixKey: updated.find((k) => k.isDefault)?.key || updated[0]?.key || ""
                               });
@@ -5999,9 +6021,9 @@ export const ProfessorView: React.FC = () => {
             </div>
       </AnimatedModal>
 
-      {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO NO TOPO ===================== */}
+      {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO ===================== */}
       {(profileSuccessMsg || offerSuccessMsg || saveAvailabilityMsg) && (
-        <div className="fixed top-[max(0.75rem,env(safe-area-inset-top,12px))] left-4 right-4 max-w-md landscape:max-w-xl mx-auto z-[100] animate-bounce">
+        <div className="fixed bottom-24 left-4 right-4 max-w-md landscape:max-w-xl mx-auto z-[9999] pointer-events-auto animate-bounce">
           <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-floating border border-emerald-400/40 backdrop-blur-md flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <CheckCircle size={18} className="text-white shrink-0" />

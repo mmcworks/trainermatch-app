@@ -7,6 +7,7 @@ export interface PricingRules {
 export interface Gym {
   id: string;
   name: string;
+  isDeleted?: boolean;
   neighborhood: string;
   city: string;
   address: string;

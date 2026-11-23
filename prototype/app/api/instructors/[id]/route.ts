@@ -118,6 +118,10 @@ export async function PUT(
     }
 
     if (!targetInstructor) {
+      targetInstructor = await prisma.instructor.findFirst();
+    }
+
+    if (!targetInstructor) {
       return NextResponse.json({ error: "Professor não encontrado para atualização" }, { status: 404 });
     }
 

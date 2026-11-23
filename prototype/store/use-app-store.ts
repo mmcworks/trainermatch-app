@@ -984,8 +984,12 @@ export const useAppStore = create<AppState>()(
             });
           } else {
             // Usuário sem sessão ativa no banco, preserva credenciais locais salvas no persist
+            const effectiveInstructorId = get().activeInstructorId || (mergedInstructors.length > 0 ? mergedInstructors[0].id : "");
+            const effectiveGymId = get().activeGymId || (mergedGyms.length > 0 ? mergedGyms[0].id : "");
             set({
               isLoaded: true,
+              activeInstructorId: effectiveInstructorId,
+              activeGymId: effectiveGymId,
               gyms: mergedGyms,
               instructors: mergedInstructors,
               shifts,
@@ -1262,16 +1266,23 @@ export const useAppStore = create<AppState>()(
   },
 
   updateInstructorProfile: (instructorId, data) => {
-    const targetId = instructorId || get().activeInstructorId;
+    const targetId = instructorId || get().activeInstructorId || (get().instructors[0]?.id || "");
     if (!targetId) return;
 
-    set((state) => ({
-      instructors: state.instructors.map((inst) =>
-        inst.id === targetId || inst.id === get().activeInstructorId ? { ...inst, ...data } : inst
-      ),
-      ...(data.name ? { userName: data.name } : {}),
-      ...(data.email ? { userEmail: data.email } : {})
-    }));
+    set((state) => {
+      const exists = state.instructors.some((i) => i.id === targetId);
+      const updatedInstructors = exists
+        ? state.instructors.map((inst) =>
+            inst.id === targetId || inst.id === get().activeInstructorId ? { ...inst, ...data } : inst
+          )
+        : [{ id: targetId, ...data } as any, ...state.instructors];
+      return {
+        activeInstructorId: targetId,
+        instructors: updatedInstructors,
+        ...(data.name ? { userName: data.name } : {}),
+        ...(data.email ? { userEmail: data.email } : {})
+      };
+    });
 
     try {
       if (typeof window !== "undefined") {
@@ -1308,13 +1319,17 @@ export const useAppStore = create<AppState>()(
   },
 
   updateGymPricing: (gymId, pricingRules) => {
+    const targetId = gymId || get().activeGymId || (get().gyms[0]?.id || "");
+    if (!targetId) return;
+
     set((state) => ({
+      activeGymId: targetId,
       gyms: state.gyms.map((g) =>
-        g.id === gymId ? { ...g, pricingRules } : g
+        g.id === targetId ? { ...g, pricingRules } : g
       )
     }));
 
-    fetch(`/api/gyms/${gymId}`, {
+    fetch(`/api/gyms/${targetId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pricingRules })
@@ -1783,14 +1798,21 @@ export const useAppStore = create<AppState>()(
   },
 
   updateGymProfile: (gymId, data) => {
-    const targetId = gymId || get().activeGymId;
+    const targetId = gymId || get().activeGymId || (get().gyms[0]?.id || "");
     if (!targetId) return;
 
-    set((state) => ({
-      gyms: state.gyms.map((g) => (g.id === targetId ? { ...g, ...data } : g)),
-      ...(data.name ? { userName: data.name } : {}),
-      ...(data.email ? { userEmail: data.email } : {})
-    }));
+    set((state) => {
+      const exists = state.gyms.some((g) => g.id === targetId);
+      const updatedGyms = exists
+        ? state.gyms.map((g) => (g.id === targetId || g.id === get().activeGymId ? { ...g, ...data } : g))
+        : [{ id: targetId, ...data } as any, ...state.gyms];
+      return {
+        activeGymId: targetId,
+        gyms: updatedGyms,
+        ...(data.name ? { userName: data.name } : {}),
+        ...(data.email ? { userEmail: data.email } : {})
+      };
+    });
 
     try {
       if (typeof window !== "undefined") {
@@ -1798,6 +1820,7 @@ export const useAppStore = create<AppState>()(
         const stored = localStorage.getItem(cacheKey) || "{}";
         const parsed = JSON.parse(stored);
         localStorage.setItem(cacheKey, JSON.stringify({ ...parsed, ...data, id: targetId }));
+        localStorage.setItem("trainermatch_gym_cache_active", JSON.stringify({ ...parsed, ...data, id: targetId }));
       }
     } catch (e) {}
 

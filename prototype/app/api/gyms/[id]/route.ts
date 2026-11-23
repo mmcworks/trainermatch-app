@@ -99,6 +99,10 @@ export async function PUT(
     }
 
     if (!targetGym) {
+      targetGym = await prisma.gym.findFirst();
+    }
+
+    if (!targetGym) {
       return NextResponse.json({ error: "Academia não encontrada" }, { status: 404 });
     }
 
