@@ -56,12 +56,12 @@ export const PROFESSOR_QUALITY_BADGES: QualityBadge[] = [
 ];
 
 export const GYM_QUALITY_BADGES: QualityBadge[] = [
-  { id: "pontual", label: "Pontual", iconName: "Clock" },
-  { id: "atencioso", label: "Atencioso(a)", iconName: "Heart" },
-  { id: "tecnica", label: "Excelente Técnica", iconName: "Award" },
-  { id: "postura", label: "Postura exemplar", iconName: "ShieldCheck" },
-  { id: "energia", label: "Motivação e Energia", iconName: "Zap" },
-  { id: "apresentacao", label: "Boa apresentação", iconName: "Sparkles" },
+  { id: "estrutura", label: "Estrutura Moderna & Limpa", iconName: "Building2" },
+  { id: "equipamentos", label: "Equipamentos Conservados", iconName: "Dumbbell" },
+  { id: "climatizacao", label: "Ambiente Agradável", iconName: "Sun" },
+  { id: "recepcao", label: "Recepção e Equipe Nota 10", iconName: "Smile" },
+  { id: "pagamento", label: "Pagamento Pontual", iconName: "Zap" },
+  { id: "organizacao", label: "Ótima Organização", iconName: "ClipboardCheck" },
 ];
 
 export interface TimeInterval {

@@ -222,6 +222,7 @@ export const ProfessorView: React.FC = () => {
   const [isScheduleDirty, setIsScheduleDirty] = useState<boolean>(false);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState<boolean>(false);
   const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+  const [proposalToConfirmAccept, setProposalToConfirmAccept] = useState<{ id: string; gymName: string; modality: string; date: string; time: string; rate: number } | null>(null);
 
   const safeNavigate = (navAction: () => void) => {
     if (agendaSubTab === "grade" && isScheduleDirty) {
@@ -1012,8 +1013,13 @@ export const ProfessorView: React.FC = () => {
     return 3.5 + (Math.abs(hash) % 35);
   };
 
-  // Filtros combinados de modalidade, data e raio de busca (até 100km)
+  // Filtros combinados de modalidade, data e raio de busca (até 100km) - Apenas aulas atuais e futuras
   const filteredShifts = shifts.filter((s) => {
+    const todayStr = getTodayDateString();
+    // Apenas turnos que não estejam passados (data >= hoje) e em status ativo
+    if (s.date < todayStr) return false;
+    if (s.status === "realizada" || s.status === "cancelado") return false;
+
     const matchModality = selectedModality === "Todos" || s.modality === selectedModality;
     const matchDate = selectedDateFilter ? s.date === selectedDateFilter : true;
     const dist = getGymDistanceKm(s.gymId);
@@ -1076,10 +1082,11 @@ export const ProfessorView: React.FC = () => {
       (s) => s.date === dateStr && !isSlotHired(s)
     );
 
-    // 2. Grade semanal para este dia da semana (ativa para todos os dias do calendário)
+    // 2. Grade semanal para este dia da semana (apenas a partir do dia atual e datas futuras)
+    const isPastDate = dateStr < todayStr;
     const availList = (localAvailability && localAvailability.length > 0) ? localAvailability : (rawInstructor.availability || []);
     const matchingAvail = availList.find((a) => a.dayOfWeek === dayOfWeekIndex);
-    const weeklySlots = (matchingAvail?.active && matchingAvail.slots) ? matchingAvail.slots : [];
+    const weeklySlots = (!isPastDate && matchingAvail?.active && matchingAvail.slots) ? matchingAvail.slots : [];
 
     const results: {
       id: string;
@@ -2265,20 +2272,28 @@ export const ProfessorView: React.FC = () => {
                                     distanceKm: dispWarn.distanceKm,
                                     transitMinutes: dispWarn.transitMinutes,
                                     onConfirm: () => {
-                                      const res = acceptProposal(prop.id);
-                                      if (res.hasConflict) {
-                                        alert(`⚠️ Atenção: ${res.conflictMessage}`);
-                                      }
+                                      setProposalToConfirmAccept({
+                                        id: prop.id,
+                                        gymName: gym?.name || "Academia Parceira",
+                                        modality: shift.modality,
+                                        date: shift.date,
+                                        time: `${shift.startTime} às ${shift.endTime}`,
+                                        rate: prop.proposedRate || shift.rate || 45
+                                      });
                                     }
                                   });
                                   return;
                                 }
                               }
 
-                              const res = acceptProposal(prop.id);
-                              if (res.hasConflict) {
-                                alert(`⚠️ Atenção: ${res.conflictMessage}`);
-                              }
+                              setProposalToConfirmAccept({
+                                id: prop.id,
+                                gymName: gym?.name || "Academia Parceira",
+                                modality: shift?.modality || "Aula",
+                                date: shift?.date || "",
+                                time: shift ? `${shift.startTime} às ${shift.endTime}` : "",
+                                rate: prop.proposedRate || (shift as any)?.rate || 45
+                              });
                             }}
                             disabled={propConflict.hasConflict}
                             className={`w-full font-extrabold py-3 rounded-full text-sm shadow-sm transition-all ${
@@ -2636,6 +2651,25 @@ export const ProfessorView: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                {/* Banner de Aviso de Cancelamento pela Academia */}
+                {(() => {
+                  const cancelledByGymShifts = myConfirmedShifts.filter((s) => s.status === "cancelado" && s.cancelledBy === "academia");
+                  if (cancelledByGymShifts.length === 0) return null;
+                  return (
+                    <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-2xl space-y-1.5 animate-pulse-subtle">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                          <AlertCircle size={14} className="text-rose-600" />
+                          Aviso: {cancelledByGymShifts.length} {cancelledByGymShifts.length === 1 ? "aula foi cancelada" : "aulas foram canceladas"} pela academia
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-700 dark:text-slate-300">
+                        A academia parceira realizou o cancelamento de aula(s) contratada(s). O horário foi liberado novamente em sua agenda.
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 {/* Duas Abas: Aulas Confirmadas vs Horários Disponíveis */}
                 <div className="flex bg-slate-100 dark:bg-navy-800 p-1 rounded-2xl text-xs font-bold border border-slate-200/60 dark:border-slate-700">
@@ -3817,6 +3851,7 @@ export const ProfessorView: React.FC = () => {
               type="button"
               onClick={() => {
                 setSkillsSearch("");
+                setEditModalities(currentInstructor.modalities || []);
                 setShowSkillsModal(true);
               }}
               className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50/80 dark:hover:bg-navy-700/50 transition-colors group"
@@ -4840,7 +4875,8 @@ export const ProfessorView: React.FC = () => {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                updateInstructorProfile(activeInstructorId, {
+                const targetId = currentInstructor.id || activeInstructorId;
+                updateInstructorProfile(targetId, {
                   name: editFullName,
                   displayName: editDisplayName,
                   birthDate: editBirthDate,
@@ -5473,7 +5509,8 @@ export const ProfessorView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    updateInstructorProfile(activeInstructorId, { modalities: editModalities });
+                    const targetId = currentInstructor.id || activeInstructorId;
+                    updateInstructorProfile(targetId, { modalities: editModalities });
                     setShowSkillsModal(false);
                     setProfileSuccessMsg("Modalidades e habilidades atualizadas com sucesso!");
                     setTimeout(() => setProfileSuccessMsg(null), 3000);
@@ -5719,7 +5756,7 @@ export const ProfessorView: React.FC = () => {
               setCrefError("Informe o número do seu CREF.");
               return;
             }
-            updateInstructorProfile(activeInstructorId, {
+            updateInstructorProfile(currentInstructor.id || activeInstructorId, {
               cref: trimmed
             });
             setShowEditCrefModal(false);
@@ -5848,7 +5885,7 @@ export const ProfessorView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    updateInstructorProfile(activeInstructorId, { notificationsEnabled: notifications });
+                    updateInstructorProfile(currentInstructor.id || activeInstructorId, { notificationsEnabled: notifications });
                     setShowNotificationsModal(false);
                     setProfileSuccessMsg("Preferências de notificação atualizadas!");
                     setTimeout(() => setProfileSuccessMsg(null), 3000);
@@ -8973,6 +9010,57 @@ export const ProfessorView: React.FC = () => {
           </div>
         </AnimatedModal>
       )}
+
+      {/* ===================== MODAL DE CONFIRMAÇÃO DE ACEITE DE PROPOSTA (PROFESSOR) ===================== */}
+      <AnimatedModal
+        isOpen={Boolean(proposalToConfirmAccept)}
+        onClose={() => setProposalToConfirmAccept(null)}
+        ariaLabel="Confirmar Contratação"
+        className="p-5 space-y-4 max-w-sm"
+      >
+        {proposalToConfirmAccept && (
+          <div className="space-y-4">
+            <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200/70 dark:border-emerald-800/60 space-y-2">
+              <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-extrabold text-xs">
+                <CheckCircle size={15} className="text-emerald-600" />
+                <span>Confirmar aceite do horário?</span>
+              </div>
+              <p className="text-xs text-slate-700 dark:text-slate-300">
+                Você está confirmando a aula de <strong>{proposalToConfirmAccept.modality}</strong> na <strong>{proposalToConfirmAccept.gymName}</strong>.
+              </p>
+              <div className="pt-1 text-[11px] space-y-0.5 text-slate-600 dark:text-slate-400">
+                <div>📅 Data: <strong>{formatDateDDMMAAAA(proposalToConfirmAccept.date)}</strong></div>
+                <div>⏰ Horário: <strong>{proposalToConfirmAccept.time}</strong></div>
+                <div>💰 Valor acordado: <strong>R$ {proposalToConfirmAccept.rate}/h fixo</strong></div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setProposalToConfirmAccept(null)}
+                className="flex-1 py-2.5 rounded-full text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-navy-700 dark:hover:bg-navy-600 text-slate-700 dark:text-slate-200 transition-colors"
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const propId = proposalToConfirmAccept.id;
+                  setProposalToConfirmAccept(null);
+                  const res = acceptProposal(propId);
+                  if (res.hasConflict) {
+                    alert(`⚠️ Atenção: ${res.conflictMessage}`);
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-full text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+              >
+                Sim, Aceitar
+              </button>
+            </div>
+          </div>
+        )}
+      </AnimatedModal>
 
     </div>
   );

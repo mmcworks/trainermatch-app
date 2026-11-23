@@ -57,7 +57,8 @@ const BADGE_ICONS: Record<string, LucideIcon> = {
   Smile,
   Dumbbell,
   ClipboardCheck,
-  Sun
+  Sun,
+  Building2
 };
 
 export const ReviewModal: React.FC<ReviewModalProps> = ({

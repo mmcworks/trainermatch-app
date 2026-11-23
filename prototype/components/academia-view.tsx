@@ -61,7 +61,7 @@ import {
   Database,
   CalendarCheck
 } from "lucide-react";
-import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
+import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, Proposal, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
 import {
   getRecommendedInstructorsForShift,
   calculateSuggestedRate,
@@ -167,6 +167,8 @@ export const AcademiaView: React.FC = () => {
   const [activeMenu, setActiveMenu] = useState<"turnos" | "propostas" | "professores" | "assinatura" | "perfil">("turnos");
   const [scheduleViewMode, setScheduleViewMode] = useState<"mes" | "semana">("mes");
   const [proposalFilter, setProposalFilter] = useState<"todas" | "aceita" | "pendente" | "recusada">("todas");
+  const [proposalModalityFilter, setProposalModalityFilter] = useState<string>("todas");
+  const [proposalToConfirmAccept, setProposalToConfirmAccept] = useState<{ id: string; instructorName: string; modality: string; date: string; time: string; rate: number } | null>(null);
   const [showNewShiftModal, setShowNewShiftModal] = useState(false);
   // Wizard Quero Contratar um(a) Instrutor(a)
   const [showHireWizard, setShowHireWizard] = useState(false);
@@ -373,12 +375,22 @@ export const AcademiaView: React.FC = () => {
   // Form de novo turno
   const [newTitle, setNewTitle] = useState("Musculação - Turno Tarde");
   const [newModality, setNewModality] = useState("Musculação");
-  const [newDate, setNewDate] = useState("2026-11-08");
+  const [newDate, setNewDate] = useState(() => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  });
   const [newStartTime, setNewStartTime] = useState("14:00");
   const [newEndTime, setNewEndTime] = useState("18:00");
-  const [newMaxRate, setNewMaxRate] = useState<number>(() =>
-    calculateSuggestedRate(currentGym, "Musculação", "14:00", "2026-11-08")
-  );
+  const [newMaxRate, setNewMaxRate] = useState<number>(() => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return calculateSuggestedRate(currentGym, "Musculação", "14:00", `${yyyy}-${mm}-${dd}`);
+  });
 
   // Manipuladores dinâmicos que sugerem o valor de hora-aula ao alterar modalidade ou horário
   const handleModalityChange = (mod: string) => {
@@ -462,9 +474,22 @@ export const AcademiaView: React.FC = () => {
   const [gridTimeSlots, setGridTimeSlots] = useState<{ id: string; start: string; end: string }[]>([
     { id: "slot-1", start: "07:00", end: "11:00" }
   ]);
-  // Intervalo de datas da grade
-  const [gridStartDate, setGridStartDate] = useState<string>("2026-11-06");
-  const [gridEndDate, setGridEndDate] = useState<string>("2026-11-30");
+  // Intervalo de datas da grade (sempre a partir da data atual)
+  const [gridStartDate, setGridStartDate] = useState<string>(() => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  });
+  const [gridEndDate, setGridEndDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  });
   const [gridCreationFeedback, setGridCreationFeedback] = useState<string | null>(null);
   const [validationSuccessToast, setValidationSuccessToast] = useState<string | null>(null);
 
@@ -492,7 +517,12 @@ export const AcademiaView: React.FC = () => {
 
   // Manipulador para validar presença com toast de notificação
   const handleValidateAttendance = (shiftId: string, instructorName?: string) => {
-    gymValidateAttendance(shiftId);
+    const res = gymValidateAttendance(shiftId);
+    if (!res.success) {
+      alert(`⚠️ ${res.error || "Não é possível validar a presença antes da data e horário agendados."}`);
+      return;
+    }
+
     setValidationSuccessToast(
       `Presença ${instructorName ? `de ${instructorName}` : "do professor"} validada com sucesso! Turno finalizado.`
     );
@@ -514,11 +544,17 @@ export const AcademiaView: React.FC = () => {
     }
   };
 
-  // Cálculo dos turnos gerados pela grade em tempo real
+  // Cálculo dos turnos gerados pela grade em tempo real (apenas para hoje e datas futuras)
   const getCalculatedGridShifts = () => {
     if (!gridStartDate || !gridEndDate || gridWeekDays.length === 0 || gridTimeSlots.length === 0) {
       return [];
     }
+
+    const today = new Date();
+    const todayYyyy = today.getFullYear();
+    const todayMm = String(today.getMonth() + 1).padStart(2, "0");
+    const todayDd = String(today.getDate()).padStart(2, "0");
+    const todayStr = `${todayYyyy}-${todayMm}-${todayDd}`;
 
     const start = new Date(gridStartDate + "T00:00:00");
     const end = new Date(gridEndDate + "T23:59:59");
@@ -535,21 +571,24 @@ export const AcademiaView: React.FC = () => {
         const day = String(current.getDate()).padStart(2, "0");
         const dateStr = `${year}-${month}-${day}`;
 
-        gridTimeSlots.forEach((slot) => {
-          if (slot.start && slot.end) {
-            generatedShifts.push({
-              gymId: activeGymId,
-              title: newTitle || `${newModality} - Grade`,
-              modality: newModality,
-              origin: "grade",
-              date: dateStr,
-              dateFormatted: `${formatDateDDMMAAAA(dateStr)} · ${slot.start} – ${slot.end}`,
-              startTime: slot.start,
-              endTime: slot.end,
-              maxRate: newMaxRate
-            });
-          }
-        });
+        // Regra obrigatória: Grade semanal deve conter somente datas a partir de hoje e datas futuras
+        if (dateStr >= todayStr) {
+          gridTimeSlots.forEach((slot) => {
+            if (slot.start && slot.end) {
+              generatedShifts.push({
+                gymId: activeGymId,
+                title: newTitle || `${newModality} - Grade`,
+                modality: newModality,
+                origin: "grade",
+                date: dateStr,
+                dateFormatted: `${formatDateDDMMAAAA(dateStr)} · ${slot.start} – ${slot.end}`,
+                startTime: slot.start,
+                endTime: slot.end,
+                maxRate: newMaxRate
+              });
+            }
+          });
+        }
       }
       current.setDate(current.getDate() + 1);
     }
@@ -558,11 +597,31 @@ export const AcademiaView: React.FC = () => {
   };
 
   const filteredProposals = gymProposals.filter((p) => {
-    if (proposalFilter === "todas") return true;
-    return p.status === proposalFilter;
+    const shift = shifts.find(s => s.id === p.shiftId);
+    if (!shift) return false;
+    const matchStatus = proposalFilter === "todas" ? true : p.status === proposalFilter;
+    const matchModality = proposalModalityFilter === "todas" ? true : shift.modality === proposalModalityFilter;
+    return matchStatus && matchModality;
   });
 
-  const handleAcceptProposal = (proposalId: string) => {
+  const startAcceptProposal = (proposal: Proposal) => {
+    const shift = shifts.find(s => s.id === proposal.shiftId);
+    const instructor = instructors.find(i => i.id === proposal.instructorId);
+    setProposalToConfirmAccept({
+      id: proposal.id,
+      instructorName: instructor?.name || "Professor",
+      modality: shift?.modality || "Aula",
+      date: shift?.date || "",
+      time: shift ? `${shift.startTime} às ${shift.endTime}` : "",
+      rate: proposal.proposedRate || (shift as any)?.rate || 45
+    });
+  };
+
+  const confirmAcceptProposalAction = () => {
+    if (!proposalToConfirmAccept) return;
+    const proposalId = proposalToConfirmAccept.id;
+    setProposalToConfirmAccept(null);
+
     const result = acceptProposal(proposalId);
     if (result.hasConflict) {
       alert(`⚠️ Conflito de Horário / Deslocamento: ${result.conflictMessage}`);
@@ -799,6 +858,25 @@ export const AcademiaView: React.FC = () => {
             {/* ABA 1: AGENDA (MOBILE) */}
             {activeMenu === "turnos" && (
               <div className="space-y-4">
+                {/* Banner de Aviso de Cancelamento pelo Professor (Mobile) */}
+                {(() => {
+                  const cancelledByInstructor = gymShifts.filter((s) => s.status === "cancelado" && s.cancelledBy === "professor");
+                  if (cancelledByInstructor.length === 0) return null;
+                  return (
+                    <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-2xl space-y-1.5 animate-pulse-subtle">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                          <AlertCircle size={14} className="text-rose-600" />
+                          Aviso: {cancelledByInstructor.length} {cancelledByInstructor.length === 1 ? "aula foi cancelada" : "aulas foram canceladas"} pelo professor
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-700 dark:text-slate-300">
+                        O professor contratado realizou o cancelamento de aula(s) confirmada(s). O horário foi liberado novamente em sua agenda para nova contratação.
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 {/* Botões de Ação da Agenda Mobile */}
                 <div className="space-y-2">
                   <button
@@ -813,7 +891,9 @@ export const AcademiaView: React.FC = () => {
 
                   <button
                     onClick={() => {
-                      setNewDate("2026-11-08");
+                      const today = new Date();
+                      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                      setNewDate(todayStr);
                       setShowNewShiftModal(true);
                     }}
                     className="w-full flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-navy-800 dark:hover:bg-navy-700 text-slate-700 dark:text-slate-200 text-xs font-bold py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 active:scale-[0.98] transition-all"
@@ -1303,119 +1383,170 @@ export const AcademiaView: React.FC = () => {
                   <p className="text-xs text-muted dark:text-slate-400">Analise e confirme professores pelo valor fixo da aula</p>
                 </div>
 
-                {/* Filtros de Propostas */}
-                <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                  {[
-                    { id: "todas", label: "Todas" },
-                    { id: "pendente", label: "Pendentes" },
-                    { id: "aceita", label: "Aceitas" },
-                    { id: "recusada", label: "Recusadas" }
-                  ].map((f) => (
-                    <button
-                      key={f.id}
-                      onClick={() => setProposalFilter(f.id as any)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
-                        proposalFilter === f.id
-                          ? "bg-primary text-white shadow-xs"
-                          : "bg-card dark:bg-navy-800 text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-800"
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
+                {/* Filtros de Status e Modalidade de Propostas */}
+                <div className="space-y-2">
+                  <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                    {[
+                      { id: "todas", label: "Todas" },
+                      { id: "pendente", label: "Pendentes" },
+                      { id: "aceita", label: "Aceitas" },
+                      { id: "recusada", label: "Recusadas" }
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setProposalFilter(f.id as any)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+                          proposalFilter === f.id
+                            ? "bg-primary text-white shadow-xs"
+                            : "bg-card dark:bg-navy-800 text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-800"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Filtro por Modalidade */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                    {["todas", "Musculação", "Spinning", "Funcional", "Pilates", "Crossfit", "Natação"].map((mod) => (
+                      <button
+                        key={mod}
+                        onClick={() => setProposalModalityFilter(mod)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap transition-all ${
+                          proposalModalityFilter === mod
+                            ? "bg-navy-900 text-white dark:bg-slate-100 dark:text-navy-900 shadow-xs"
+                            : "bg-slate-100 dark:bg-navy-900 text-slate-500 dark:text-slate-400 hover:text-slate-800"
+                        }`}
+                      >
+                        {mod === "todas" ? "Todas Modalidades" : mod}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Lista de Propostas */}
-                <div className="space-y-3">
+                {/* Lista de Propostas Agrupadas por Mês */}
+                <div className="space-y-4">
                   {filteredProposals.length === 0 ? (
                     <div className="bg-card dark:bg-navy-800 p-8 rounded-squircle text-center border border-slate-100 dark:border-slate-800 space-y-2">
                       <Clock className="mx-auto text-slate-300 dark:text-slate-600" size={32} />
                       <p className="text-xs font-bold text-navy-900 dark:text-white">Nenhuma proposta nesta categoria</p>
                     </div>
-                  ) : (
-                    filteredProposals.map((proposal) => {
-                      const shift = shifts.find(s => s.id === proposal.shiftId);
-                      const instructor = instructors.find(i => i.id === proposal.instructorId);
-                      if (!shift || !instructor) return null;
+                  ) : (() => {
+                    const monthsMap: Record<string, Proposal[]> = {};
+                    filteredProposals.forEach((p) => {
+                      const shift = shifts.find(s => s.id === p.shiftId);
+                      const key = shift?.date ? shift.date.substring(0, 7) : "Outros";
+                      if (!monthsMap[key]) monthsMap[key] = [];
+                      monthsMap[key].push(p);
+                    });
+
+                    const sortedMonthKeys = Object.keys(monthsMap).sort();
+
+                    return sortedMonthKeys.map((mKey) => {
+                      let monthTitle = mKey;
+                      if (mKey.includes("-")) {
+                        const [y, m] = mKey.split("-").map(Number);
+                        const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+                        monthTitle = `${monthNames[m - 1]} ${y}`;
+                      }
+
+                      const mProposals = monthsMap[mKey];
 
                       return (
-                        <div
-                          key={proposal.id}
-                          className="bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-3.5"
-                        >
-                          {/* Cabeçalho com o Turno */}
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className="text-[10px] text-primary font-bold uppercase tracking-wider block">
-                                {shift.modality} · {formatDateDDMMAAAA(shift.date)}
-                              </span>
-                              <h4 className="text-xs font-black text-navy-900 dark:text-white">{shift.title}</h4>
-                              <span className="text-[11px] text-muted dark:text-slate-400">{shift.startTime} – {shift.endTime}</span>
-                            </div>
-
-                            <div className="text-right">
-                              <span className="text-xs font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full block">
-                                R$ {proposal.proposedRate}/h fixo
-                              </span>
-                              <span className="text-[10px] text-muted dark:text-slate-400 mt-1 block">
-                                {proposal.type === "convite" ? "Convite enviado" : "Candidatura recebida"}
-                              </span>
-                            </div>
+                        <div key={mKey} className="space-y-2.5">
+                          <div className="flex items-center justify-between px-1 border-b border-slate-100 dark:border-slate-800 pb-1">
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                              <CalendarIcon size={12} className="text-primary" /> {monthTitle}
+                            </span>
+                            <span className="text-[10px] bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-bold">
+                              {mProposals.length} {mProposals.length === 1 ? "proposta" : "propostas"}
+                            </span>
                           </div>
 
-                          {/* Card do Professor com Avaliação 1 a 5 Estrelas */}
-                          <div
-                            onClick={() => setInstructorDetailModal(instructor)}
-                            className="p-3 bg-slate-50 hover:bg-slate-100/80 dark:bg-navy-900/60 dark:hover:bg-navy-900/90 rounded-2xl flex items-center gap-3 border border-slate-100 dark:border-slate-700/60 cursor-pointer transition-colors group"
-                            title="Ver detalhes e avaliações do professor"
-                          >
-                            <div className="w-11 h-11 rounded-full overflow-hidden bg-slate-200 dark:bg-navy-700 shrink-0 border border-white dark:border-navy-700 flex items-center justify-center">
-                              {instructor.avatar ? (
-                                <img src={instructor.avatar} alt={instructor.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <User size={22} className="text-primary" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <h5 className="text-xs font-bold text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">{instructor.name}</h5>
-                                <ChevronRight size={14} className="text-slate-400 opacity-60 group-hover:opacity-100 transition-opacity" />
-                              </div>
-                              {(instructor.ratingCount || 0) > 0 ? (
-                                <div className="flex items-center gap-1 text-[11px] text-amber-500 font-bold mt-0.5">
-                                  <Star size={12} fill="currentColor" strokeWidth={1.5} />
-                                  <span>{instructor.rating.toFixed(1)}</span>
-                                  <span className="text-slate-400 font-normal">· {instructor.ratingCount} contratações</span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-0.5">
-                                  <Sparkles size={11} strokeWidth={1.5} />
-                                  <span>Novo Professor · Sem avaliações</span>
-                                </div>
-                              )}
-                              <span className="text-[10px] text-muted dark:text-slate-400 block truncate">{instructor.cref}</span>
-                            </div>
-                          </div>
+                          <div className="space-y-3">
+                            {mProposals.map((proposal) => {
+                              const shift = shifts.find(s => s.id === proposal.shiftId);
+                              const instructor = instructors.find(i => i.id === proposal.instructorId);
+                              if (!shift || !instructor) return null;
 
-                          {/* Ações da Proposta com Valor Fixo */}
-                          {proposal.status === "pendente" && (
-                            <div className="space-y-2 pt-1">
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleAcceptProposal(proposal.id)}
-                                  className="flex-1 py-2.5 rounded-full text-xs font-extrabold bg-primary hover:bg-primary-hover text-white shadow-xs transition-all active:scale-95"
+                              return (
+                                <div
+                                  key={proposal.id}
+                                  className="bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-3.5"
                                 >
-                                  Aprovar e Contratar (R$ {proposal.proposedRate}/h)
-                                </button>
-                                <button
-                                  onClick={() => rejectProposal(proposal.id)}
-                                  className="px-3 py-2.5 rounded-full text-xs font-bold text-slate-500 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors"
-                                >
-                                  Recusar
-                                </button>
-                              </div>
-                            </div>
-                          )}
+                                  {/* Cabeçalho com o Turno */}
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <span className="text-[10px] text-primary font-bold uppercase tracking-wider block">
+                                        {shift.modality} · {formatDateDDMMAAAA(shift.date)}
+                                      </span>
+                                      <h4 className="text-xs font-black text-navy-900 dark:text-white">{shift.title}</h4>
+                                      <span className="text-[11px] text-muted dark:text-slate-400">{shift.startTime} – {shift.endTime}</span>
+                                    </div>
+
+                                    <div className="text-right">
+                                      <span className="text-xs font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full block">
+                                        R$ {proposal.proposedRate}/h fixo
+                                      </span>
+                                      <span className="text-[10px] text-muted dark:text-slate-400 mt-1 block">
+                                        {proposal.type === "convite" ? "Convite enviado" : "Candidatura recebida"}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Card do Professor com Avaliação 1 a 5 Estrelas */}
+                                  <div
+                                    onClick={() => setInstructorDetailModal(instructor)}
+                                    className="p-3 bg-slate-50 hover:bg-slate-100/80 dark:bg-navy-900/60 dark:hover:bg-navy-900/90 rounded-2xl flex items-center gap-3 border border-slate-100 dark:border-slate-700/60 cursor-pointer transition-colors group"
+                                    title="Ver detalhes e avaliações do professor"
+                                  >
+                                    <div className="w-11 h-11 rounded-full overflow-hidden bg-slate-200 dark:bg-navy-700 shrink-0 border border-white dark:border-navy-700 flex items-center justify-center">
+                                      {instructor.avatar ? (
+                                        <img src={instructor.avatar} alt={instructor.name} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <User size={22} className="text-primary" />
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between">
+                                        <h5 className="text-xs font-bold text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">{instructor.name}</h5>
+                                        <ChevronRight size={14} className="text-slate-400 opacity-60 group-hover:opacity-100 transition-opacity" />
+                                      </div>
+                                      {(instructor.ratingCount || 0) > 0 ? (
+                                        <div className="flex items-center gap-1 text-[11px] text-amber-500 font-bold mt-0.5">
+                                          <Star size={12} fill="currentColor" strokeWidth={1.5} />
+                                          <span>{instructor.rating.toFixed(1)}</span>
+                                          <span className="text-slate-400 font-normal">· {instructor.ratingCount} contratações</span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-0.5">
+                                          <Sparkles size={11} strokeWidth={1.5} />
+                                          <span>Novo Professor · Sem avaliações</span>
+                                        </div>
+                                      )}
+                                      <span className="text-[10px] text-muted dark:text-slate-400 block truncate">{instructor.cref}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Ações da Proposta com Valor Fixo */}
+                                  {proposal.status === "pendente" && (
+                                    <div className="space-y-2 pt-1">
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => startAcceptProposal(proposal)}
+                                          className="flex-1 py-2.5 rounded-full text-xs font-extrabold bg-primary hover:bg-primary-hover text-white shadow-xs transition-all active:scale-95"
+                                        >
+                                          Aprovar e Contratar (R$ {proposal.proposedRate}/h)
+                                        </button>
+                                        <button
+                                          onClick={() => rejectProposal(proposal.id)}
+                                          className="px-3 py-2.5 rounded-full text-xs font-bold text-slate-500 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors"
+                                        >
+                                          Recusar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
 
                           {proposal.status === "aceita" && (
                             <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-2 text-xs">
@@ -1494,15 +1625,14 @@ export const AcademiaView: React.FC = () => {
                             </div>
                           )}
 
-                          {proposal.status === "recusada" && (
-                            <div className="p-2 rounded-xl bg-slate-100 dark:bg-navy-700/60 text-center text-[11px] font-bold text-slate-500">
-                              Candidatura Recusada
-                            </div>
-                          )}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       );
-                    })
-                  )}
+                    });
+                  })()}
                 </div>
               </div>
             )}
@@ -1511,7 +1641,7 @@ export const AcademiaView: React.FC = () => {
             {activeMenu === "professores" && (() => {
               const activeTargetShift = gymShifts.find(s => s.id === (selectedShiftForRecommendations || gymShifts[0]?.id));
               const shiftRecommendations = activeTargetShift
-                ? getRecommendedInstructorsForShift(activeTargetShift, activeInstructors, recommendationSortBy, shifts, gyms)
+                ? getRecommendedInstructorsForShift(activeTargetShift, activeInstructors, recommendationSortBy, shifts, gyms, proposals)
                 : [];
 
               return (
@@ -1652,8 +1782,14 @@ export const AcademiaView: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* Badge de Prioridade de Cobertura de Horário */}
+                            {/* Badge de Prioridade de Cobertura de Horário e Candidatura */}
                             <div className="flex flex-wrap gap-1.5">
+                              {rec.hasActiveProposal && (
+                                <span className="px-2.5 py-1 rounded-full bg-primary text-white text-[10px] font-black flex items-center gap-1 shadow-xs animate-pulse-subtle">
+                                  <Sparkles size={11} className="fill-white" />
+                                  ★ Candidato Inscrito nesta Vaga
+                                </span>
+                              )}
                               {rec.isExactMatch ? (
                                 <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 text-[10px] font-black flex items-center gap-1">
                                   <Sparkles size={11} className="text-amber-500 fill-amber-500" />
@@ -2477,7 +2613,9 @@ export const AcademiaView: React.FC = () => {
 
                 <button
                   onClick={() => {
-                    setNewDate("2026-11-08");
+                    const today = new Date();
+                    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                    setNewDate(todayStr);
                     setShowNewShiftModal(true);
                   }}
                   className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-navy-800 dark:hover:bg-navy-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold px-4 py-2 rounded-full shadow-xs transition-all active:scale-95"
@@ -2569,6 +2707,24 @@ export const AcademiaView: React.FC = () => {
           {/* ===================== ABA 1: AGENDA (MÊS COMPLETO & SEMANAL) ===================== */}
           {activeMenu === "turnos" && (
             <div className="space-y-6">
+              {/* Banner de Aviso de Cancelamento pelo Professor (Desktop) */}
+              {(() => {
+                const cancelledByInstructor = gymShifts.filter((s) => s.status === "cancelado" && s.cancelledBy === "professor");
+                if (cancelledByInstructor.length === 0) return null;
+                return (
+                  <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-2xl space-y-1.5 animate-pulse-subtle">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-black text-rose-800 dark:text-rose-300 flex items-center gap-2">
+                        <AlertCircle size={16} className="text-rose-600" />
+                        Aviso: {cancelledByInstructor.length} {cancelledByInstructor.length === 1 ? "aula foi cancelada" : "aulas foram canceladas"} pelo professor
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-700 dark:text-slate-300">
+                      O professor contratado realizou o cancelamento de aula(s) confirmada(s). O horário foi liberado novamente em sua agenda para nova contratação.
+                    </p>
+                  </div>
+                );
+              })()}
               
               {/* Barra Superior da Agenda: Modos de Visualização (Esquerda), Legendas (Ao Lado) e Dropdown de Mês (Direita) */}
               <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800">
@@ -3313,11 +3469,11 @@ export const AcademiaView: React.FC = () => {
                                       </div>
 
                                       {prop.status === "pendente" && (
-                                        <div className="flex gap-2 pt-1">
-                                          <button
-                                            onClick={() => handleAcceptProposal(prop.id)}
-                                            className="flex-1 bg-primary hover:bg-primary-hover text-white font-extrabold py-2 rounded-full text-xs shadow-xs transition-all active:scale-95"
-                                          >
+                                          <div className="flex gap-2 pt-1">
+                                            <button
+                                              onClick={() => startAcceptProposal(prop)}
+                                              className="flex-1 bg-primary hover:bg-primary-hover text-white font-extrabold py-2 rounded-full text-xs shadow-xs transition-all active:scale-95"
+                                            >
                                             Aprovar (R$ {prop.proposedRate}/h)
                                           </button>
                                           <button
@@ -3994,7 +4150,7 @@ export const AcademiaView: React.FC = () => {
                           <div className="space-y-2 pt-1">
                             <div className="flex gap-2">
                               <button
-                                onClick={() => handleAcceptProposal(prop.id)}
+                                onClick={() => startAcceptProposal(prop)}
                                 className="flex-1 bg-primary text-white font-extrabold py-2.5 rounded-full text-xs shadow-xs hover:bg-primary-hover transition-all active:scale-95"
                               >
                                 Aprovar e Contratar (R$ {prop.proposedRate}/h)
@@ -4126,7 +4282,7 @@ export const AcademiaView: React.FC = () => {
               (s) => s.id === (selectedShiftForRecommendations || gymShifts[0]?.id)
             );
             const shiftRecommendations = activeTargetShift
-              ? getRecommendedInstructorsForShift(activeTargetShift, activeInstructors, recommendationSortBy, shifts, gyms)
+              ? getRecommendedInstructorsForShift(activeTargetShift, activeInstructors, recommendationSortBy, shifts, gyms, proposals)
               : [];
 
             return (
@@ -5217,6 +5373,10 @@ export const AcademiaView: React.FC = () => {
                     <input
                       type="date"
                       value={newDate}
+                      min={(() => {
+                        const today = new Date();
+                        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                      })()}
                       onChange={(e) => handleDateChange(e.target.value)}
                       className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-navy-900 dark:text-white focus:outline-primary cursor-pointer"
                     />
@@ -5529,6 +5689,10 @@ export const AcademiaView: React.FC = () => {
                         <input
                           type="date"
                           value={gridStartDate}
+                          min={(() => {
+                            const today = new Date();
+                            return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                          })()}
                           onChange={(e) => setGridStartDate(e.target.value)}
                           className="w-full p-2 bg-white dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-navy-900 dark:text-white text-xs focus:outline-primary cursor-pointer"
                         />
@@ -5538,6 +5702,10 @@ export const AcademiaView: React.FC = () => {
                         <input
                           type="date"
                           value={gridEndDate}
+                          min={gridStartDate || (() => {
+                            const today = new Date();
+                            return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                          })()}
                           onChange={(e) => setGridEndDate(e.target.value)}
                           className="w-full p-2 bg-white dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-navy-900 dark:text-white text-xs focus:outline-primary cursor-pointer"
                         />
@@ -7427,6 +7595,50 @@ export const AcademiaView: React.FC = () => {
           await cancelShift(shiftToCancel.id, "academia", reason, currentGym.name || "Academia");
         }}
       />
+
+      {/* ===================== MODAL DE CONFIRMAÇÃO DE ACEITE DE PROPOSTA ===================== */}
+      <AnimatedModal
+        isOpen={Boolean(proposalToConfirmAccept)}
+        onClose={() => setProposalToConfirmAccept(null)}
+        ariaLabel="Confirmar Contratação"
+        className="p-5 space-y-4 max-w-sm"
+      >
+        {proposalToConfirmAccept && (
+          <div className="space-y-4">
+            <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200/70 dark:border-emerald-800/60 space-y-2">
+              <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-extrabold text-xs">
+                <CheckCircle size={15} className="text-emerald-600" />
+                <span>Confirmar contratação do professor?</span>
+              </div>
+              <p className="text-xs text-slate-700 dark:text-slate-300">
+                Você está contratando <strong>{proposalToConfirmAccept.instructorName}</strong> para a aula de <strong>{proposalToConfirmAccept.modality}</strong>.
+              </p>
+              <div className="pt-1 text-[11px] space-y-0.5 text-slate-600 dark:text-slate-400">
+                <div>📅 Data: <strong>{formatDateDDMMAAAA(proposalToConfirmAccept.date)}</strong></div>
+                <div>⏰ Horário: <strong>{proposalToConfirmAccept.time}</strong></div>
+                <div>💰 Valor acordado: <strong>R$ {proposalToConfirmAccept.rate}/h fixo</strong></div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setProposalToConfirmAccept(null)}
+                className="flex-1 py-2.5 rounded-full text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-navy-700 dark:hover:bg-navy-600 text-slate-700 dark:text-slate-200 transition-colors"
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                onClick={confirmAcceptProposalAction}
+                className="flex-1 py-2.5 rounded-full text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+              >
+                Sim, Contratar
+              </button>
+            </div>
+          </div>
+        )}
+      </AnimatedModal>
 
     </div>
   );

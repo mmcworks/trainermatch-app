@@ -253,6 +253,7 @@ export interface RecommendationMatch {
   isExactMatch: boolean; // Coincidência idêntica com o início e término da vaga
   coverageType: "exact" | "full" | "partial" | "none"; // Tipo de cobertura
   isRecommended: boolean;
+  hasActiveProposal?: boolean;
   hasConflict?: boolean;
   conflictType?: "overlap" | "transit";
   conflictMessage?: string;
@@ -347,6 +348,52 @@ export function checkCheckInEligibility(
     status: "disponivel",
     message: "Horário liberado para início da aula."
   };
+}
+
+export function checkGymValidationEligibility(
+  shiftDate: string,
+  startTime: string,
+  currentSimulatedDate?: string,
+  currentSimulatedTime?: string
+): { canValidate: boolean; message?: string } {
+  const now = new Date();
+  let todayStr = currentSimulatedDate;
+  if (!todayStr) {
+    const isNov2026 = now.getFullYear() === 2026 && now.getMonth() + 1 === 11;
+    if (isNov2026) {
+      const day = String(now.getDate()).padStart(2, "0");
+      todayStr = `2026-11-${day}`;
+    } else {
+      todayStr = "2026-11-05";
+    }
+  }
+
+  // Se a data da aula for futura
+  if (shiftDate > todayStr) {
+    return {
+      canValidate: false,
+      message: `Não é possível validar presença antes da data da aula (${formatDateDDMMAAAA(shiftDate)}). A validação só é permitida no dia e horário agendado.`
+    };
+  }
+
+  // Se for no mesmo dia, verifica se o horário de início da aula já foi atingido (com 30 min de tolerância prévia)
+  if (shiftDate === todayStr) {
+    let currentTimeStr = currentSimulatedTime;
+    if (!currentTimeStr) {
+      currentTimeStr = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+    const currentMinutes = timeToMinutes(currentTimeStr);
+    const startMinutes = timeToMinutes(startTime);
+    // Permite validar a partir de 30 minutos antes do início (quando o professor já fez check-in)
+    if (currentMinutes < startMinutes - 30) {
+      return {
+        canValidate: false,
+        message: `Aguarde o horário da aula: a validação de presença é liberada a partir de 30 minutos antes do início (${startTime}).`
+      };
+    }
+  }
+
+  return { canValidate: true };
 }
 
 export function getInstructorMatchForShift(
@@ -478,16 +525,29 @@ export function getRecommendedInstructorsForShift(
   instructors: Instructor[],
   sortBy: "horarios" | "valores" | "avaliacao" = "horarios",
   allShifts?: Shift[],
-  allGyms?: Gym[]
+  allGyms?: Gym[],
+  proposals?: Proposal[]
 ): RecommendationMatch[] {
   if (!shift) return [];
   // Filtra apenas instrutores ativos e não excluídos (elimina usuários inexistentes como José da Silva)
   const activeInstructors = instructors.filter(
     (inst) => !inst.isDeleted && inst.isActive !== false && !inst.name?.toLowerCase().includes("josé da silva") && inst.cref !== "12345/ES"
   );
-  const matches = activeInstructors.map((inst) => getInstructorMatchForShift(inst, shift, allShifts, allGyms));
+  const matches = activeInstructors.map((inst) => {
+    const match = getInstructorMatchForShift(inst, shift, allShifts, allGyms);
+    const hasProposal = Boolean(proposals?.some((p) => p.shiftId === shift.id && p.instructorId === inst.id && p.status !== "recusada" && p.status !== "expirada"));
+    return {
+      ...match,
+      hasActiveProposal: hasProposal
+    };
+  });
 
   return matches.sort((a, b) => {
+    // -1º critério de OURO: Professores com proposta/candidatura para esta vaga FICAM SEMPRE NO TOPO!
+    if (a.hasActiveProposal !== b.hasActiveProposal) {
+      return a.hasActiveProposal ? -1 : 1;
+    }
+
     // 0º critério: conflito de horário/deslocamento vai para o fim
     if (a.hasConflict !== b.hasConflict) {
       return a.hasConflict ? 1 : -1;
@@ -634,7 +694,7 @@ interface AppState {
   createMultipleShifts: (shiftsData: Omit<Shift, "id" | "status">[]) => void;
   deleteShift: (shiftId: string, force?: boolean) => { success: boolean; error?: string };
   instructorCheckIn: (shiftId: string) => { success: boolean; message: string };
-  gymValidateAttendance: (shiftId: string) => void;
+  gymValidateAttendance: (shiftId: string) => { success: boolean; error?: string };
   completeShift: (shiftId: string) => void;
   cancelShift: (shiftId: string, role: "professor" | "academia", reason: string, cancelledByName: string) => Promise<boolean>;
   toggleBlockDate: (instructorId: string, dateStr: string) => Promise<void>;
@@ -1463,6 +1523,16 @@ export const useAppStore = create<AppState>()(
   },
 
   gymValidateAttendance: (shiftId) => {
+    const shift = get().shifts.find((s) => s.id === shiftId);
+    if (!shift) {
+      return { success: false, error: "Turno não encontrado." };
+    }
+
+    const eligibility = checkGymValidationEligibility(shift.date, shift.startTime);
+    if (!eligibility.canValidate) {
+      return { success: false, error: eligibility.message };
+    }
+
     set((state) => ({
       shifts: state.shifts.map((s) =>
         s.id === shiftId
@@ -1485,6 +1555,8 @@ export const useAppStore = create<AppState>()(
         completedAt: new Date().toISOString()
       })
     }).catch((err) => console.error("Erro ao validar presença:", err));
+
+    return { success: true };
   },
 
   completeShift: (shiftId) => {

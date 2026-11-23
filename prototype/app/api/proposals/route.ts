@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
 
     const parsed = proposals.map((p) => ({
       ...p,
+      proposedRate: Number(p.rate || 45),
       history: JSON.parse(p.history || "[]"),
       shift: {
         ...p.shift,
@@ -175,7 +176,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true, proposal: created });
+    return NextResponse.json({
+      success: true,
+      proposal: {
+        ...created,
+        proposedRate: Number(created.rate || 45),
+        history: JSON.parse(created.history || "[]")
+      }
+    });
   } catch (error: any) {
     console.error("Erro nas propostas:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
