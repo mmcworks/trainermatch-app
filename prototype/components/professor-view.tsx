@@ -1479,7 +1479,7 @@ export const ProfessorView: React.FC = () => {
                         {isInvite ? "Novo Convite de Aula Recebido" : "Proposta em Aberto"}
                       </span>
                       <p className="text-xs font-bold truncate text-white mt-0.5">
-                        {upGym?.name || "Academia Parceira"}: R$ {urgentProposal.proposedRate}/h fixo
+                        {upGym?.name || "Academia Parceira"}: R$ {urgentProposal.proposedRate || upShift?.rate || upShift?.maxRate || 45}/h fixo
                       </p>
                       {upShift && (
                         <p className="text-[11px] text-white/90 font-medium truncate mt-0.5">
@@ -2184,7 +2184,7 @@ export const ProfessorView: React.FC = () => {
                       <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-200/60 dark:border-slate-700">
                         <span className="text-primary font-bold">Valor fixo da hora-aula:</span>
                         <span className="font-black text-primary text-base">
-                          R$ {prop.proposedRate}/h
+                          R$ {prop.proposedRate || shift?.rate || shift?.maxRate || 45}/h
                         </span>
                       </div>
 
@@ -2315,7 +2315,7 @@ export const ProfessorView: React.FC = () => {
                           >
                             {propConflict.hasConflict
                               ? `Indisponível (${propConflict.conflictType === "overlap" ? "Conflito" : "Deslocamento Curto"})`
-                              : `Aceitar Horário (R$ ${prop.proposedRate}/h)`}
+                              : `Aceitar Horário (R$ ${prop.proposedRate || shift?.rate || shift?.maxRate || 45}/h)`}
                           </button>
                           <button
                             onClick={() => rejectProposal(prop.id)}
@@ -3648,18 +3648,6 @@ export const ProfessorView: React.FC = () => {
       {/* ===================== TAB: PERFIL (ESTILO IFOOD COM ÍCONES OUTLINE LIGHT NA COR DA FONTE) ===================== */}
       {activeTab === "perfil" && (
         <main className="p-5 space-y-4 animate-fade-in">
-          {profileSuccessMsg && (
-            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center justify-between gap-3 shadow-md animate-fade-in">
-              <div className="flex items-center gap-2.5">
-                <CheckCircle size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span className="text-xs font-black text-emerald-800 dark:text-emerald-200">{profileSuccessMsg}</span>
-              </div>
-              <button type="button" onClick={() => setProfileSuccessMsg(null)} className="text-emerald-700 dark:text-emerald-300 p-1">
-                <X size={14} />
-              </button>
-            </div>
-          )}
-
           {/* 1. Card Superior: Foto Clicável, Nome, CREF e Nota Geral com Estrela */}
           <div className="bg-card dark:bg-navy-800 rounded-squircle p-6 shadow-soft border border-slate-100 dark:border-slate-800 text-center space-y-3">
             {/* Avatar Clicável com Toque para Trocar Foto */}
@@ -6023,7 +6011,7 @@ export const ProfessorView: React.FC = () => {
 
       {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO ===================== */}
       {(profileSuccessMsg || offerSuccessMsg || saveAvailabilityMsg) && (
-        <div className="fixed bottom-24 left-4 right-4 max-w-md landscape:max-w-xl mx-auto z-[9999] pointer-events-auto animate-bounce">
+        <div className="fixed top-4 left-4 right-4 max-w-md landscape:max-w-xl mx-auto z-[99999] pointer-events-auto animate-bounce">
           <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-floating border border-emerald-400/40 backdrop-blur-md flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <CheckCircle size={18} className="text-white shrink-0" />

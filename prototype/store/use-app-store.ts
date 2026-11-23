@@ -15,7 +15,8 @@ import {
   MOCK_INSTRUCTORS,
   formatDateDDMMAAAA,
   canCancelShift,
-  WorkExperience
+  WorkExperience,
+  getTodayDateString
 } from "./mock-data";
 import { estimateDistanceBetweenLocations } from "./brazil-locations";
 
@@ -281,16 +282,7 @@ export function checkCheckInEligibility(
   const now = new Date();
 
   // Determina a data atual de referência
-  let todayStr = currentSimulatedDate;
-  if (!todayStr) {
-    const isNov2026 = now.getFullYear() === 2026 && now.getMonth() + 1 === 11;
-    if (isNov2026) {
-      const day = String(now.getDate()).padStart(2, "0");
-      todayStr = `2026-11-${day}`;
-    } else {
-      todayStr = "2026-11-05"; // fallback consistente com o mock do app
-    }
-  }
+  let todayStr = currentSimulatedDate || getTodayDateString();
 
   // Determina o horário atual de referência
   let currentTimeStr = currentSimulatedTime;
@@ -357,16 +349,7 @@ export function checkGymValidationEligibility(
   currentSimulatedTime?: string
 ): { canValidate: boolean; message?: string } {
   const now = new Date();
-  let todayStr = currentSimulatedDate;
-  if (!todayStr) {
-    const isNov2026 = now.getFullYear() === 2026 && now.getMonth() + 1 === 11;
-    if (isNov2026) {
-      const day = String(now.getDate()).padStart(2, "0");
-      todayStr = `2026-11-${day}`;
-    } else {
-      todayStr = "2026-11-05";
-    }
-  }
+  let todayStr = currentSimulatedDate || getTodayDateString();
 
   // Se a data da aula for futura
   if (shiftDate > todayStr) {
@@ -845,11 +828,11 @@ export const useAppStore = create<AppState>()(
 
           // Filtra instrutores ativos do banco
           const apiInstructors = rawInstructors.filter(
-            (i: any) => !i.isDeleted && i.isActive !== false && (isMockActive || (i.id !== "inst-1" && i.id !== "inst-2" && i.name !== "Lucas Ferreira"))
+            (i: any) => !i.isDeleted && i.isActive !== false
           );
 
           // Mescla instrutores: API + local (preservando edições locais de perfil, foto e disponibilidade)
-          let mergedInstructors = apiInstructors.length > 0 ? apiInstructors : (localInstructors.length > 0 ? localInstructors : (isMockActive ? MOCK_INSTRUCTORS : []));
+          let mergedInstructors = apiInstructors.length > 0 ? apiInstructors : (localInstructors.length > 0 ? localInstructors : MOCK_INSTRUCTORS);
           if (localInstructors.length > 0 && apiInstructors.length > 0) {
             mergedInstructors = apiInstructors.map((apiInst: any) => {
               const loc = localInstructors.find((li) => li.id === apiInst.id);
@@ -882,8 +865,8 @@ export const useAppStore = create<AppState>()(
           }
 
           // Mescla academias
-          const apiGyms = rawGyms.filter((g: any) => !g.isDeleted && (isMockActive || (g.id !== "gym-1" && g.id !== "gym-2" && g.id !== "gym-3" && g.name !== "Academia Mova")));
-          let mergedGyms = apiGyms.length > 0 ? apiGyms : (localGyms.length > 0 ? localGyms : (isMockActive ? MOCK_GYMS : []));
+          const apiGyms = rawGyms.filter((g: any) => !g.isDeleted);
+          let mergedGyms = apiGyms.length > 0 ? apiGyms : (localGyms.length > 0 ? localGyms : MOCK_GYMS);
           if (localGyms.length > 0 && apiGyms.length > 0) {
             mergedGyms = apiGyms.map((apiG: any) => {
               const loc = localGyms.find((lg) => lg.id === apiG.id);
@@ -984,8 +967,14 @@ export const useAppStore = create<AppState>()(
             });
           } else {
             // Usuário sem sessão ativa no banco, preserva credenciais locais salvas no persist
-            const effectiveInstructorId = get().activeInstructorId || (mergedInstructors.length > 0 ? mergedInstructors[0].id : "");
-            const effectiveGymId = get().activeGymId || (mergedGyms.length > 0 ? mergedGyms[0].id : "");
+            const currentInstId = get().activeInstructorId;
+            const currentGymId = get().activeGymId;
+            const effectiveInstructorId = currentInstId && currentInstId !== "inst-new"
+              ? currentInstId
+              : (mergedInstructors.length > 0 ? mergedInstructors[0].id : "inst-1");
+            const effectiveGymId = currentGymId && currentGymId !== "gym-new"
+              ? currentGymId
+              : (mergedGyms.length > 0 ? mergedGyms[0].id : "gym-1");
             set({
               isLoaded: true,
               activeInstructorId: effectiveInstructorId,
@@ -1266,8 +1255,10 @@ export const useAppStore = create<AppState>()(
   },
 
   updateInstructorProfile: (instructorId, data) => {
-    const targetId = instructorId || get().activeInstructorId || (get().instructors[0]?.id || "");
-    if (!targetId) return;
+    let targetId = instructorId || get().activeInstructorId;
+    if (!targetId || targetId === "inst-new") {
+      targetId = get().instructors.find((i) => i.id !== "inst-new")?.id || "inst-1";
+    }
 
     set((state) => {
       const exists = state.instructors.some((i) => i.id === targetId);
@@ -1798,8 +1789,10 @@ export const useAppStore = create<AppState>()(
   },
 
   updateGymProfile: (gymId, data) => {
-    const targetId = gymId || get().activeGymId || (get().gyms[0]?.id || "");
-    if (!targetId) return;
+    let targetId = gymId || get().activeGymId;
+    if (!targetId || targetId === "gym-new") {
+      targetId = get().gyms.find((g) => g.id !== "gym-new")?.id || "gym-1";
+    }
 
     set((state) => {
       const exists = state.gyms.some((g) => g.id === targetId);

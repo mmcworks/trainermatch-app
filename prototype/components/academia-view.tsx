@@ -1086,7 +1086,8 @@ export const AcademiaView: React.FC = () => {
 
                 {/* Sub-abas Mobile: Aulas Confirmadas vs Vagas Disponíveis */}
                 {(() => {
-                  const dayList = gymShifts.filter(s => mobileSelectedDate === "todas" || s.date === mobileSelectedDate);
+                  const todayStr = getTodayDateString();
+                  const dayList = gymShifts.filter(s => (mobileSelectedDate === "todas" ? s.date >= todayStr : s.date === mobileSelectedDate));
                   const confirmedList = dayList.filter(
                     s => s.status === "confirmado" || s.status === "realizada" || Boolean(s.confirmedInstructorId) || (s.status === "cancelado" && Boolean(s.confirmedInstructorId || s.confirmedInstructorName))
                   );
@@ -1500,7 +1501,7 @@ export const AcademiaView: React.FC = () => {
 
                                     <div className="text-right">
                                       <span className="text-xs font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full block">
-                                        R$ {proposal.proposedRate}/h fixo
+                                        R$ {proposal.proposedRate || shift?.rate || shift?.maxRate || 45}/h fixo
                                       </span>
                                       <span className="text-[10px] text-muted dark:text-slate-400 mt-1 block">
                                         {proposal.type === "convite" ? "Convite enviado" : "Candidatura recebida"}
@@ -1550,7 +1551,7 @@ export const AcademiaView: React.FC = () => {
                                           onClick={() => startAcceptProposal(proposal)}
                                           className="flex-1 py-2.5 rounded-full text-xs font-extrabold bg-primary hover:bg-primary-hover text-white shadow-xs transition-all active:scale-95"
                                         >
-                                          Aprovar e Contratar (R$ {proposal.proposedRate}/h)
+                                          Aprovar e Contratar (R$ {proposal.proposedRate || shift?.rate || shift?.maxRate || 45}/h)
                                         </button>
                                         <button
                                           onClick={() => rejectProposal(proposal.id)}
@@ -1980,13 +1981,6 @@ export const AcademiaView: React.FC = () => {
                   <h2 className="text-base font-black text-navy-900 dark:text-white">Perfil da Academia</h2>
                   <p className="text-xs text-muted dark:text-slate-400">Dados cadastrais, fotos e modalidades da unidade</p>
                 </div>
-
-                {profileSuccessMsg && (
-                  <div className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 p-3 rounded-2xl text-xs font-bold flex items-center gap-2 border border-emerald-200/50">
-                    <CheckCircle size={14} />
-                    <span>{profileSuccessMsg}</span>
-                  </div>
-                )}
 
                 {/* Fotos da Academia com Botões de Crop */}
                 <div className="bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-3">
@@ -3456,6 +3450,7 @@ export const AcademiaView: React.FC = () => {
                               ) : (
                                 gymProposals.slice(0, 3).map((prop) => {
                                   const inst = instructors.find((i) => i.id === prop.instructorId);
+                                  const shift = shifts.find((s) => s.id === prop.shiftId);
 
                                   return (
                                     <div key={prop.id} className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-900/60 space-y-3 border border-slate-100 dark:border-slate-700">
@@ -3488,7 +3483,7 @@ export const AcademiaView: React.FC = () => {
                                       <div className="flex justify-between items-center text-xs">
                                         <span className="text-muted dark:text-slate-400">Valor solicitado:</span>
                                         <span className="font-extrabold text-navy-900 dark:text-white text-sm">
-                                          R$ {prop.proposedRate}/h
+                                          R$ {prop.proposedRate || shift?.rate || shift?.maxRate || 45}/h
                                         </span>
                                       </div>
 
@@ -3498,7 +3493,7 @@ export const AcademiaView: React.FC = () => {
                                               onClick={() => startAcceptProposal(prop)}
                                               className="flex-1 bg-primary hover:bg-primary-hover text-white font-extrabold py-2 rounded-full text-xs shadow-xs transition-all active:scale-95"
                                             >
-                                            Aprovar (R$ {prop.proposedRate}/h)
+                                            Aprovar (R$ {prop.proposedRate || shift?.rate || shift?.maxRate || 45}/h)
                                           </button>
                                           <button
                                             onClick={() => rejectProposal(prop.id)}
@@ -3536,10 +3531,13 @@ export const AcademiaView: React.FC = () => {
               {/* LISTA COMPLETA DE TODOS OS HORÁRIOS CADASTRADOS DA UNIDADE */}
               {(() => {
                 const uniqueModalities = Array.from(new Set(gymShifts.map((s) => s.modality)));
-                const uniqueDates = Array.from(new Set(gymShifts.map((s) => s.date))).sort();
+                const todayStr = getTodayDateString();
+                const uniqueDates = Array.from(new Set(gymShifts.filter((s) => s.date >= todayStr).map((s) => s.date))).sort();
 
                 const filteredAllShifts = gymShifts.filter((shift) => {
-                  if (allShiftsDate !== "todas" && shift.date !== allShiftsDate) {
+                  if (allShiftsDate === "todas") {
+                    if (shift.date < todayStr) return false;
+                  } else if (shift.date !== allShiftsDate) {
                     return false;
                   }
                   if (allShiftsModality !== "todas" && shift.modality !== allShiftsModality) {
@@ -4166,7 +4164,7 @@ export const AcademiaView: React.FC = () => {
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted dark:text-slate-400">Valor da Proposta:</span>
-                            <span className="font-extrabold text-navy-900 dark:text-white">R$ {prop.proposedRate}/h (Fixo)</span>
+                            <span className="font-extrabold text-navy-900 dark:text-white">R$ {prop.proposedRate || shift?.rate || shift?.maxRate || 45}/h (Fixo)</span>
                           </div>
                         </div>
 
@@ -4177,7 +4175,7 @@ export const AcademiaView: React.FC = () => {
                                 onClick={() => startAcceptProposal(prop)}
                                 className="flex-1 bg-primary text-white font-extrabold py-2.5 rounded-full text-xs shadow-xs hover:bg-primary-hover transition-all active:scale-95"
                               >
-                                Aprovar e Contratar (R$ {prop.proposedRate}/h)
+                                Aprovar e Contratar (R$ {prop.proposedRate || shift?.rate || shift?.maxRate || 45}/h)
                               </button>
                               <button
                                 onClick={() => rejectProposal(prop.id)}
@@ -4702,13 +4700,6 @@ export const AcademiaView: React.FC = () => {
                   Cadastre o logotipo, foto da fachada, endereço, modalidades, dados dos responsáveis e senha.
                 </p>
               </div>
-
-              {profileSuccessMsg && (
-                <div className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2 border border-emerald-200/50">
-                  <CheckCircle size={16} />
-                  <span>{profileSuccessMsg}</span>
-                </div>
-              )}
 
               <form onSubmit={handleSaveProfile} className="space-y-6">
                 {/* 1. Identidade Visual (Logotipo 1:1 e Foto da Fachada 16:9 com Crop) */}
@@ -7849,9 +7840,9 @@ export const AcademiaView: React.FC = () => {
         </form>
       </AnimatedModal>
 
-      {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO NO RODAPÉ ===================== */}
+      {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO NO TOPO ===================== */}
       {(profileSuccessMsg || inviteSuccessMsg) && (
-        <div className="fixed bottom-24 left-4 right-4 max-w-md mx-auto z-[9999] pointer-events-auto animate-bounce">
+        <div className="fixed top-4 left-4 right-4 max-w-md landscape:max-w-xl mx-auto z-[99999] pointer-events-auto animate-bounce">
           <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-floating border border-emerald-400/40 backdrop-blur-md flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <CheckCircle size={18} className="text-white shrink-0" />
