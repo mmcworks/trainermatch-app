@@ -19,7 +19,7 @@ export async function GET() {
       orderBy: { rating: "desc" }
     });
 
-    const parsed = gyms.map((g) => ({
+    const parsed = gyms.map((g: any) => ({
       ...g,
       modalities: safeJson(g.modalities, []),
       pricingRules: safeJson(g.pricingRules, undefined)

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useAppStore } from "@/store/use-app-store";
 import {
   Calendar as CalendarIcon,
@@ -128,25 +129,25 @@ export const AcademiaView: React.FC = () => {
   const [isDeletingAccount, setIsDeletingAccount] = useState<boolean>(false);
 
   const fallbackGym = {
-    id: activeGymId || "gym-new",
-    name: userName || "Academia",
-    neighborhood: "Centro",
-    city: "São Paulo",
-    address: "",
+    id: (activeGymId && activeGymId !== "gym-new") ? activeGymId : (gyms[0]?.id || "gym-1"),
+    name: userName || gyms[0]?.name || "Academia Mova",
+    neighborhood: "Praia do Canto",
+    city: "Vitória",
+    address: "Rua das Palmeiras, 120, Praia do Canto, Vitória - ES",
     logo: "",
     facadeUrl: "",
-    rating: 5.0,
-    ratingCount: 0,
-    phone: "",
-    email: userEmail || "",
-    cnpj: "",
-    managerName: userName || "Gestor",
-    managerRole: "Coordenação",
-    managerPhone: "",
-    managerEmail: userEmail || "",
-    modalities: ["Musculação", "Funcional"],
+    rating: 4.8,
+    ratingCount: 32,
+    phone: "(27) 99881-2233",
+    email: userEmail || gyms[0]?.email || "movagym@email.com",
+    cnpj: "14.285.912/0001-44",
+    managerName: "Carlos Eduardo Silva",
+    managerRole: "Coordenador Geral / Sócio",
+    managerPhone: "(27) 99812-4455",
+    managerEmail: "carlos.gerencia@movafit.com.br",
+    modalities: ["Musculação", "Spinning", "Funcional", "Pilates"],
     pricingRules: {
-      modalityRates: { "Musculação": 45, "Funcional": 50 },
+      modalityRates: { "Musculação": 40, "Spinning": 55, "Funcional": 45, "Pilates": 50 },
       peakHourAddition: 5,
       weekendAddition: 8
     }
@@ -154,7 +155,6 @@ export const AcademiaView: React.FC = () => {
 
   const currentGym = (
     gyms.find((g) => g.id === activeGymId) ||
-    gyms.find((g) => !g.isDeleted && g.id !== "gym-1") ||
     gyms.find((g) => !g.isDeleted) ||
     gyms[0] ||
     fallbackGym
@@ -165,6 +165,11 @@ export const AcademiaView: React.FC = () => {
       useAppStore.setState({ activeGymId: currentGym.id });
     }
   }, [activeGymId, currentGym?.id]);
+
+  const [mounted, setMounted] = useState<boolean>(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -1980,13 +1985,6 @@ export const AcademiaView: React.FC = () => {
                   <h2 className="text-base font-black text-navy-900 dark:text-white">Perfil da Academia</h2>
                   <p className="text-xs text-muted dark:text-slate-400">Dados cadastrais, fotos e modalidades da unidade</p>
                 </div>
-
-                {profileSuccessMsg && (
-                  <div className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 p-3 rounded-2xl text-xs font-bold flex items-center gap-2 border border-emerald-200/50">
-                    <CheckCircle size={14} />
-                    <span>{profileSuccessMsg}</span>
-                  </div>
-                )}
 
                 {/* Fotos da Academia com Botões de Crop */}
                 <div className="bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-3">
@@ -4702,13 +4700,6 @@ export const AcademiaView: React.FC = () => {
                   Cadastre o logotipo, foto da fachada, endereço, modalidades, dados dos responsáveis e senha.
                 </p>
               </div>
-
-              {profileSuccessMsg && (
-                <div className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2 border border-emerald-200/50">
-                  <CheckCircle size={16} />
-                  <span>{profileSuccessMsg}</span>
-                </div>
-              )}
 
               <form onSubmit={handleSaveProfile} className="space-y-6">
                 {/* 1. Identidade Visual (Logotipo 1:1 e Foto da Fachada 16:9 com Crop) */}
@@ -7849,28 +7840,31 @@ export const AcademiaView: React.FC = () => {
         </form>
       </AnimatedModal>
 
-      {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO NO RODAPÉ ===================== */}
-      {(profileSuccessMsg || inviteSuccessMsg) && (
-        <div className="fixed bottom-24 left-4 right-4 max-w-md mx-auto z-[9999] pointer-events-auto animate-bounce">
-          <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-floating border border-emerald-400/40 backdrop-blur-md flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <CheckCircle size={18} className="text-white shrink-0" />
-              <span className="text-xs font-bold leading-snug">{profileSuccessMsg || inviteSuccessMsg}</span>
+      {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO NO TOPO ===================== */}
+      {mounted && typeof document !== "undefined" && (profileSuccessMsg || inviteSuccessMsg) &&
+        createPortal(
+          <div className="fixed top-[max(0.75rem,env(safe-area-inset-top,12px))] left-4 right-4 max-w-md mx-auto z-[99999] pointer-events-auto animate-bounce">
+            <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-floating border border-emerald-400/40 backdrop-blur-md flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <CheckCircle size={18} className="text-white shrink-0" />
+                <span className="text-xs font-bold leading-snug">{profileSuccessMsg || inviteSuccessMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileSuccessMsg(null);
+                  setInviteSuccessMsg(null);
+                }}
+                className="text-white/80 hover:text-white p-1 shrink-0"
+                title="Fechar notificação"
+              >
+                <X size={15} />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setProfileSuccessMsg(null);
-                setInviteSuccessMsg(null);
-              }}
-              className="text-white/80 hover:text-white p-1 shrink-0"
-              title="Fechar notificação"
-            >
-              <X size={15} />
-            </button>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )
+      }
 
     </div>
   );

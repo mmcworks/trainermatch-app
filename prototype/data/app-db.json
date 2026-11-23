@@ -1,0 +1,85 @@
+{
+  "users": [
+    {
+      "id": "user-lucas-1",
+      "email": "lucasf@email.com",
+      "passwordHash": "$2b$10$hZ/8zN6.RJ.nHKaSOssuc.uyYkhjEpL9RWRzgJ03qts9yRHO0vV1i",
+      "role": "PROFESSOR",
+      "name": "Lucas Ferreira",
+      "phone": "(27) 99999-1234",
+      "document": "123.456.789-00",
+      "createdAt": "2026-11-23T19:08:31.356Z",
+      "updatedAt": "2026-11-23T19:08:31.356Z"
+    },
+    {
+      "id": "user-mova-1",
+      "email": "movagym@email.com",
+      "passwordHash": "$2b$10$hZ/8zN6.RJ.nHKaSOssuc.uyYkhjEpL9RWRzgJ03qts9yRHO0vV1i",
+      "role": "ACADEMIA",
+      "name": "Academia Mova",
+      "phone": "(27) 99881-2233",
+      "document": "14.285.912/0001-44",
+      "createdAt": "2026-11-23T19:08:31.356Z",
+      "updatedAt": "2026-11-23T19:08:31.356Z"
+    }
+  ],
+  "gyms": [
+    {
+      "id": "gym-1",
+      "userId": "user-mova-1",
+      "name": "Academia Mova",
+      "cnpj": "14.285.912/0001-44",
+      "phone": "(27) 99881-2233",
+      "email": "movagym@email.com",
+      "address": "Rua das Palmeiras, 120, Praia do Canto, Vitória - ES",
+      "neighborhood": "Praia do Canto",
+      "city": "Vitória",
+      "logo": "",
+      "facadeUrl": "",
+      "managerName": "Carlos Eduardo Silva",
+      "managerRole": "Coordenador Geral / Sócio",
+      "managerPhone": "(27) 99812-4455",
+      "managerEmail": "carlos.gerencia@movafit.com.br",
+      "rating": 4.8,
+      "ratingCount": 32,
+      "plan": "essencial",
+      "modalities": "[\"Musculação\",\"Spinning\",\"Funcional\",\"Pilates\"]",
+      "pricingRules": "{\"modalityRates\":{\"Musculação\":40,\"Spinning\":55,\"Funcional\":45,\"Pilates\":50},\"peakHourAddition\":5,\"weekendAddition\":8}",
+      "createdAt": "2026-11-23T19:08:31.356Z",
+      "updatedAt": "2026-11-23T19:08:31.356Z"
+    }
+  ],
+  "instructors": [
+    {
+      "id": "inst-1",
+      "userId": "user-lucas-1",
+      "name": "Lucas Ferreira",
+      "displayName": "Lucas Ferreira",
+      "email": "lucasf@email.com",
+      "phone": "(27) 99999-1234",
+      "cpf": "123.456.789-00",
+      "cnpj": "",
+      "cref": "049182-G/SP",
+      "avatar": "",
+      "bio": "Profissional de Educação Física com 8 anos de experiência em treinamento funcional e musculação.",
+      "birthDate": "1994-06-15",
+      "rating": 4.9,
+      "ratingCount": 47,
+      "hourlyRate": 45,
+      "minHourlyRate": 40,
+      "allowNegotiation": true,
+      "modalities": "[\"Musculação\",\"Funcional\",\"Spinning\"]",
+      "pixKeys": "[{\"id\":\"pix-1\",\"type\":\"cpf\",\"key\":\"123.456.789-00\",\"bank\":\"Nubank\",\"isDefault\":true}]",
+      "availability": "[]",
+      "blockedDates": "[]",
+      "blockedDateSlots": "[]",
+      "offeredSlots": "[]",
+      "notificationsEnabled": "{\"push\":true,\"whatsapp\":true,\"email\":true}",
+      "workExperiences": "[]",
+      "createdAt": "2026-11-23T19:08:31.352Z",
+      "updatedAt": "2026-11-23T19:08:31.356Z"
+    }
+  ],
+  "shifts": [],
+  "proposals": []
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useAppStore } from "@/store/use-app-store";
 import { HorizontalBars } from "@/components/horizontal-bars";
 import {
@@ -156,6 +157,11 @@ export const ProfessorView: React.FC = () => {
     logout,
     deleteAccount
   } = useAppStore();
+
+  const [mounted, setMounted] = useState<boolean>(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [shiftToCancel, setShiftToCancel] = useState<Shift | null>(null);
   const [showCancelModal, setShowCancelModal] = useState<boolean>(false);
@@ -381,11 +387,11 @@ export const ProfessorView: React.FC = () => {
   }, []);
 
   const fallbackInstructor: Instructor = {
-    id: activeInstructorId || "inst-new",
-    name: userName || "Professor",
+    id: (activeInstructorId && activeInstructorId !== "inst-new") ? activeInstructorId : (instructors[0]?.id || "inst-1"),
+    name: userName || instructors[0]?.name || "Lucas Ferreira",
     crefStatus: "ativo",
     occurrences: 0,
-    email: userEmail || "",
+    email: userEmail || instructors[0]?.email || "lucasf@email.com",
     phone: "",
     cpf: "",
     cref: "CREF Regular",
@@ -3648,17 +3654,6 @@ export const ProfessorView: React.FC = () => {
       {/* ===================== TAB: PERFIL (ESTILO IFOOD COM ÍCONES OUTLINE LIGHT NA COR DA FONTE) ===================== */}
       {activeTab === "perfil" && (
         <main className="p-5 space-y-4 animate-fade-in">
-          {profileSuccessMsg && (
-            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-2xl flex items-center justify-between gap-3 shadow-md animate-fade-in">
-              <div className="flex items-center gap-2.5">
-                <CheckCircle size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span className="text-xs font-black text-emerald-800 dark:text-emerald-200">{profileSuccessMsg}</span>
-              </div>
-              <button type="button" onClick={() => setProfileSuccessMsg(null)} className="text-emerald-700 dark:text-emerald-300 p-1">
-                <X size={14} />
-              </button>
-            </div>
-          )}
 
           {/* 1. Card Superior: Foto Clicável, Nome, CREF e Nota Geral com Estrela */}
           <div className="bg-card dark:bg-navy-800 rounded-squircle p-6 shadow-soft border border-slate-100 dark:border-slate-800 text-center space-y-3">
@@ -6021,29 +6016,32 @@ export const ProfessorView: React.FC = () => {
             </div>
       </AnimatedModal>
 
-      {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO ===================== */}
-      {(profileSuccessMsg || offerSuccessMsg || saveAvailabilityMsg) && (
-        <div className="fixed bottom-24 left-4 right-4 max-w-md landscape:max-w-xl mx-auto z-[9999] pointer-events-auto animate-bounce">
-          <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-floating border border-emerald-400/40 backdrop-blur-md flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <CheckCircle size={18} className="text-white shrink-0" />
-              <span className="text-xs font-bold leading-snug">{profileSuccessMsg || offerSuccessMsg || saveAvailabilityMsg}</span>
+      {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO NO TOPO ===================== */}
+      {mounted && typeof document !== "undefined" && (profileSuccessMsg || offerSuccessMsg || saveAvailabilityMsg) &&
+        createPortal(
+          <div className="fixed top-[max(0.75rem,env(safe-area-inset-top,12px))] left-4 right-4 max-w-md landscape:max-w-xl mx-auto z-[99999] pointer-events-auto animate-bounce">
+            <div className="bg-emerald-600 text-white p-3.5 rounded-2xl shadow-floating border border-emerald-400/40 backdrop-blur-md flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <CheckCircle size={18} className="text-white shrink-0" />
+                <span className="text-xs font-bold leading-snug">{profileSuccessMsg || offerSuccessMsg || saveAvailabilityMsg}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileSuccessMsg(null);
+                  setOfferSuccessMsg(null);
+                  setSaveAvailabilityMsg(null);
+                }}
+                className="text-white/80 hover:text-white p-1 shrink-0"
+                title="Fechar notificação"
+              >
+                <X size={15} />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setProfileSuccessMsg(null);
-                setOfferSuccessMsg(null);
-                setSaveAvailabilityMsg(null);
-              }}
-              className="text-white/80 hover:text-white p-1 shrink-0"
-              title="Fechar notificação"
-            >
-              <X size={15} />
-            </button>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )
+      }
 
       {/* ===================== SIMULADOR DE PUSH NOTIFICATION FLUTUANTE ===================== */}
       {pushToast && (

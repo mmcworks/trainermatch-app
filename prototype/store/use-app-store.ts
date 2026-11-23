@@ -750,17 +750,17 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       isLoaded: false,
       isMockDataEnabled: false,
-      gyms: [],
-      instructors: [],
+      gyms: MOCK_GYMS,
+      instructors: MOCK_INSTRUCTORS,
       shifts: [],
       proposals: [],
 
       isAuthenticated: false,
-      userEmail: "",
-      userName: "",
+      userEmail: "lucasf@email.com",
+      userName: "Lucas Ferreira",
       currentRole: "professor",
-      activeInstructorId: "",
-      activeGymId: "",
+      activeInstructorId: "inst-1",
+      activeGymId: "gym-1",
 
       syncWithBackend: async () => {
         try {
@@ -845,11 +845,11 @@ export const useAppStore = create<AppState>()(
 
           // Filtra instrutores ativos do banco
           const apiInstructors = rawInstructors.filter(
-            (i: any) => !i.isDeleted && i.isActive !== false && (isMockActive || (i.id !== "inst-1" && i.id !== "inst-2" && i.name !== "Lucas Ferreira"))
+            (i: any) => !i.isDeleted && i.isActive !== false
           );
 
           // Mescla instrutores: API + local (preservando edições locais de perfil, foto e disponibilidade)
-          let mergedInstructors = apiInstructors.length > 0 ? apiInstructors : (localInstructors.length > 0 ? localInstructors : (isMockActive ? MOCK_INSTRUCTORS : []));
+          let mergedInstructors = apiInstructors.length > 0 ? apiInstructors : (localInstructors.length > 0 ? localInstructors : MOCK_INSTRUCTORS);
           if (localInstructors.length > 0 && apiInstructors.length > 0) {
             mergedInstructors = apiInstructors.map((apiInst: any) => {
               const loc = localInstructors.find((li) => li.id === apiInst.id);
@@ -882,8 +882,8 @@ export const useAppStore = create<AppState>()(
           }
 
           // Mescla academias
-          const apiGyms = rawGyms.filter((g: any) => !g.isDeleted && (isMockActive || (g.id !== "gym-1" && g.id !== "gym-2" && g.id !== "gym-3" && g.name !== "Academia Mova")));
-          let mergedGyms = apiGyms.length > 0 ? apiGyms : (localGyms.length > 0 ? localGyms : (isMockActive ? MOCK_GYMS : []));
+          const apiGyms = rawGyms.filter((g: any) => !g.isDeleted);
+          let mergedGyms = apiGyms.length > 0 ? apiGyms : (localGyms.length > 0 ? localGyms : MOCK_GYMS);
           if (localGyms.length > 0 && apiGyms.length > 0) {
             mergedGyms = apiGyms.map((apiG: any) => {
               const loc = localGyms.find((lg) => lg.id === apiG.id);
@@ -940,10 +940,10 @@ export const useAppStore = create<AppState>()(
           if (sessionUser) {
             const userGymId = sessionUser.role === "academia" && sessionUser.gym?.id
               ? sessionUser.gym.id
-              : (sessionUser.role === "academia" ? (get().activeGymId || (isMockActive ? mergedGyms[0]?.id : "") || "") : "");
+              : (sessionUser.role === "academia" ? (get().activeGymId || mergedGyms[0]?.id || "gym-1") : "");
             const userInstructorId = sessionUser.role === "professor" && sessionUser.instructor?.id
               ? sessionUser.instructor.id
-              : (sessionUser.role === "professor" ? (get().activeInstructorId || (isMockActive ? mergedInstructors[0]?.id : "") || "") : "");
+              : (sessionUser.role === "professor" ? (get().activeInstructorId || mergedInstructors[0]?.id || "inst-1") : "");
 
             if (sessionUser.instructor) {
               const instructorWithCache = cachedInstructor
@@ -965,8 +965,8 @@ export const useAppStore = create<AppState>()(
             }
 
             // sessionUser é a fonte de autoridade prioritária soberana
-            const effectiveEmail = sessionUser.email || cachedInstructor?.email || cachedGym?.email || get().userEmail;
-            const effectiveName = sessionUser.name || cachedInstructor?.name || cachedGym?.name || get().userName;
+            const effectiveEmail = sessionUser.email || cachedInstructor?.email || cachedGym?.email || get().userEmail || "lucasf@email.com";
+            const effectiveName = sessionUser.name || cachedInstructor?.name || cachedGym?.name || get().userName || "Lucas Ferreira";
 
             set({
               isLoaded: true,
@@ -974,8 +974,8 @@ export const useAppStore = create<AppState>()(
               userEmail: effectiveEmail,
               userName: effectiveName,
               currentRole: sessionUser.role,
-              activeGymId: userGymId || get().activeGymId,
-              activeInstructorId: userInstructorId || get().activeInstructorId,
+              activeGymId: userGymId || get().activeGymId || "gym-1",
+              activeInstructorId: userInstructorId || get().activeInstructorId || "inst-1",
               gymPlan: sessionUser.gym?.plan || get().gymPlan || "gratis",
               gyms: mergedGyms,
               instructors: mergedInstructors,
@@ -984,8 +984,8 @@ export const useAppStore = create<AppState>()(
             });
           } else {
             // Usuário sem sessão ativa no banco, preserva credenciais locais salvas no persist
-            const effectiveInstructorId = get().activeInstructorId || (mergedInstructors.length > 0 ? mergedInstructors[0].id : "");
-            const effectiveGymId = get().activeGymId || (mergedGyms.length > 0 ? mergedGyms[0].id : "");
+            const effectiveInstructorId = get().activeInstructorId || (mergedInstructors.length > 0 ? mergedInstructors[0].id : "inst-1");
+            const effectiveGymId = get().activeGymId || (mergedGyms.length > 0 ? mergedGyms[0].id : "gym-1");
             set({
               isLoaded: true,
               activeInstructorId: effectiveInstructorId,
@@ -1266,8 +1266,11 @@ export const useAppStore = create<AppState>()(
   },
 
   updateInstructorProfile: (instructorId, data) => {
-    const targetId = instructorId || get().activeInstructorId || (get().instructors[0]?.id || "");
-    if (!targetId) return;
+    let targetId = instructorId || get().activeInstructorId || (get().instructors[0]?.id || "inst-1");
+    if (targetId === "inst-new") {
+      targetId = (get().activeInstructorId && get().activeInstructorId !== "inst-new") ? get().activeInstructorId : "inst-1";
+    }
+    if (!targetId) targetId = "inst-1";
 
     set((state) => {
       const exists = state.instructors.some((i) => i.id === targetId);
@@ -1798,8 +1801,11 @@ export const useAppStore = create<AppState>()(
   },
 
   updateGymProfile: (gymId, data) => {
-    const targetId = gymId || get().activeGymId || (get().gyms[0]?.id || "");
-    if (!targetId) return;
+    let targetId = gymId || get().activeGymId || (get().gyms[0]?.id || "gym-1");
+    if (targetId === "gym-new") {
+      targetId = (get().activeGymId && get().activeGymId !== "gym-new") ? get().activeGymId : "gym-1";
+    }
+    if (!targetId) targetId = "gym-1";
 
     set((state) => {
       const exists = state.gyms.some((g) => g.id === targetId);
