@@ -58,9 +58,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  let body: any = {};
   try {
-    body = await req.json();
+    const body = await req.json();
     const updateData: any = {};
 
     if (body.name !== undefined) updateData.name = body.name;
@@ -122,34 +121,17 @@ export async function PUT(
       targetInstructor = await prisma.instructor.findFirst();
     }
 
-    let updated: any = null;
-    if (targetInstructor) {
-      try {
-        updated = await prisma.instructor.update({
-          where: { id: targetInstructor.id },
-          data: updateData
-        });
-      } catch (err) {
-        console.warn("[api/instructors] Update no banco falhou, usando fallback em memória:", err);
-        updated = { ...targetInstructor, ...updateData };
-      }
-    } else {
-      updated = {
-        id: params.id || "inst-1",
-        name: body.name || "Lucas Ferreira",
-        email: body.email || "lucasf@email.com",
-        phone: body.phone || "(27) 99999-1234",
-        cref: body.cref || "049182-G/SP",
-        cpf: body.cpf || "123.456.789-00",
-        rating: 5.0,
-        ratingCount: 1,
-        hourlyRate: body.hourlyRate ? Number(body.hourlyRate) : 45,
-        ...updateData
-      };
+    if (!targetInstructor) {
+      return NextResponse.json({ error: "Professor não encontrado para atualização" }, { status: 404 });
     }
 
+    const updated = await prisma.instructor.update({
+      where: { id: targetInstructor.id },
+      data: updateData
+    });
+
     // Sincroniza usuário se nome ou telefone ou email forem alterados
-    if (targetInstructor?.userId && (body.name || body.phone || body.email)) {
+    if (targetInstructor.userId && (body.name || body.phone || body.email)) {
       const userUpdate: any = {};
       if (body.name) userUpdate.name = body.name;
       if (body.phone) userUpdate.phone = body.phone;
@@ -160,12 +142,6 @@ export async function PUT(
       }).catch(() => {});
     }
 
-    const safeParse = (str: any, fb: any) => {
-      if (!str) return fb;
-      if (typeof str !== "string") return str;
-      try { return JSON.parse(str); } catch { return fb; }
-    };
-
     const response = NextResponse.json({
       success: true,
       instructor: {
@@ -173,25 +149,25 @@ export async function PUT(
         displayName: (updated as any).displayName || updated.name,
         birthDate: (updated as any).birthDate || body.birthDate || "",
         cnpj: (updated as any).cnpj || "",
-        modalities: safeParse(updated.modalities, []),
-        pixKeys: safeParse(updated.pixKeys, []),
-        availability: safeParse(updated.availability, []),
-        blockedDates: safeParse((updated as any).blockedDates, []),
-        blockedDateSlots: safeParse((updated as any).blockedDateSlots, []),
-        offeredSlots: safeParse((updated as any).offeredSlots, []),
-        notificationsEnabled: safeParse((updated as any).notificationsEnabled, { push: true, whatsapp: true, email: true }),
-        workExperiences: safeParse((updated as any).workExperiences, []),
+        modalities: JSON.parse(updated.modalities || "[]"),
+        pixKeys: JSON.parse(updated.pixKeys || "[]"),
+        availability: JSON.parse(updated.availability || "[]"),
+        blockedDates: JSON.parse((updated as any).blockedDates || "[]"),
+        blockedDateSlots: JSON.parse((updated as any).blockedDateSlots || "[]"),
+        offeredSlots: JSON.parse((updated as any).offeredSlots || "[]"),
+        notificationsEnabled: JSON.parse((updated as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
+        workExperiences: JSON.parse((updated as any).workExperiences || "[]"),
         criteria: {
-          pontualidade: updated.rating || 5.0,
-          tecnica: updated.rating || 5.0,
-          postura: updated.rating || 5.0
+          pontualidade: updated.rating,
+          tecnica: updated.rating,
+          postura: updated.rating
         },
-        badges: (updated.ratingCount || 0) > 0 ? ["Pontual", "Atencioso(a)", "Excelente Técnica"] : [],
-        wouldHireAgainRate: (updated.ratingCount || 0) > 0 ? 98 : undefined
+        badges: updated.ratingCount > 0 ? ["Pontual", "Atencioso(a)", "Excelente Técnica"] : [],
+        wouldHireAgainRate: updated.ratingCount > 0 ? 98 : undefined
       }
     });
 
-    if (targetInstructor?.userId) {
+    if (targetInstructor.userId) {
       response.cookies.set("trainer_session", JSON.stringify({
         userId: targetInstructor.userId,
         email: updated.email,
@@ -207,14 +183,6 @@ export async function PUT(
 
     return response;
   } catch (error: any) {
-    console.error("[api/instructors] Erro não tratado:", error);
-    return NextResponse.json({
-      success: true,
-      instructor: {
-        id: params.id || "inst-1",
-        name: "Lucas Ferreira",
-        ...body
-      }
-    });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

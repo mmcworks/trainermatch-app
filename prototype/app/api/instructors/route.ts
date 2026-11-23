@@ -14,7 +14,7 @@ export async function GET() {
 
     // Filtra instrutores ativos (não exclui usuários reais que tenham nomes legítimos)
     const activeInstructors = instructors.filter(
-      (i) => !i.name.includes("MOCK_DELETE")
+      (i) => i.user && !i.name.includes("MOCK_DELETE")
     );
 
     const parsed = activeInstructors.map((i) => ({
