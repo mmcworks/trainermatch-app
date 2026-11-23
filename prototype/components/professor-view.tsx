@@ -412,10 +412,10 @@ export const ProfessorView: React.FC = () => {
   ) as Instructor;
 
   useEffect(() => {
-    if (!activeInstructorId && rawInstructor?.id && rawInstructor.id !== "inst-new") {
+    if ((!activeInstructorId || !instructors.some((i) => i.id === activeInstructorId)) && rawInstructor?.id && rawInstructor.id !== "inst-new") {
       useAppStore.setState({ activeInstructorId: rawInstructor.id });
     }
-  }, [activeInstructorId, rawInstructor?.id]);
+  }, [activeInstructorId, rawInstructor?.id, instructors]);
   const currentInstructor = useMemo(() => ({
     ...rawInstructor,
     criteria: rawInstructor.criteria || {
@@ -4882,31 +4882,13 @@ export const ProfessorView: React.FC = () => {
               </button>
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const targetId = currentInstructor.id || activeInstructorId;
-                updateInstructorProfile(targetId, {
-                  name: editFullName,
-                  displayName: editDisplayName,
-                  birthDate: editBirthDate,
-                  cpf: editCpf,
-                  email: editEmail,
-                  phone: editPhone
-                });
-                setShowPersonalDataModal(false);
-                setProfileSuccessMsg("Dados cadastrais atualizados com sucesso!");
-                setTimeout(() => setProfileSuccessMsg(null), 3000);
-              }}
-              className="space-y-3"
-            >
+            <div className="space-y-3">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-navy-900 dark:text-white">Nome Completo</label>
                 <input
                   type="text"
                   value={editFullName}
                   onChange={(e) => setEditFullName(e.target.value)}
-                  required
                   className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary"
                 />
               </div>
@@ -4917,7 +4899,6 @@ export const ProfessorView: React.FC = () => {
                   type="text"
                   value={editDisplayName}
                   onChange={(e) => setEditDisplayName(e.target.value)}
-                  required
                   className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary"
                 />
               </div>
@@ -4962,7 +4943,6 @@ export const ProfessorView: React.FC = () => {
                   type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
-                  required
                   className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary"
                 />
               </div>
@@ -4976,7 +4956,6 @@ export const ProfessorView: React.FC = () => {
                   onChange={(e) => setEditPhone(maskPhone(e.target.value))}
                   placeholder="(00) 00000-0000"
                   maxLength={15}
-                  required
                   className="w-full bg-slate-50 dark:bg-navy-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-navy-900 dark:text-white focus:outline-none focus:border-primary"
                 />
               </div>
@@ -4990,13 +4969,31 @@ export const ProfessorView: React.FC = () => {
                   Cancelar
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => {
+                    if (!editFullName.trim()) {
+                      alert("Por favor, preencha o seu nome completo.");
+                      return;
+                    }
+                    const targetId = currentInstructor.id || activeInstructorId;
+                    updateInstructorProfile(targetId, {
+                      name: editFullName,
+                      displayName: editDisplayName || editFullName,
+                      birthDate: editBirthDate,
+                      cpf: editCpf,
+                      email: editEmail,
+                      phone: editPhone
+                    });
+                    setShowPersonalDataModal(false);
+                    setProfileSuccessMsg("Dados cadastrais atualizados com sucesso!");
+                    setTimeout(() => setProfileSuccessMsg(null), 3000);
+                  }}
                   className="flex-1 py-2.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary-hover shadow-sm transition-all"
                 >
                   Salvar Alterações
                 </button>
               </div>
-            </form>
+            </div>
 
             {/* Zona de Exclusão de Conta: Separada dos dados pessoais na parte inferior */}
             <div className="pt-4 mt-3 border-t border-slate-200 dark:border-navy-700">

@@ -969,10 +969,10 @@ export const useAppStore = create<AppState>()(
             // Usuário sem sessão ativa no banco, preserva credenciais locais salvas no persist
             const currentInstId = get().activeInstructorId;
             const currentGymId = get().activeGymId;
-            const effectiveInstructorId = currentInstId && currentInstId !== "inst-new"
+            const effectiveInstructorId = currentInstId && currentInstId !== "inst-new" && mergedInstructors.some((i: any) => i.id === currentInstId)
               ? currentInstId
               : (mergedInstructors.length > 0 ? mergedInstructors[0].id : "inst-1");
-            const effectiveGymId = currentGymId && currentGymId !== "gym-new"
+            const effectiveGymId = currentGymId && currentGymId !== "gym-new" && mergedGyms.some((g: any) => g.id === currentGymId)
               ? currentGymId
               : (mergedGyms.length > 0 ? mergedGyms[0].id : "gym-1");
             set({
@@ -1210,10 +1210,14 @@ export const useAppStore = create<AppState>()(
   setRole: (role) => set({ currentRole: role }),
 
   updateInstructorAvailability: (instructorId, availability) => {
-    const targetId = instructorId || get().activeInstructorId;
+    let targetId = instructorId || get().activeInstructorId;
+    if (!targetId || targetId === "inst-new" || !get().instructors.some((i) => i.id === targetId)) {
+      targetId = get().instructors.find((i) => i.id !== "inst-new")?.id || "inst-1";
+    }
     if (!targetId) return;
 
     set((state) => ({
+      activeInstructorId: targetId,
       instructors: state.instructors.map((inst) =>
         inst.id === targetId || inst.id === get().activeInstructorId ? { ...inst, availability } : inst
       )
@@ -1827,7 +1831,8 @@ export const useAppStore = create<AppState>()(
           const json = await res.json();
           if (json.gym) {
             set((state) => ({
-              gyms: state.gyms.map((g) => (g.id === targetId ? { ...g, ...json.gym } : g)),
+              activeGymId: json.gym.id,
+              gyms: state.gyms.map((g) => (g.id === targetId || g.id === json.gym.id ? { ...g, ...json.gym } : g)),
               ...(json.gym.name ? { userName: json.gym.name } : {}),
               ...(json.gym.email ? { userEmail: json.gym.email } : {})
             }));
@@ -1840,9 +1845,11 @@ export const useAppStore = create<AppState>()(
   },
 
   createShift: (shiftData) => {
+    const validGymId = shiftData.gymId || get().activeGymId || (get().gyms[0]?.id || "gym-1");
     const rateVal = Number(shiftData.maxRate ?? (shiftData as any).rate ?? 45);
     const newShift: Shift = {
       ...shiftData,
+      gymId: validGymId,
       rate: rateVal,
       maxRate: rateVal,
       id: `shift-${Date.now()}`,
@@ -1853,16 +1860,19 @@ export const useAppStore = create<AppState>()(
     fetch("/api/shifts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ shift: { ...shiftData, rate: rateVal, maxRate: rateVal } })
+      body: JSON.stringify({ shift: { ...shiftData, gymId: validGymId, rate: rateVal, maxRate: rateVal } })
     }).catch((err) => console.error("Erro ao criar turno no banco:", err));
   },
 
   createMultipleShifts: (shiftsData) => {
     const baseTimestamp = Date.now();
+    const fallbackGymId = get().activeGymId || (get().gyms[0]?.id || "gym-1");
     const newShifts: Shift[] = shiftsData.map((data, index) => {
+      const validGymId = data.gymId || fallbackGymId;
       const rateVal = Number(data.maxRate ?? (data as any).rate ?? 45);
       return {
         ...data,
+        gymId: validGymId,
         rate: rateVal,
         maxRate: rateVal,
         id: `shift-${baseTimestamp}-${index}`,
@@ -1876,8 +1886,9 @@ export const useAppStore = create<AppState>()(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         shifts: shiftsData.map((d) => {
+          const validGymId = d.gymId || fallbackGymId;
           const rateVal = Number(d.maxRate ?? (d as any).rate ?? 45);
-          return { ...d, rate: rateVal, maxRate: rateVal };
+          return { ...d, gymId: validGymId, rate: rateVal, maxRate: rateVal };
         })
       })
     }).catch((err) => console.error("Erro ao cadastrar múltiplos turnos:", err));

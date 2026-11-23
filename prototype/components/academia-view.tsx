@@ -161,10 +161,10 @@ export const AcademiaView: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!activeGymId && currentGym?.id && currentGym.id !== "gym-new") {
+    if ((!activeGymId || !gyms.some((g) => g.id === activeGymId)) && currentGym?.id && currentGym.id !== "gym-new") {
       useAppStore.setState({ activeGymId: currentGym.id });
     }
-  }, [activeGymId, currentGym?.id]);
+  }, [activeGymId, currentGym?.id, gyms]);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -336,7 +336,7 @@ export const AcademiaView: React.FC = () => {
   const [showEditUnitModal, setShowEditUnitModal] = useState<boolean>(false);
 
   // Filtros Mobile - Foco inicial no dia atual
-  const [mobileSelectedDate, setMobileSelectedDate] = useState<string>("2026-11-11");
+  const [mobileSelectedDate, setMobileSelectedDate] = useState<string>(() => getTodayDateString());
   const [mobileSearchTeacher, setMobileSearchTeacher] = useState<string>("");
   const [mobileAgendaTab, setMobileAgendaTab] = useState<"confirmadas" | "disponiveis">("confirmadas");
   const mobileTodayButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -396,8 +396,14 @@ export const AcademiaView: React.FC = () => {
     const dd = String(today.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
   });
-  const [newStartTime, setNewStartTime] = useState("14:00");
-  const [newEndTime, setNewEndTime] = useState("18:00");
+  const [newStartTime, setNewStartTime] = useState(() => {
+    const nextHour = (new Date().getHours() + 1) % 24;
+    return `${String(nextHour).padStart(2, "0")}:00`;
+  });
+  const [newEndTime, setNewEndTime] = useState(() => {
+    const endHour = (new Date().getHours() + 2) % 24;
+    return `${String(endHour).padStart(2, "0")}:00`;
+  });
   const [newMaxRate, setNewMaxRate] = useState<number>(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -7680,29 +7686,7 @@ export const AcademiaView: React.FC = () => {
           </button>
         </div>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const gymId = currentGym.id || activeGymId;
-            updateGymProfile(gymId, {
-              name: profileName,
-              cnpj: profileCnpj,
-              phone: profilePhone,
-              email: profileEmail,
-              address: profileAddress,
-              neighborhood: profileNeighborhood,
-              city: profileCity,
-              managerName: profileManagerName,
-              managerRole: profileManagerRole,
-              managerPhone: profileManagerPhone,
-              managerEmail: profileManagerEmail
-            });
-            setShowEditUnitModal(false);
-            setProfileSuccessMsg("Dados cadastrais da unidade atualizados com sucesso!");
-            setTimeout(() => setProfileSuccessMsg(null), 4000);
-          }}
-          className="space-y-3 text-xs"
-        >
+        <div className="space-y-3 text-xs">
           <div className="space-y-1">
             <label className="font-bold text-navy-900 dark:text-white">Nome da Academia</label>
             <input
@@ -7831,13 +7815,36 @@ export const AcademiaView: React.FC = () => {
               Cancelar
             </button>
             <button
-              type="submit"
+              type="button"
+              onClick={() => {
+                if (!profileName.trim()) {
+                  alert("Por favor, preencha o nome da academia.");
+                  return;
+                }
+                const gymId = currentGym.id || activeGymId;
+                updateGymProfile(gymId, {
+                  name: profileName,
+                  cnpj: profileCnpj,
+                  phone: profilePhone,
+                  email: profileEmail,
+                  address: profileAddress,
+                  neighborhood: profileNeighborhood,
+                  city: profileCity,
+                  managerName: profileManagerName,
+                  managerRole: profileManagerRole,
+                  managerPhone: profileManagerPhone,
+                  managerEmail: profileManagerEmail
+                });
+                setShowEditUnitModal(false);
+                setProfileSuccessMsg("Dados cadastrais da unidade atualizados com sucesso!");
+                setTimeout(() => setProfileSuccessMsg(null), 4000);
+              }}
               className="flex-1 py-2.5 rounded-full text-xs font-bold bg-primary text-white hover:bg-primary-hover shadow-sm transition-all"
             >
               Salvar Dados
             </button>
           </div>
-        </form>
+        </div>
       </AnimatedModal>
 
       {/* ===================== NOTIFICAÇÃO FLUTUANTE DE SUCESSO NO TOPO ===================== */}

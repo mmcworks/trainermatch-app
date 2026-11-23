@@ -136,22 +136,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "shiftId e instructorId são obrigatórios" }, { status: 400 });
     }
 
+    let targetInstructorId = instructorId;
+    const instExists = await prisma.instructor.findUnique({ where: { id: targetInstructorId } });
+    if (!instExists) {
+      const defaultInst = await prisma.instructor.findFirst();
+      if (defaultInst) {
+        targetInstructorId = defaultInst.id;
+      } else {
+        return NextResponse.json({ error: "Professor não encontrado no banco" }, { status: 404 });
+      }
+    }
+
+    const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
+    if (!shift) {
+      return NextResponse.json({ error: "Turno não encontrado" }, { status: 404 });
+    }
+
     // Checa se já existe proposta para este turno e professor
     const existing = await prisma.proposal.findFirst({
-      where: { shiftId, instructorId }
+      where: { shiftId, instructorId: targetInstructorId }
     });
 
     if (existing) {
       return NextResponse.json({ success: true, proposal: existing, alreadyExisted: true });
     }
 
-    const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
     const proposalRate = Number(rate) || Number(shift?.rate) || 45;
 
     const created = await prisma.proposal.create({
       data: {
         shiftId,
-        instructorId,
+        instructorId: targetInstructorId,
         rate: proposalRate,
         status: "pendente",
         history: JSON.stringify([

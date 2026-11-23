@@ -79,6 +79,15 @@ export async function GET(req: NextRequest) {
   }
 }
 
+async function resolveGymId(gymId?: string): Promise<string | null> {
+  if (gymId) {
+    const existing = await prisma.gym.findUnique({ where: { id: gymId } });
+    if (existing) return existing.id;
+  }
+  const fallback = await prisma.gym.findFirst();
+  return fallback ? fallback.id : null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -86,11 +95,28 @@ export async function POST(req: NextRequest) {
     // Criação em lote (grade semanal / múltiplos horários)
     if (Array.isArray(body.shifts)) {
       const createdShifts = [];
+      const fallbackGym = await prisma.gym.findFirst();
+      const defaultGymId = fallbackGym ? fallbackGym.id : null;
+
       for (const item of body.shifts) {
+        let validGymId = item.gymId;
+        if (validGymId) {
+          const gymExists = await prisma.gym.findUnique({ where: { id: validGymId } });
+          if (!gymExists) {
+            validGymId = defaultGymId;
+          }
+        } else {
+          validGymId = defaultGymId;
+        }
+
+        if (!validGymId) {
+          continue;
+        }
+
         const itemRate = Number(item.rate ?? item.maxRate ?? 45);
         const created = await prisma.shift.create({
           data: {
-            gymId: item.gymId,
+            gymId: validGymId,
             date: item.date,
             startTime: item.startTime,
             endTime: item.endTime,
@@ -111,15 +137,20 @@ export async function POST(req: NextRequest) {
 
     // Criação individual
     const shiftData = body.shift || body;
-    if (!shiftData.gymId || !shiftData.date || !shiftData.startTime || !shiftData.endTime || !shiftData.modality) {
+    if (!shiftData.date || !shiftData.startTime || !shiftData.endTime || !shiftData.modality) {
       return NextResponse.json({ error: "Dados incompletos para criação do turno" }, { status: 400 });
+    }
+
+    const validGymId = await resolveGymId(shiftData.gymId);
+    if (!validGymId) {
+      return NextResponse.json({ error: "Nenhuma academia encontrada para vincular o turno" }, { status: 404 });
     }
 
     const calculatedRate = Number(shiftData.rate ?? shiftData.maxRate ?? 45);
 
     const created = await prisma.shift.create({
       data: {
-        gymId: shiftData.gymId,
+        gymId: validGymId,
         date: shiftData.date,
         startTime: shiftData.startTime,
         endTime: shiftData.endTime,
