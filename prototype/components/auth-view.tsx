@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useAppStore } from "@/store/use-app-store";
 import { maskPhone, maskCpf, maskCnpj } from "@/store/mock-data";
+import { isValidEmail, isValidCpf, isValidCnpj, isValidPhone } from "@/lib/validations";
 import {
   Building2,
   User,
@@ -15,6 +16,8 @@ import {
   Check,
   X,
   AlertCircle,
+  AlertTriangle,
+  LogIn,
   Eye,
   EyeOff,
   Sparkles,
@@ -35,6 +38,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
   // Alerta de erro da autenticação
   const [authError, setAuthError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [duplicateEmailError, setDuplicateEmailError] = useState<{ email: string } | null>(null);
 
   // Campos de Validação de E-mail (OTP)
   const [emailToVerify, setEmailToVerify] = useState("");
@@ -307,16 +311,53 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
+    setDuplicateEmailError(null);
 
-    if (!registerName.trim()) {
-      setAuthError("Por favor, preencha seu nome.");
+    const cleanName = registerName.trim();
+    const cleanEmail = registerEmail.trim().toLowerCase();
+    const cleanDoc = registerCpfOrCnpj.trim();
+    const cleanPhone = registerPhone.trim();
+
+    if (!cleanName) {
+      setAuthError("Por favor, preencha seu nome completo.");
       return;
     }
 
-    if (!registerEmail.trim()) {
+    if (!cleanEmail) {
       setAuthError("Por favor, preencha seu e-mail.");
       return;
     }
+
+    // 1. Validação de E-mail
+    if (!isValidEmail(cleanEmail)) {
+      setAuthError("Por favor, informe um endereço de e-mail válido (ex: seu.nome@email.com).");
+      return;
+    }
+
+    // 2. Validação de Documento (CPF para Professor / CNPJ para Academia)
+    if (selectedRole === "professor") {
+      if (!isValidCpf(cleanDoc)) {
+        setAuthError("CPF inválido. Verifique os números digitados (deve conter 11 dígitos e dígitos verificadores válidos).");
+        return;
+      }
+    } else {
+      if (!isValidCnpj(cleanDoc)) {
+        setAuthError("CNPJ inválido. Verifique os números digitados (deve conter 14 dígitos e dígitos verificadores válidos).");
+        return;
+      }
+    }
+
+    // 3. Validação de Telefone
+    if (!cleanPhone) {
+      setAuthError("Por favor, informe seu telefone / WhatsApp com DDD.");
+      return;
+    }
+    if (!isValidPhone(cleanPhone)) {
+      setAuthError("Telefone inválido. Informe o DDD e o número completo (ex: (27) 99881-2233).");
+      return;
+    }
+
+    // CREF: SEM validação, livre conforme solicitado!
 
     if (!termsAccepted) {
       alert("Por favor, aceite os termos de pontualidade e ocorrências.");
@@ -331,18 +372,18 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
     setIsSubmitting(true);
     try {
       const result = await registerUser({
-        name: registerName.trim(),
-        email: registerEmail.trim().toLowerCase(),
+        name: cleanName,
+        email: cleanEmail,
         password: registerPassword,
         role: selectedRole,
-        doc: registerCpfOrCnpj.trim(),
+        doc: cleanDoc,
         crefOrCnpj: registerCref.trim(),
-        phone: registerPhone.trim(),
+        phone: cleanPhone,
         logoOrAvatar: uploadedImageSrc
       });
 
       if (result?.requiresVerification) {
-        setEmailToVerify(result.email || registerEmail.trim().toLowerCase());
+        setEmailToVerify(result.email || cleanEmail);
         setOtpDigits(["", "", "", "", "", ""]);
         setResendCooldown(60);
         setMode("verificar_email");
@@ -365,7 +406,11 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
       }
 
       if (!result?.success) {
-        setAuthError(result?.error || "Erro ao criar conta.");
+        if (result?.code === "EMAIL_ALREADY_EXISTS") {
+          setDuplicateEmailError({ email: cleanEmail });
+        } else {
+          setAuthError(result?.error || "Erro ao criar conta.");
+        }
       }
     } catch (err: any) {
       setAuthError(err.message || "Falha ao cadastrar.");
@@ -492,6 +537,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
               onClick={() => {
                 setSelectedRole("professor");
                 setAuthError("");
+                setDuplicateEmailError(null);
               }}
               className={`flex-1 py-2 rounded-full flex items-center justify-center gap-1.5 transition-all ${
                 selectedRole === "professor"
@@ -506,6 +552,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
               onClick={() => {
                 setSelectedRole("academia");
                 setAuthError("");
+                setDuplicateEmailError(null);
               }}
               className={`flex-1 py-2 rounded-full flex items-center justify-center gap-1.5 transition-all ${
                 selectedRole === "academia"
@@ -801,6 +848,56 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
         )}
 
         {/* ===================== FORMULÁRIO DE CADASTRO DO ZERO ===================== */}
+        {mode === "cadastro" && duplicateEmailError && (
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-300 dark:border-amber-700/50 text-slate-800 dark:text-slate-200 animate-fade-in shadow-xs">
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/60 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400 mt-0.5">
+                <AlertTriangle size={18} />
+              </div>
+              <div className="flex-1 space-y-1">
+                <h4 className="font-bold text-xs text-amber-900 dark:text-amber-200">
+                  E-mail já cadastrado!
+                </h4>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                  O e-mail <strong>{duplicateEmailError.email}</strong> já possui uma conta registrada no TrainerMatch.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail(duplicateEmailError.email);
+                      setPassword("");
+                      setMode("login");
+                      setDuplicateEmailError(null);
+                      setAuthError("");
+                    }}
+                    className="flex-1 py-2 px-3 bg-white dark:bg-navy-900 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 font-bold rounded-xl text-[11px] hover:bg-amber-50 dark:hover:bg-navy-800 transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    <LogIn size={13} />
+                    <span>Fazer Login</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetEmail(duplicateEmailError.email);
+                      setVerificationCode("849201");
+                      setResetStep(2);
+                      setMode("esqueceu_senha");
+                      setDuplicateEmailError(null);
+                      setAuthError("");
+                      showTopToast("Código de recuperação gerado para teste!", "success");
+                    }}
+                    className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-[11px] transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    <KeyRound size={13} />
+                    <span>Criar Nova Senha</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {mode === "cadastro" && (
           <form onSubmit={handleRegister} className="space-y-3.5 text-xs">
             <div>
@@ -840,20 +937,36 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
 
               <div>
                 <label className="text-navy-900 dark:text-white font-bold block mb-1">
-                  {selectedRole === "professor" ? "Registro CREF" : "Telefone / WhatsApp"}
+                  Telefone / WhatsApp
                 </label>
                 <input
-                  type={selectedRole === "professor" ? "text" : "tel"}
-                  inputMode={selectedRole === "professor" ? undefined : "numeric"}
+                  type="tel"
+                  inputMode="numeric"
                   required
-                  value={selectedRole === "professor" ? registerCref : registerPhone}
-                  onChange={(e) => selectedRole === "professor" ? setRegisterCref(e.target.value) : setRegisterPhone(maskPhone(e.target.value))}
-                  placeholder={selectedRole === "professor" ? "Ex: 012845-G/ES" : "(00) 00000-0000"}
-                  maxLength={selectedRole === "professor" ? 20 : 15}
+                  value={registerPhone}
+                  onChange={(e) => setRegisterPhone(maskPhone(e.target.value))}
+                  placeholder="(00) 00000-0000"
+                  maxLength={15}
                   className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
                 />
               </div>
             </div>
+
+            {selectedRole === "professor" && (
+              <div>
+                <label className="text-navy-900 dark:text-white font-bold block mb-1">
+                  Registro CREF <span className="text-[10px] font-normal text-muted">(opcional / sem validação prévia)</span>
+                </label>
+                <input
+                  type="text"
+                  value={registerCref}
+                  onChange={(e) => setRegisterCref(e.target.value)}
+                  placeholder="Ex: 012845-G/ES"
+                  maxLength={20}
+                  className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
+                />
+              </div>
+            )}
 
             <div>
               <label className="text-navy-900 dark:text-white font-bold block mb-1">E-mail de Acesso</label>
@@ -861,7 +974,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                 type="email"
                 required
                 value={registerEmail}
-                onChange={(e) => setRegisterEmail(e.target.value)}
+                onChange={(e) => {
+                  setRegisterEmail(e.target.value);
+                  if (duplicateEmailError) setDuplicateEmailError(null);
+                }}
                 placeholder="seu.email@exemplo.com"
                 className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
               />
@@ -1114,6 +1230,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                   onClick={() => {
                     setMode("cadastro");
                     setAuthError("");
+                    setDuplicateEmailError(null);
                   }}
                   className="text-primary font-bold hover:underline"
                 >
@@ -1124,9 +1241,11 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
               <p className="text-muted">
                 Já possui uma conta?{" "}
                 <button
+                  type="button"
                   onClick={() => {
                     setMode("login");
                     setAuthError("");
+                    setDuplicateEmailError(null);
                   }}
                   className="text-primary font-bold hover:underline"
                 >

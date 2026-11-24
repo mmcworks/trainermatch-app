@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendVerificationCodeEmail } from "@/lib/email";
+import { isValidEmail, isValidCpf, isValidCnpj, isValidPhone } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,17 +28,45 @@ export async function POST(req: NextRequest) {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Checa se o e-mail já existe
+    // 1. Validação de Formato do E-mail
+    if (!isValidEmail(cleanEmail)) {
+      return NextResponse.json({ error: "Por favor, informe um endereço de e-mail válido (ex: seu.nome@email.com)." }, { status: 400 });
+    }
+
+    // 2. Checa se o e-mail já existe
     const existing = await prisma.user.findUnique({
       where: { email: cleanEmail }
     });
 
     if (existing) {
-      return NextResponse.json({ error: "Este e-mail já está cadastrado. Tente fazer login." }, { status: 409 });
+      return NextResponse.json({
+        error: "Este e-mail já está cadastrado no TrainerMatch.",
+        code: "EMAIL_ALREADY_EXISTS",
+        email: cleanEmail
+      }, { status: 409 });
+    }
+
+    const normalizedRole = role.toUpperCase() === "ACADEMIA" ? "ACADEMIA" : "PROFESSOR";
+
+    // 3. Validação de Documento (CPF para Professor / CNPJ para Academia)
+    if (normalizedRole === "PROFESSOR") {
+      const docCpf = document || "";
+      if (!isValidCpf(docCpf)) {
+        return NextResponse.json({ error: "CPF inválido. Verifique os números digitados." }, { status: 400 });
+      }
+    } else {
+      const docCnpj = document || crefOrCnpj || "";
+      if (!isValidCnpj(docCnpj)) {
+        return NextResponse.json({ error: "CNPJ inválido. Verifique os números digitados." }, { status: 400 });
+      }
+    }
+
+    // 4. Validação de Telefone (se informado)
+    if (phone && !isValidPhone(phone)) {
+      return NextResponse.json({ error: "Telefone inválido. Informe o DDD e o número com 9 dígitos." }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const normalizedRole = role.toUpperCase() === "ACADEMIA" ? "ACADEMIA" : "PROFESSOR";
 
     let newUser;
 

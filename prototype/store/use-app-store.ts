@@ -694,7 +694,7 @@ interface AppState {
   login: (email: string, passwordOrRole?: string, maybeRole?: "professor" | "academia") => Promise<{ success: boolean; requiresVerification?: boolean; email?: string; devCode?: string; error?: string }>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<boolean>;
-  registerUser: (data: { name: string; email: string; password?: string; role: "professor" | "academia"; doc: string; crefOrCnpj: string; phone?: string; logoOrAvatar?: string }) => Promise<{ success: boolean; requiresVerification?: boolean; email?: string; devCode?: string; emailDeliveryError?: string; error?: string }>;
+  registerUser: (data: { name: string; email: string; password?: string; role: "professor" | "academia"; doc: string; crefOrCnpj: string; phone?: string; logoOrAvatar?: string }) => Promise<{ success: boolean; requiresVerification?: boolean; email?: string; code?: string; devCode?: string; emailDeliveryError?: string; error?: string }>;
   verifyEmail: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
   resendVerificationCode: (email: string) => Promise<{ success: boolean; message?: string; devCode?: string; emailDeliveryError?: string; error?: string }>;
   
@@ -1216,7 +1216,12 @@ export const useAppStore = create<AppState>()(
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        return { success: false, error: data.error || "Erro ao realizar cadastro." };
+        return {
+          success: false,
+          code: data.code,
+          email: data.email,
+          error: data.error || "Erro ao realizar cadastro."
+        };
       }
 
       // Se o backend exigir verificação de e-mail com código OTP
