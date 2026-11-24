@@ -128,14 +128,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
     }
   }, [selectedRole, mode]);
 
-  // Validação de Senha Forte
-  const hasMinLength = newPassword.length >= 8;
-  const hasUppercase = /[A-Z]/.test(newPassword);
-  const hasNumber = /[0-9]/.test(newPassword);
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
-  const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
-  const isPasswordStrong = hasMinLength && hasUppercase && hasNumber && hasSpecial && passwordsMatch;
-  const strengthScore = [hasMinLength, hasUppercase, hasNumber, hasSpecial].filter(Boolean).length;
+  // Validação de Nova Senha (mínimo 6 caracteres e confirmação coincidente)
+  const hasMinLength = newPassword.length >= 6;
+  const passwordsMatch = newPassword.length >= 6 && newPassword === confirmPassword;
 
   // Timer de contagem regressiva para reenvio de código
   useEffect(() => {
@@ -465,7 +460,16 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
   const handleSaveNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
-    if (!isPasswordStrong) return;
+
+    if (!newPassword || newPassword.length < 6) {
+      setAuthError("A nova senha deve ter no mínimo 6 caracteres.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setAuthError("As senhas não coincidem. Certifique-se de digitar a mesma senha nos dois campos.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -760,8 +764,11 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                       type={showResetNewPassword ? "text" : "password"}
                       required
                       value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Mínimo 8 caracteres"
+                      onChange={(e) => {
+                        setNewPassword(e.target.value);
+                        if (authError) setAuthError("");
+                      }}
+                      placeholder="Mínimo de 6 caracteres"
                       className="w-full p-2.5 pr-10 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
                     />
                     <button
@@ -781,8 +788,11 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                       type={showResetConfirmPassword ? "text" : "password"}
                       required
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Repita a senha"
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        if (authError) setAuthError("");
+                      }}
+                      placeholder="Repita a nova senha"
                       className="w-full p-2.5 pr-10 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
                     />
                     <button
@@ -795,16 +805,43 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                   </div>
                 </div>
 
+                {/* Dicas visuais da senha */}
+                <div className="flex flex-wrap gap-2 text-[11px] pt-1">
+                  <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] transition-colors ${
+                      hasMinLength
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold"
+                        : "bg-slate-100 text-slate-500 dark:bg-navy-800 dark:text-slate-400"
+                    }`}
+                  >
+                    {hasMinLength ? <Check size={11} className="stroke-[3]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />}
+                    Mínimo 6 caracteres
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] transition-colors ${
+                      passwordsMatch
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold"
+                        : "bg-slate-100 text-slate-500 dark:bg-navy-800 dark:text-slate-400"
+                    }`}
+                  >
+                    {passwordsMatch ? <Check size={11} className="stroke-[3]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />}
+                    Senhas coincidem
+                  </span>
+                </div>
+
                 <button
                   type="submit"
-                  disabled={!isPasswordStrong}
-                  className={`w-full py-3 rounded-full text-xs font-extrabold transition-all shadow-sm ${
-                    isPasswordStrong
-                      ? "bg-primary hover:bg-primary-hover text-white"
-                      : "bg-slate-200 dark:bg-navy-700 text-slate-400 cursor-not-allowed"
-                  }`}
+                  disabled={isSubmitting}
+                  className="w-full py-3 rounded-full text-xs font-extrabold transition-all shadow-sm bg-primary hover:bg-primary-hover text-white flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  Salvar Nova Senha
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>Salvando nova senha...</span>
+                    </>
+                  ) : (
+                    <span>Salvar Nova Senha</span>
+                  )}
                 </button>
               </form>
             )}
