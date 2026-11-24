@@ -1,7 +1,52 @@
 "use client";
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+
+// Armazenamento seguro que previne QuotaExceededError no Safari / iOS WebKit
+const safeStorage = createJSONStorage(() => ({
+  getItem: (name: string) => {
+    try {
+      if (typeof window === "undefined") return null;
+      return localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name: string, value: string) => {
+    try {
+      if (typeof window === "undefined") return;
+      localStorage.setItem(name, value);
+    } catch (e) {
+      console.warn("Storage quota exceeded or restricted on mobile, write safely ignored:", e);
+    }
+  },
+  removeItem: (name: string) => {
+    try {
+      if (typeof window === "undefined") return;
+      localStorage.removeItem(name);
+    } catch {}
+  }
+}));
+
+// Limpeza de emergência de caches de imagens base64 antigos que estouraram os 5MB do Safari
+if (typeof window !== "undefined") {
+  try {
+    const keysToPurge: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith("trainermatch_") || k === "trainermatch-app-storage" || k === "trainermatch-storage-v2")) {
+        // Remove caches gigantes legados de imagens e documentos
+        if (k.includes("cache") || k.includes("docs") || k.includes("storage")) {
+          keysToPurge.push(k);
+        }
+      }
+    }
+    keysToPurge.forEach((k) => {
+      try { localStorage.removeItem(k); } catch (e) {}
+    });
+  } catch (e) {}
+}
 import {
   Gym,
   Instructor,
@@ -1973,12 +2018,9 @@ export const useAppStore = create<AppState>()(
   }
 }),
     {
-      name: "trainermatch-app-storage",
+      name: "trainermatch-session-v3",
+      storage: safeStorage,
       partialize: (state) => ({
-        instructors: state.instructors,
-        gyms: state.gyms,
-        shifts: state.shifts,
-        proposals: state.proposals,
         activeInstructorId: state.activeInstructorId,
         activeGymId: state.activeGymId,
         userEmail: state.userEmail,
