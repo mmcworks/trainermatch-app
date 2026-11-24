@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Script from "next/script";
 import "./globals.css";
 import { useAppStore } from "@/store/use-app-store";
 
@@ -98,17 +97,6 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-background dark:bg-navy-900 text-navy-900 dark:text-slate-100 transition-colors duration-200">
-        <Script
-          src="https://cdn.jsdelivr.net/npm/eruda"
-          strategy="afterInteractive"
-          onLoad={() => {
-            // @ts-ignore
-            if (typeof window !== "undefined" && window.eruda) {
-              // @ts-ignore
-              window.eruda.init();
-            }
-          }}
-        />
         {children}
       </body>
     </html>
