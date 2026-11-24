@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendVerificationCodeEmail } from "@/lib/email";
-import { isValidEmail, isValidCpf, isValidCnpj, isValidPhone } from "@/lib/validations";
+import { isValidEmail, isValidCpf, isValidCnpj, isValidPhone, validatePasswordRules } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
@@ -64,6 +64,12 @@ export async function POST(req: NextRequest) {
     // 4. Validação de Telefone (se informado)
     if (phone && !isValidPhone(phone)) {
       return NextResponse.json({ error: "Telefone inválido. Informe o DDD e o número com 9 dígitos." }, { status: 400 });
+    }
+
+    // 5. Validação de Segurança da Senha (mínimo 6 caracteres, 1 número, 1 caractere especial)
+    const pwdCheck = validatePasswordRules(password);
+    if (!pwdCheck.isValid) {
+      return NextResponse.json({ error: pwdCheck.errorMessage || "Senha não atende aos requisitos de segurança." }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);

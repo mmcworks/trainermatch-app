@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useAppStore } from "@/store/use-app-store";
 import { maskPhone, maskCpf, maskCnpj } from "@/store/mock-data";
-import { isValidEmail, isValidCpf, isValidCnpj, isValidPhone } from "@/lib/validations";
+import { isValidEmail, isValidCpf, isValidCnpj, isValidPhone, validatePasswordRules } from "@/lib/validations";
 import {
   Building2,
   User,
@@ -128,8 +128,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
     }
   }, [selectedRole, mode]);
 
-  // Validação de Nova Senha (mínimo 6 caracteres e confirmação coincidente)
-  const hasMinLength = newPassword.length >= 6;
+  // Validação de Senha em Tempo Real (Cadastro e Redefinição)
+  const registerPasswordRules = validatePasswordRules(registerPassword);
+  const resetPasswordRules = validatePasswordRules(newPassword);
   const passwordsMatch = newPassword.length >= 6 && newPassword === confirmPassword;
 
   // Timer de contagem regressiva para reenvio de código
@@ -359,8 +360,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
       return;
     }
 
-    if (!registerPassword || registerPassword.length < 6) {
-      setAuthError("A senha deve ter no mínimo 6 caracteres.");
+    // 4. Validação de Senha Reforçada (mínimo 6 caracteres, 1 número, 1 caractere especial)
+    if (!registerPasswordRules.isValid) {
+      setAuthError(registerPasswordRules.errorMessage || "A senha deve conter no mínimo 6 caracteres, pelo menos 1 número e 1 caractere especial.");
       return;
     }
 
@@ -461,8 +463,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
     e.preventDefault();
     setAuthError("");
 
-    if (!newPassword || newPassword.length < 6) {
-      setAuthError("A nova senha deve ter no mínimo 6 caracteres.");
+    if (!resetPasswordRules.isValid) {
+      setAuthError(resetPasswordRules.errorMessage || "A nova senha deve ter no mínimo 6 caracteres, pelo menos 1 número e 1 caractere especial.");
       return;
     }
 
@@ -806,16 +808,36 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                 </div>
 
                 {/* Dicas visuais da senha */}
-                <div className="flex flex-wrap gap-2 text-[11px] pt-1">
+                <div className="flex flex-wrap gap-1.5 text-[11px] pt-1">
                   <span
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] transition-colors ${
-                      hasMinLength
+                      resetPasswordRules.hasMinLength
                         ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold"
                         : "bg-slate-100 text-slate-500 dark:bg-navy-800 dark:text-slate-400"
                     }`}
                   >
-                    {hasMinLength ? <Check size={11} className="stroke-[3]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />}
+                    {resetPasswordRules.hasMinLength ? <Check size={11} className="stroke-[3]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />}
                     Mínimo 6 caracteres
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] transition-colors ${
+                      resetPasswordRules.hasNumber
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold"
+                        : "bg-slate-100 text-slate-500 dark:bg-navy-800 dark:text-slate-400"
+                    }`}
+                  >
+                    {resetPasswordRules.hasNumber ? <Check size={11} className="stroke-[3]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />}
+                    Pelo menos 1 número
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] transition-colors ${
+                      resetPasswordRules.hasSpecial
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold"
+                        : "bg-slate-100 text-slate-500 dark:bg-navy-800 dark:text-slate-400"
+                    }`}
+                  >
+                    {resetPasswordRules.hasSpecial ? <Check size={11} className="stroke-[3]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />}
+                    1 especial (!@#$...)
                   </span>
                   <span
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] transition-colors ${
@@ -1027,8 +1049,11 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                   type={showRegisterPassword ? "text" : "password"}
                   required
                   value={registerPassword}
-                  onChange={(e) => setRegisterPassword(e.target.value)}
-                  placeholder="Mínimo de 6 caracteres"
+                  onChange={(e) => {
+                    setRegisterPassword(e.target.value);
+                    if (authError) setAuthError("");
+                  }}
+                  placeholder="Mínimo 6 dígitos, com número e caractere especial"
                   className="w-full p-2.5 pr-10 bg-slate-50 dark:bg-navy-900 rounded-xl border border-slate-200 dark:border-slate-700 font-medium dark:text-white"
                 />
                 <button
@@ -1038,6 +1063,40 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                 >
                   {showRegisterPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
+              </div>
+
+              {/* Dicas visuais da senha de cadastro */}
+              <div className="flex flex-wrap gap-1.5 text-[11px] pt-1.5">
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] transition-colors ${
+                    registerPasswordRules.hasMinLength
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold"
+                      : "bg-slate-100 text-slate-500 dark:bg-navy-800 dark:text-slate-400"
+                  }`}
+                >
+                  {registerPasswordRules.hasMinLength ? <Check size={11} className="stroke-[3]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />}
+                  Mínimo 6 caracteres
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] transition-colors ${
+                    registerPasswordRules.hasNumber
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold"
+                      : "bg-slate-100 text-slate-500 dark:bg-navy-800 dark:text-slate-400"
+                  }`}
+                >
+                  {registerPasswordRules.hasNumber ? <Check size={11} className="stroke-[3]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />}
+                  Pelo menos 1 número
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] transition-colors ${
+                    registerPasswordRules.hasSpecial
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold"
+                      : "bg-slate-100 text-slate-500 dark:bg-navy-800 dark:text-slate-400"
+                  }`}
+                >
+                  {registerPasswordRules.hasSpecial ? <Check size={11} className="stroke-[3]" /> : <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />}
+                  1 especial (!@#$...)
+                </span>
               </div>
             </div>
 

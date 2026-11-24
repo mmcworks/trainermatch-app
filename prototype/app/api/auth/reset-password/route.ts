@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { validatePasswordRules } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,9 +14,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (newPassword.length < 6) {
+    const pwdCheck = validatePasswordRules(newPassword);
+    if (!pwdCheck.isValid) {
       return NextResponse.json(
-        { error: "A nova senha deve ter no mínimo 6 caracteres." },
+        { error: pwdCheck.errorMessage || "A nova senha não atende aos requisitos de segurança." },
         { status: 400 }
       );
     }

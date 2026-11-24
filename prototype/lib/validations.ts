@@ -151,3 +151,44 @@ export function isValidPhone(phone: string): boolean {
 
   return true;
 }
+
+/**
+ * Validação de Senha TrainerMatch:
+ * - Mínimo de 6 caracteres
+ * - Pelo menos um número (0-9)
+ * - Pelo menos um caractere especial (!@#$%^&*(),.?":{}|<>_\-+=[\]\\/`~ etc.)
+ */
+export function validatePasswordRules(password: string): {
+  hasMinLength: boolean;
+  hasNumber: boolean;
+  hasSpecial: boolean;
+  isValid: boolean;
+  errorMessage?: string;
+} {
+  const pwd = password || "";
+  const hasMinLength = pwd.length >= 6;
+  const hasNumber = /[0-9]/.test(pwd);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>_\-+=[\]\\/`~]/.test(pwd);
+  const isValid = hasMinLength && hasNumber && hasSpecial;
+
+  let errorMessage: string | undefined;
+  if (!hasMinLength) {
+    errorMessage = "A senha deve ter no mínimo 6 caracteres.";
+  } else if (!hasNumber) {
+    errorMessage = "A senha deve conter pelo menos um número.";
+  } else if (!hasSpecial) {
+    errorMessage = "A senha deve conter pelo menos um caractere especial (ex: ! @ # $ %).";
+  }
+
+  return {
+    hasMinLength,
+    hasNumber,
+    hasSpecial,
+    isValid,
+    errorMessage
+  };
+}
+
+export function isValidPassword(password: string): boolean {
+  return validatePasswordRules(password).isValid;
+}
