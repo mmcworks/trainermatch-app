@@ -143,20 +143,30 @@ export async function POST(req: NextRequest) {
     });
 
     // 4. Dispara e-mail via Resend
-    await sendVerificationCodeEmail({
+    const emailResult = await sendVerificationCodeEmail({
       toEmail: cleanEmail,
       code: verificationCode,
       name
     });
 
-    // 5. Retorna status exigindo validação do código (a sessão só é iniciada após validar)
+    // Detecta se estamos usando o domínio de testes do Resend ou se o envio falhou
+    const isUsingTestingDomain = !process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL.includes("resend.dev");
+    const isDemoMode = !emailResult.success || isUsingTestingDomain;
+
+    // 5. Retorna status exigindo validação do código
     return NextResponse.json({
       success: true,
       requiresVerification: true,
       email: cleanEmail,
       name,
       role: normalizedRole.toLowerCase(),
-      message: "Conta criada com sucesso! Enviamos um código de verificação para o seu e-mail."
+      emailSent: emailResult.success,
+      emailDeliveryError: emailResult.error || null,
+      devCode: isDemoMode ? verificationCode : undefined,
+      isDemoMode,
+      message: emailResult.success
+        ? "Conta criada com sucesso! Enviamos um código de verificação para o seu e-mail."
+        : "Conta criada! Como o domínio próprio ainda não está ativo no Resend, utilize o código de segurança gerado na tela."
     });
   } catch (error: any) {
     console.error("Erro no cadastro:", error);

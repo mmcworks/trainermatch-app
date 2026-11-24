@@ -691,12 +691,12 @@ interface AppState {
   activeGymId: string;
   
   // Ações de Autenticação
-  login: (email: string, passwordOrRole?: string, maybeRole?: "professor" | "academia") => Promise<{ success: boolean; requiresVerification?: boolean; email?: string; error?: string }>;
+  login: (email: string, passwordOrRole?: string, maybeRole?: "professor" | "academia") => Promise<{ success: boolean; requiresVerification?: boolean; email?: string; devCode?: string; error?: string }>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<boolean>;
-  registerUser: (data: { name: string; email: string; password?: string; role: "professor" | "academia"; doc: string; crefOrCnpj: string; phone?: string; logoOrAvatar?: string }) => Promise<{ success: boolean; requiresVerification?: boolean; email?: string; error?: string }>;
+  registerUser: (data: { name: string; email: string; password?: string; role: "professor" | "academia"; doc: string; crefOrCnpj: string; phone?: string; logoOrAvatar?: string }) => Promise<{ success: boolean; requiresVerification?: boolean; email?: string; devCode?: string; emailDeliveryError?: string; error?: string }>;
   verifyEmail: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
-  resendVerificationCode: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  resendVerificationCode: (email: string) => Promise<{ success: boolean; message?: string; devCode?: string; emailDeliveryError?: string; error?: string }>;
   
   // Assinatura da Academia ativa
   gymPlan: "gratis" | "essencial" | "pro" | "rede";
@@ -1066,6 +1066,7 @@ export const useAppStore = create<AppState>()(
             success: false,
             requiresVerification: true,
             email: data.email,
+            devCode: data.devCode,
             error: data.error || "Seu e-mail ainda não foi validado."
           };
         }
@@ -1223,7 +1224,9 @@ export const useAppStore = create<AppState>()(
         return {
           success: true,
           requiresVerification: true,
-          email: data.email
+          email: data.email,
+          devCode: data.devCode,
+          emailDeliveryError: data.emailDeliveryError
         };
       }
 
@@ -1322,7 +1325,12 @@ export const useAppStore = create<AppState>()(
         return { success: false, error: data.error || "Erro ao reenviar código de verificação." };
       }
 
-      return { success: true, message: data.message };
+      return {
+        success: true,
+        message: data.message,
+        devCode: data.devCode,
+        emailDeliveryError: data.emailDeliveryError
+      };
     } catch (err: any) {
       return { success: false, error: err.message || "Erro de conexão ao reenviar código." };
     }

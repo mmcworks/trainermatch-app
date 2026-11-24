@@ -43,6 +43,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isResendingOtp, setIsResendingOtp] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60);
+  const [devOtpHint, setDevOtpHint] = useState<string>("");
+  const [deliveryWarning, setDeliveryWarning] = useState<string>("");
   const [topToast, setTopToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const otpInputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
@@ -212,7 +214,17 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
       const res = await resendVerificationCode(emailToVerify);
       if (res.success) {
         setResendCooldown(60);
-        showTopToast("Novo código enviado para seu e-mail!", "success");
+        if (res.devCode) setDevOtpHint(res.devCode);
+        if (res.emailDeliveryError) {
+          if (res.emailDeliveryError === "RESEND_API_KEY_NOT_FOUND") {
+            setDeliveryWarning("A chave RESEND_API_KEY não foi encontrada nas variáveis de ambiente da Vercel. Lembre-se de fazer um Redeploy na Vercel.");
+          } else {
+            setDeliveryWarning(`Aviso do Resend: ${res.emailDeliveryError}`);
+          }
+        } else {
+          setDeliveryWarning("");
+        }
+        showTopToast(res.emailDeliveryError ? "Novo código gerado para teste!" : "Novo código enviado para seu e-mail!", "success");
       } else {
         setOtpError(res.error || "Não foi possível reenviar o código.");
       }
@@ -233,8 +245,11 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
         setEmailToVerify(result.email || email.trim().toLowerCase());
         setOtpDigits(["", "", "", "", "", ""]);
         setResendCooldown(60);
+        if (result.devCode) {
+          setDevOtpHint(result.devCode);
+        }
         setMode("verificar_email");
-        showTopToast("Insira o código de 6 dígitos enviado para seu e-mail.", "success");
+        showTopToast("Insira o código de 6 dígitos para validar sua conta.", "success");
         return;
       }
 
@@ -331,7 +346,21 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
         setOtpDigits(["", "", "", "", "", ""]);
         setResendCooldown(60);
         setMode("verificar_email");
-        showTopToast("Código de verificação enviado para seu e-mail!", "success");
+        if (result.devCode) {
+          setDevOtpHint(result.devCode);
+        } else {
+          setDevOtpHint("");
+        }
+        if (result.emailDeliveryError) {
+          if (result.emailDeliveryError === "RESEND_API_KEY_NOT_FOUND") {
+            setDeliveryWarning("A chave RESEND_API_KEY não foi encontrada nas variáveis de ambiente da Vercel. Lembre-se de fazer um Redeploy na Vercel.");
+          } else {
+            setDeliveryWarning(`Aviso do Resend: ${result.emailDeliveryError}`);
+          }
+        } else {
+          setDeliveryWarning("");
+        }
+        showTopToast(result.emailDeliveryError ? "Código gerado para teste!" : "Código de verificação enviado para seu e-mail!", "success");
         return;
       }
 
@@ -941,6 +970,46 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
                 <span className="font-bold text-primary break-all">{emailToVerify}</span>.
               </p>
             </div>
+
+            {/* Banner de Demonstração (Código de Validação Visível) */}
+            {devOtpHint && (
+              <div className="p-3 bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl text-left text-xs space-y-2 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5 text-xs">
+                    <Sparkles size={13} className="text-primary shrink-0" />
+                    <span>Modo Demonstração (Sem Domínio Próprio)</span>
+                  </div>
+                  <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full">
+                    Ativo
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {deliveryWarning
+                    ? deliveryWarning
+                    : "Como o domínio próprio ainda não está ativo no Resend, utilize o código abaixo para validar e acessar o sistema:"}
+                </p>
+                <div className="bg-white dark:bg-navy-900 p-2 rounded-lg border border-blue-200 dark:border-blue-900 flex items-center justify-between shadow-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500 font-medium">Código:</span>
+                    <span className="font-mono text-sm font-black text-primary tracking-widest">
+                      {devOtpHint}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const digits = devOtpHint.split("").slice(0, 6);
+                      setOtpDigits(digits);
+                      otpInputRefs.current[5]?.focus();
+                    }}
+                    className="text-xs font-bold text-white bg-primary hover:bg-primary-hover px-2.5 py-1 rounded-md transition-all active:scale-95 shadow-xs flex items-center gap-1"
+                  >
+                    <span>Preencher</span>
+                    <Check size={12} />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Alerta de Erro específico do OTP */}
             {otpError && (

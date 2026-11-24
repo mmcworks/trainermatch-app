@@ -108,11 +108,25 @@ export async function POST(req: NextRequest) {
 
     // Se o usuário comum cadastrado ainda não validou o e-mail
     if (!isMockUser && (user as any).emailVerified === false) {
+      const isUsingTestingDomain = !process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL.includes("resend.dev");
+      let devCode: string | undefined = undefined;
+
+      if (isUsingTestingDomain) {
+        const pending = await prisma.emailVerificationCode.findFirst({
+          where: { email: cleanEmail },
+          orderBy: { createdAt: "desc" }
+        });
+        if (pending && new Date() < pending.expiresAt) {
+          devCode = pending.code;
+        }
+      }
+
       return NextResponse.json({
         requiresVerification: true,
         email: user.email,
         name: user.name,
         role: userRole,
+        devCode,
         error: "Seu e-mail ainda não foi validado. Por favor, insira o código de 6 dígitos para ativar sua conta."
       }, { status: 403 });
     }

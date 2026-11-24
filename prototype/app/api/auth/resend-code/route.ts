@@ -79,15 +79,24 @@ export async function POST(req: NextRequest) {
     });
 
     // 4. Dispara e-mail
-    await sendVerificationCodeEmail({
+    const emailResult = await sendVerificationCodeEmail({
       toEmail: cleanEmail,
       code: newCode,
       name: user.name
     });
 
+    const isUsingTestingDomain = !process.env.RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL.includes("resend.dev");
+    const isDemoMode = !emailResult.success || isUsingTestingDomain;
+
     return NextResponse.json({
       success: true,
-      message: "Novo código de verificação enviado com sucesso!"
+      emailSent: emailResult.success,
+      emailDeliveryError: emailResult.error || null,
+      devCode: isDemoMode ? newCode : undefined,
+      isDemoMode,
+      message: emailResult.success
+        ? "Novo código de verificação enviado com sucesso para seu e-mail!"
+        : "Novo código de segurança gerado para teste!"
     });
   } catch (error: any) {
     console.error("Erro no reenvio de código:", error);

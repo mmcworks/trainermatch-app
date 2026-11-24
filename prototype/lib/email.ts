@@ -1,15 +1,8 @@
 import { Resend } from "resend";
 
-const resendApiKey = process.env.RESEND_API_KEY;
-const resendFromEmail = process.env.RESEND_FROM_EMAIL || "TrainerMatch <onboarding@resend.dev>";
-
-// Inicializa cliente Resend caso a chave esteja presente
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
-
 /**
- * Envia e-mail com código OTP de 6 dígitos para validação de conta.
- * Caso a RESEND_API_KEY não esteja configurada no ambiente local,
- * faz o log seguro no terminal como fallback de desenvolvimento.
+ * Envia e-mail com código OTP de 6 dígitos para validação de conta via Resend.
+ * Lê dinamicamente process.env.RESEND_API_KEY a cada invocação.
  */
 export async function sendVerificationCodeEmail({
   toEmail,
@@ -22,6 +15,9 @@ export async function sendVerificationCodeEmail({
 }): Promise<{ success: boolean; id?: string; error?: string }> {
   const cleanEmail = toEmail.trim().toLowerCase();
   const firstName = name ? name.split(" ")[0] : "Usuário";
+
+  const apiKey = (process.env.RESEND_API_KEY || "").trim();
+  const fromEmail = (process.env.RESEND_FROM_EMAIL || "TrainerMatch <onboarding@resend.dev>").trim();
 
   // Template HTML profissional e responsivo com a identidade visual do TrainerMatch
   const htmlContent = `
@@ -74,19 +70,21 @@ export async function sendVerificationCodeEmail({
     </html>
   `;
 
-  // Se não houver chave Resend configurada (modo local/desenvolvimento)
-  if (!resend) {
-    console.log("=================================================");
-    console.log(`[Resend Dev Fallback] RESEND_API_KEY não encontrada.`);
-    console.log(`[Resend Dev Fallback] E-mail: ${cleanEmail}`);
-    console.log(`[Resend Dev Fallback] Código OTP Gerado: >>> ${code} <<<`);
-    console.log("=================================================");
-    return { success: true, id: "dev-fallback" };
+  // Se não houver chave Resend configurada
+  if (!apiKey) {
+    console.warn("[Resend] RESEND_API_KEY não foi encontrada nas variáveis de ambiente.");
+    console.log(`[Resend Fallback] Código OTP para ${cleanEmail}: ${code}`);
+    return {
+      success: false,
+      error: "RESEND_API_KEY_NOT_FOUND"
+    };
   }
+
+  const resend = new Resend(apiKey);
 
   try {
     const { data, error } = await resend.emails.send({
-      from: resendFromEmail,
+      from: fromEmail,
       to: [cleanEmail],
       subject: `${code} é o seu código de verificação · TrainerMatch`,
       html: htmlContent,
