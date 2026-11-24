@@ -103,6 +103,20 @@ export async function POST(req: NextRequest) {
 
     const userRole = user.role.toLowerCase() as "academia" | "professor";
 
+    // Usuários mock e de teste NUNCA precisam de verificação
+    const isMockUser = cleanEmail === "movagym@email.com" || cleanEmail === "lucasf@email.com" || cleanEmail.endsWith("@trainermatch.com");
+
+    // Se o usuário comum cadastrado ainda não validou o e-mail
+    if (!isMockUser && (user as any).emailVerified === false) {
+      return NextResponse.json({
+        requiresVerification: true,
+        email: user.email,
+        name: user.name,
+        role: userRole,
+        error: "Seu e-mail ainda não foi validado. Por favor, insira o código de 6 dígitos para ativar sua conta."
+      }, { status: 403 });
+    }
+
     // Se o usuário especificou o perfil e não bate com a conta
     if (role && role.toLowerCase() !== userRole) {
       return NextResponse.json({

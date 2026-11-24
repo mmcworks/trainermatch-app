@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import { sendVerificationCodeEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -48,6 +50,7 @@ export async function POST(req: NextRequest) {
           name,
           phone: phone || "",
           document: document || crefOrCnpj || "",
+          emailVerified: false,
           gym: {
             create: {
               name,
@@ -68,7 +71,6 @@ export async function POST(req: NextRequest) {
                 peakHourAddition: 5,
                 weekendAddition: 8
               })
-              // 0 aulas/turnos!
             }
           }
         },
@@ -85,6 +87,7 @@ export async function POST(req: NextRequest) {
           name,
           phone: phone || "",
           document: document || "",
+          emailVerified: false,
           instructor: {
             create: {
               name,
@@ -116,68 +119,45 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const createdUser = await prisma.user.findUnique({
-      where: { id: newUser.id },
-      include: {
-        gym: true,
-        instructor: true
-      }
-    });
+    // 1. Gera código criptograficamente seguro de 6 dígitos
+    const verificationCode = crypto.randomInt(100000, 999999).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
 
-    if (!createdUser) {
-      return NextResponse.json({ error: "Erro ao carregar usuário criado" }, { status: 500 });
+    // 2. Remove códigos anteriores pendentes para o mesmo e-mail (caso tenha recadastrado)
+    try {
+      await prisma.emailVerificationCode.deleteMany({
+        where: { email: cleanEmail }
+      });
+    } catch (cleanupErr) {
+      console.warn("Aviso ao limpar códigos anteriores:", cleanupErr);
     }
 
-    const userRole = createdUser.role.toLowerCase() as "academia" | "professor";
-
-    const response = NextResponse.json({
-      success: true,
-      user: {
-        id: createdUser.id,
-        email: createdUser.email,
-        name: createdUser.name,
-        role: userRole,
-        phone: createdUser.phone,
-        document: createdUser.document,
-        gym: createdUser.gym ? {
-          ...createdUser.gym,
-          managerName: (createdUser.gym as any).managerName || "",
-          managerPhone: (createdUser.gym as any).managerPhone || "",
-          managerEmail: (createdUser.gym as any).managerEmail || "",
-          managerRole: (createdUser.gym as any).managerRole || "",
-          modalities: JSON.parse(createdUser.gym.modalities || "[]"),
-          pricingRules: createdUser.gym.pricingRules ? JSON.parse(createdUser.gym.pricingRules) : undefined
-        } : null,
-        instructor: createdUser.instructor ? {
-          ...createdUser.instructor,
-          displayName: (createdUser.instructor as any).displayName || createdUser.instructor.name,
-          birthDate: (createdUser.instructor as any).birthDate || "",
-          cnpj: (createdUser.instructor as any).cnpj || "",
-          modalities: JSON.parse(createdUser.instructor.modalities || "[]"),
-          pixKeys: JSON.parse(createdUser.instructor.pixKeys || "[]"),
-          availability: JSON.parse(createdUser.instructor.availability || "[]"),
-          blockedDates: JSON.parse((createdUser.instructor as any).blockedDates || "[]"),
-          blockedDateSlots: JSON.parse((createdUser.instructor as any).blockedDateSlots || "[]"),
-          offeredSlots: JSON.parse((createdUser.instructor as any).offeredSlots || "[]"),
-          notificationsEnabled: JSON.parse((createdUser.instructor as any).notificationsEnabled || "{\"push\":true,\"whatsapp\":true,\"email\":true}"),
-          workExperiences: JSON.parse((createdUser.instructor as any).workExperiences || "[]")
-        } : null
+    // 3. Salva novo código no banco
+    await prisma.emailVerificationCode.create({
+      data: {
+        email: cleanEmail,
+        code: verificationCode,
+        expiresAt,
+        attempts: 0
       }
     });
 
-    response.cookies.set("trainer_session", JSON.stringify({
-      userId: createdUser.id,
-      email: createdUser.email,
-      role: userRole,
-      entityId: userRole === "academia" ? createdUser.gym?.id : createdUser.instructor?.id
-    }), {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 30
+    // 4. Dispara e-mail via Resend
+    await sendVerificationCodeEmail({
+      toEmail: cleanEmail,
+      code: verificationCode,
+      name
     });
 
-    return response;
+    // 5. Retorna status exigindo validação do código (a sessão só é iniciada após validar)
+    return NextResponse.json({
+      success: true,
+      requiresVerification: true,
+      email: cleanEmail,
+      name,
+      role: normalizedRole.toLowerCase(),
+      message: "Conta criada com sucesso! Enviamos um código de verificação para o seu e-mail."
+    });
   } catch (error: any) {
     console.error("Erro no cadastro:", error);
     return NextResponse.json({ error: error.message || "Erro ao criar conta." }, { status: 500 });

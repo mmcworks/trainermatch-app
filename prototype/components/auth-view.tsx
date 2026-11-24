@@ -17,7 +17,9 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Sparkles
+  Sparkles,
+  RefreshCw,
+  ArrowLeft
 } from "lucide-react";
 
 interface AuthViewProps {
@@ -25,14 +27,24 @@ interface AuthViewProps {
 }
 
 export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
-  const { login, registerUser } = useAppStore();
+  const { login, registerUser, verifyEmail, resendVerificationCode } = useAppStore();
 
-  const [mode, setMode] = useState<"login" | "cadastro" | "esqueceu_senha">("login");
+  const [mode, setMode] = useState<"login" | "cadastro" | "esqueceu_senha" | "verificar_email">("login");
   const [selectedRole, setSelectedRole] = useState<"professor" | "academia">(defaultRole || "professor");
 
   // Alerta de erro da autenticação
   const [authError, setAuthError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Campos de Validação de E-mail (OTP)
+  const [emailToVerify, setEmailToVerify] = useState("");
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const [otpError, setOtpError] = useState("");
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [isResendingOtp, setIsResendingOtp] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(60);
+  const [topToast, setTopToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const otpInputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
   // Campos de Login (iniciam vazios com placeholders, preenchíveis pelo botão de teste)
   const [email, setEmail] = useState("");
@@ -119,12 +131,113 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
   const isPasswordStrong = hasMinLength && hasUppercase && hasNumber && hasSpecial && passwordsMatch;
   const strengthScore = [hasMinLength, hasUppercase, hasNumber, hasSpecial].filter(Boolean).length;
 
+  // Timer de contagem regressiva para reenvio de código
+  useEffect(() => {
+    if (mode !== "verificar_email" || resendCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [mode, resendCooldown]);
+
+  const showTopToast = (message: string, type: "success" | "error" = "success") => {
+    setTopToast({ message, type });
+    setTimeout(() => {
+      setTopToast(null);
+    }, 4500);
+  };
+
+  const handleOtpDigitChange = (index: number, value: string) => {
+    setOtpError("");
+    const digit = value.replace(/\D/g, "").slice(-1);
+    const newDigits = [...otpDigits];
+    newDigits[index] = digit;
+    setOtpDigits(newDigits);
+
+    if (digit && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pastedData) return;
+
+    const newDigits = [...otpDigits];
+    for (let i = 0; i < 6; i++) {
+      newDigits[i] = pastedData[i] || "";
+    }
+    setOtpDigits(newDigits);
+
+    const nextFocusIndex = Math.min(pastedData.length, 5);
+    otpInputRefs.current[nextFocusIndex]?.focus();
+  };
+
+  const handleVerifyOtpSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setOtpError("");
+    const fullCode = otpDigits.join("");
+    if (fullCode.length < 6) {
+      setOtpError("Por favor, digite os 6 dígitos do código de verificação.");
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    try {
+      const res = await verifyEmail(emailToVerify, fullCode);
+      if (!res.success) {
+        setOtpError(res.error || "Código de verificação incorreto ou expirado.");
+      } else {
+        showTopToast("E-mail validado com sucesso! Bem-vindo ao TrainerMatch.", "success");
+      }
+    } catch (err: any) {
+      setOtpError(err.message || "Erro de conexão ao validar código.");
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || isResendingOtp) return;
+    setIsResendingOtp(true);
+    setOtpError("");
+    try {
+      const res = await resendVerificationCode(emailToVerify);
+      if (res.success) {
+        setResendCooldown(60);
+        showTopToast("Novo código enviado para seu e-mail!", "success");
+      } else {
+        setOtpError(res.error || "Não foi possível reenviar o código.");
+      }
+    } catch (err: any) {
+      setOtpError(err.message || "Falha na comunicação com o servidor.");
+    } finally {
+      setIsResendingOtp(false);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
     setIsSubmitting(true);
     try {
       const result = await login(email, password, selectedRole);
+      if (result?.requiresVerification) {
+        setEmailToVerify(result.email || email.trim().toLowerCase());
+        setOtpDigits(["", "", "", "", "", ""]);
+        setResendCooldown(60);
+        setMode("verificar_email");
+        showTopToast("Insira o código de 6 dígitos enviado para seu e-mail.", "success");
+        return;
+      }
+
       if (result?.success) {
         try {
           if (rememberMe) {
@@ -213,6 +326,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
         logoOrAvatar: uploadedImageSrc
       });
 
+      if (result?.requiresVerification) {
+        setEmailToVerify(result.email || registerEmail.trim().toLowerCase());
+        setOtpDigits(["", "", "", "", "", ""]);
+        setResendCooldown(60);
+        setMode("verificar_email");
+        showTopToast("Código de verificação enviado para seu e-mail!", "success");
+        return;
+      }
+
       if (!result?.success) {
         setAuthError(result?.error || "Erro ao criar conta.");
       }
@@ -298,7 +420,21 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
   };
 
   return (
-    <div className="min-h-screen bg-background dark:bg-navy-900 flex items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-background dark:bg-navy-900 flex items-center justify-center p-4 font-sans relative">
+      {/* Notificação Flutuante de Sucesso/Alerta no Topo */}
+      {topToast && (
+        <div
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[99999] px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-bold animate-in fade-in slide-in-from-top-4 transition-all ${
+            topToast.type === "success"
+              ? "bg-emerald-600 text-white"
+              : "bg-red-600 text-white"
+          }`}
+        >
+          {topToast.type === "success" ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+          <span>{topToast.message}</span>
+        </div>
+      )}
+
       <div className="bg-card dark:bg-navy-800 w-full max-w-md rounded-squircle p-8 shadow-floating space-y-5 border border-slate-100 dark:border-slate-700/60 animate-scale-up">
         {/* Header com Logo */}
         <div className="text-center space-y-1.5">
@@ -313,12 +449,14 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
               ? "Entre para gerenciar turnos e contratações em produção"
               : mode === "cadastro"
               ? "Cadastre sua academia ou seu perfil de professor do zero"
+              : mode === "verificar_email"
+              ? "Validação de segurança e ativação de conta"
               : "Recuperação de Acesso e Redefinição de Senha"}
           </p>
         </div>
 
-        {/* Alternar Perfil: Professor vs Academia */}
-        {mode !== "esqueceu_senha" && (
+        {/* Alternar Perfil: Professor vs Academia (Apenas no login e cadastro) */}
+        {mode !== "esqueceu_senha" && mode !== "verificar_email" && (
           <div className="flex bg-slate-100 dark:bg-navy-700 p-1 rounded-full text-xs font-bold">
             <button
               type="button"
@@ -352,7 +490,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
         )}
 
         {/* Alerta de Erro */}
-        {authError && (
+        {authError && mode !== "verificar_email" && (
           <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-xl flex items-start gap-2 text-red-700 dark:text-red-300 text-xs animate-shake">
             <AlertCircle size={15} className="shrink-0 mt-0.5" />
             <span>{authError}</span>
@@ -783,8 +921,121 @@ export const AuthView: React.FC<AuthViewProps> = ({ defaultRole }) => {
           </form>
         )}
 
+        {/* ===================== TELA DE VALIDAÇÃO DE E-MAIL (OTP) ===================== */}
+        {mode === "verificar_email" && (
+          <div className="space-y-5 animate-scale-up text-center">
+            {/* Ícone de Envelope com Badge */}
+            <div className="relative w-16 h-16 mx-auto flex items-center justify-center bg-primary/10 dark:bg-primary/20 rounded-2xl text-primary shadow-inner">
+              <Mail size={32} />
+              <div className="absolute -top-1.5 -right-1.5 bg-emerald-500 text-white rounded-full p-1 shadow-sm">
+                <ShieldCheck size={14} />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <h2 className="text-lg font-black text-navy-900 dark:text-white">
+                Verifique seu E-mail
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+                Enviamos um código de <span className="font-bold text-navy-900 dark:text-white">6 dígitos</span> para{" "}
+                <span className="font-bold text-primary break-all">{emailToVerify}</span>.
+              </p>
+            </div>
+
+            {/* Alerta de Erro específico do OTP */}
+            {otpError && (
+              <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-xl flex items-start gap-2 text-red-700 dark:text-red-300 text-xs text-left animate-shake">
+                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                <span>{otpError}</span>
+              </div>
+            )}
+
+            {/* Inputs de 6 Dígitos */}
+            <div className="flex justify-center items-center gap-2 my-4">
+              {otpDigits.map((digit, index) => (
+                <input
+                  key={index}
+                  ref={(el) => {
+                    otpInputRefs.current[index] = el;
+                  }}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleOtpDigitChange(index, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                  onPaste={handleOtpPaste}
+                  className="w-11 h-12 text-center text-xl font-black rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-navy-900 text-navy-900 dark:text-white focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-xs"
+                />
+              ))}
+            </div>
+
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">
+              ⏱ O código é válido por 15 minutos. Você pode digitar ou colar diretamente.
+            </p>
+
+            {/* Botão de Validar e Entrar */}
+            <button
+              type="button"
+              disabled={isVerifyingOtp || otpDigits.join("").length < 6}
+              onClick={() => handleVerifyOtpSubmit()}
+              className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 text-white font-extrabold py-3.5 rounded-full text-xs shadow-sm transition-all active:scale-[0.99] flex items-center justify-center gap-1.5"
+            >
+              {isVerifyingOtp ? (
+                <>
+                  <RefreshCw size={14} className="animate-spin" />
+                  <span>Validando Código...</span>
+                </>
+              ) : (
+                <>
+                  <span>Validar e Acessar Conta</span>
+                  <ArrowRight size={14} />
+                </>
+              )}
+            </button>
+
+            {/* Seção de Reenvio com Contador */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 space-y-3">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                Não recebeu o código?{" "}
+                {resendCooldown > 0 ? (
+                  <span className="font-semibold text-slate-400 dark:text-slate-500">
+                    Reenviar em {String(resendCooldown).padStart(2, "0")}s
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isResendingOtp}
+                    onClick={handleResendOtp}
+                    className="text-primary font-bold hover:underline inline-flex items-center gap-1"
+                  >
+                    {isResendingOtp && <RefreshCw size={11} className="animate-spin" />}
+                    <span>Reenviar código</span>
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("login");
+                    setAuthError("");
+                    setOtpError("");
+                  }}
+                  className="text-[11px] text-slate-500 hover:text-navy-900 dark:hover:text-white inline-flex items-center gap-1 transition-colors"
+                >
+                  <ArrowLeft size={12} />
+                  <span>Voltar para o Login</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Rodapé Alternador de Login / Cadastro */}
-        {mode !== "esqueceu_senha" && (
+        {mode !== "esqueceu_senha" && mode !== "verificar_email" && (
           <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 text-center text-xs">
             {mode === "login" ? (
               <p className="text-muted">

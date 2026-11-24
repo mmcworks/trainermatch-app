@@ -691,10 +691,12 @@ interface AppState {
   activeGymId: string;
   
   // Ações de Autenticação
-  login: (email: string, passwordOrRole?: string, maybeRole?: "professor" | "academia") => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, passwordOrRole?: string, maybeRole?: "professor" | "academia") => Promise<{ success: boolean; requiresVerification?: boolean; email?: string; error?: string }>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<boolean>;
-  registerUser: (data: { name: string; email: string; password?: string; role: "professor" | "academia"; doc: string; crefOrCnpj: string; phone?: string; logoOrAvatar?: string }) => Promise<{ success: boolean; error?: string }>;
+  registerUser: (data: { name: string; email: string; password?: string; role: "professor" | "academia"; doc: string; crefOrCnpj: string; phone?: string; logoOrAvatar?: string }) => Promise<{ success: boolean; requiresVerification?: boolean; email?: string; error?: string }>;
+  verifyEmail: (email: string, code: string) => Promise<{ success: boolean; error?: string }>;
+  resendVerificationCode: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   
   // Assinatura da Academia ativa
   gymPlan: "gratis" | "essencial" | "pro" | "rede";
@@ -1059,6 +1061,14 @@ export const useAppStore = create<AppState>()(
 
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (data.requiresVerification) {
+          return {
+            success: false,
+            requiresVerification: true,
+            email: data.email,
+            error: data.error || "Seu e-mail ainda não foi validado."
+          };
+        }
         return { success: false, error: data.error || "E-mail ou senha incorretos." };
       }
 
@@ -1208,7 +1218,67 @@ export const useAppStore = create<AppState>()(
         return { success: false, error: data.error || "Erro ao realizar cadastro." };
       }
 
+      // Se o backend exigir verificação de e-mail com código OTP
+      if (data.requiresVerification) {
+        return {
+          success: true,
+          requiresVerification: true,
+          email: data.email
+        };
+      }
+
+      // Se por algum motivo o backend já retornou o usuário diretamente
       const user = data.user;
+      if (user) {
+        const userGymId = user.role === "academia" && user.gym?.id ? user.gym.id : "";
+        const userInstructorId = user.role === "professor" && user.instructor?.id ? user.instructor.id : "";
+
+        const updatedInstructors = user.instructor
+          ? [user.instructor, ...get().instructors.filter((i) => i.id !== user.instructor.id)]
+          : get().instructors;
+
+        const updatedGyms = user.gym
+          ? [user.gym, ...get().gyms.filter((g) => g.id !== user.gym.id)]
+          : get().gyms;
+
+        set({
+          isAuthenticated: true,
+          userName: user.name,
+          userEmail: user.email,
+          currentRole: user.role,
+          activeGymId: userGymId,
+          activeInstructorId: userInstructorId,
+          instructors: updatedInstructors,
+          gyms: updatedGyms
+        });
+
+        await get().syncWithBackend();
+      }
+
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message || "Falha ao conectar ao servidor." };
+    }
+  },
+
+  verifyEmail: async (email: string, code: string) => {
+    try {
+      const res = await fetch("/api/auth/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || "Código de verificação incorreto ou expirado." };
+      }
+
+      const user = data.user;
+      if (!user) {
+        return { success: false, error: "Dados do usuário não recebidos após validação." };
+      }
+
       const userGymId = user.role === "academia" && user.gym?.id ? user.gym.id : "";
       const userInstructorId = user.role === "professor" && user.instructor?.id ? user.instructor.id : "";
 
@@ -1220,13 +1290,6 @@ export const useAppStore = create<AppState>()(
         ? [user.gym, ...get().gyms.filter((g) => g.id !== user.gym.id)]
         : get().gyms;
 
-      try {
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("trainermatch_instructor_cache");
-          localStorage.removeItem("trainermatch_gym_cache");
-        }
-      } catch (e) {}
-
       set({
         isAuthenticated: true,
         userName: user.name,
@@ -1234,14 +1297,34 @@ export const useAppStore = create<AppState>()(
         currentRole: user.role,
         activeGymId: userGymId,
         activeInstructorId: userInstructorId,
+        gymPlan: user.gym?.plan || get().gymPlan,
         instructors: updatedInstructors,
         gyms: updatedGyms
       });
 
       await get().syncWithBackend();
       return { success: true };
-    } catch (e: any) {
-      return { success: false, error: e.message || "Falha ao conectar ao servidor." };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Erro de conexão ao validar e-mail." };
+    }
+  },
+
+  resendVerificationCode: async (email: string) => {
+    try {
+      const res = await fetch("/api/auth/resend-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || "Erro ao reenviar código de verificação." };
+      }
+
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Erro de conexão ao reenviar código." };
     }
   },
 
