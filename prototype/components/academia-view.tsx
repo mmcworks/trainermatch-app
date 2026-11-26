@@ -65,7 +65,7 @@ import {
   CalendarCheck,
   Edit3
 } from "lucide-react";
-import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, Proposal, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString } from "@/store/mock-data";
+import { PricingRules, formatDateDDMMAAAA, formatShiftDateTime, Shift, Instructor, Proposal, canCancelShift, maskPhone, maskCpf, maskCnpj, blockNonNumericKeyDown, isTimeInPastForDate, getTodayDateString, getCurrentWeekMonday } from "@/store/mock-data";
 import {
   getRecommendedInstructorsForShift,
   calculateSuggestedRate,
@@ -259,12 +259,12 @@ export const AcademiaView: React.FC = () => {
   };
 
   // Navegação da Grade Semanal
-  // Data base da semana selecionada: Segunda-feira (padrão: 2026-11-09 - semana atual)
-  const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>("2026-11-09");
+  // Data base da semana selecionada: Segunda-feira (padrão: segunda-feira da semana atual)
+  const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(() => getCurrentWeekMonday());
 
   const handlePrevWeek = () => {
     const [y, m, d] = selectedWeekStartDate.split("-").map(Number);
-    const date = new Date(y, m - 1, d);
+    const date = new Date(y, m - 1, d, 12, 0, 0);
     date.setDate(date.getDate() - 7);
     const prevY = date.getFullYear();
     const prevM = String(date.getMonth() + 1).padStart(2, "0");
@@ -274,7 +274,7 @@ export const AcademiaView: React.FC = () => {
 
   const handleNextWeek = () => {
     const [y, m, d] = selectedWeekStartDate.split("-").map(Number);
-    const date = new Date(y, m - 1, d);
+    const date = new Date(y, m - 1, d, 12, 0, 0);
     date.setDate(date.getDate() + 7);
     const nextY = date.getFullYear();
     const nextM = String(date.getMonth() + 1).padStart(2, "0");
@@ -283,7 +283,7 @@ export const AcademiaView: React.FC = () => {
   };
 
   const handleCurrentWeek = () => {
-    setSelectedWeekStartDate("2026-11-09");
+    setSelectedWeekStartDate(getCurrentWeekMonday());
   };
 
   // Filtros e Layout de "Todos os Horários Cadastrados"
@@ -1799,7 +1799,14 @@ export const AcademiaView: React.FC = () => {
 
             {/* ABA 3: PROFESSORES (MOBILE) */}
             {activeMenu === "professores" && (() => {
-              const activeTargetShift = gymShifts.find(s => s.id === (selectedShiftForRecommendations || gymShifts[0]?.id));
+              const todayStr = getTodayDateString();
+              const openFutureGymShifts = gymShifts.filter(
+                (s) => s.date >= todayStr && s.status !== "cancelado" && s.status !== "realizada" && s.status !== "concluido"
+              );
+              const activeTargetShift = openFutureGymShifts.find(
+                (s) => s.id === (selectedShiftForRecommendations || openFutureGymShifts[0]?.id)
+              ) || openFutureGymShifts[0];
+
               const shiftRecommendations = activeTargetShift
                 ? getRecommendedInstructorsForShift(activeTargetShift, uniqueInstructors, recommendationSortBy, shifts, gyms, proposals)
                 : [];
@@ -1819,7 +1826,7 @@ export const AcademiaView: React.FC = () => {
                   )}
 
                   {/* Seletor de Turno para Recomendações */}
-                  {gymShifts.length > 0 && (
+                  {openFutureGymShifts.length > 0 ? (
                     <div className="bg-card dark:bg-navy-800 p-3.5 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-2.5">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-extrabold text-navy-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
@@ -1835,7 +1842,7 @@ export const AcademiaView: React.FC = () => {
                         onChange={(e) => setSelectedShiftForRecommendations(e.target.value)}
                         className="w-full p-2.5 bg-slate-50 dark:bg-navy-900 text-navy-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold focus:outline-primary"
                       >
-                        {gymShifts.map((s) => (
+                        {openFutureGymShifts.map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.title || s.modality} ({formatDateDDMMAAAA(s.date)} - {s.startTime} às {s.endTime})
                           </option>
@@ -1880,6 +1887,14 @@ export const AcademiaView: React.FC = () => {
                           </button>
                         </div>
                       </div>
+                    </div>
+                  ) : (
+                    <div className="bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 text-center py-6 space-y-1.5">
+                      <Clock className="mx-auto text-muted dark:text-slate-500" size={24} />
+                      <p className="text-xs font-bold text-navy-900 dark:text-white">Nenhum turno futuro em aberto</p>
+                      <p className="text-[11px] text-muted dark:text-slate-400">
+                        Crie novos turnos na agenda para receber recomendações e convidar instrutores.
+                      </p>
                     </div>
                   )}
 
@@ -2128,7 +2143,7 @@ export const AcademiaView: React.FC = () => {
                                 setNewModality(inst.modalities[0] || "Musculação");
                                 setShowNewShiftModal(true);
                               }}
-                              className="px-3 py-1.5 rounded-full text-[11px] font-extrabold bg-primary text-white hover:bg-primary-hover shadow-xs transition-all whitespace-nowrap active:scale-95 shrink-0"
+                              className="px-3 py-1.5 rounded-full text-[11px] font-extrabold bg-navy-900 hover:bg-navy-800 dark:bg-navy-700 dark:hover:bg-navy-600 text-white shadow-xs transition-all whitespace-nowrap active:scale-95 shrink-0"
                             >
                               Criar Vaga para o Professor
                             </button>
@@ -3401,7 +3416,7 @@ export const AcademiaView: React.FC = () => {
                             <div className="lg:col-span-2 bg-card dark:bg-navy-800 rounded-squircle p-6 shadow-soft border border-slate-100 dark:border-slate-800 space-y-4">
                               {(() => {
                                 const [wy, wm, wd] = selectedWeekStartDate.split("-").map(Number);
-                                const monday = new Date(wy, wm - 1, wd);
+                                const monday = new Date(wy, wm - 1, wd, 12, 0, 0);
 
                                 const getWeekDay = (offset: number) => {
                                   const d = new Date(monday);
@@ -3425,7 +3440,14 @@ export const AcademiaView: React.FC = () => {
                                 const dom = getWeekDay(6);
 
                                 const weekRangeLabel = `${seg.dayMonth} a ${dom.dayMonth}`;
-                                const isCurrentWeek = selectedWeekStartDate === "2026-11-09";
+                                const currentWeekMonday = getCurrentWeekMonday();
+                                const todayStr = getTodayDateString();
+                                const isCurrentWeek = selectedWeekStartDate === currentWeekMonday;
+
+                                const [cy, cm, cd] = currentWeekMonday.split("-").map(Number);
+                                const diffWeeks = Math.round(
+                                  (new Date(wy, wm - 1, wd, 12).getTime() - new Date(cy, cm - 1, cd, 12).getTime()) / (7 * 24 * 60 * 60 * 1000)
+                                );
 
                                 const allWeekDates = [
                                   seg.dateStr,
@@ -3468,7 +3490,13 @@ export const AcademiaView: React.FC = () => {
                                             </span>
                                           ) : (
                                             <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 px-2 py-0.5 rounded-full border border-blue-300/60">
-                                              {selectedWeekStartDate < "2026-11-09" ? "Semana Anterior" : "Próxima Semana"}
+                                              {diffWeeks === -1
+                                                ? "Semana Anterior"
+                                                : diffWeeks < -1
+                                                ? `${Math.abs(diffWeeks)} semanas atrás`
+                                                : diffWeeks === 1
+                                                ? "Próxima Semana"
+                                                : `Em ${diffWeeks} semanas`}
                                             </span>
                                           )}
                                         </div>
@@ -3521,7 +3549,7 @@ export const AcademiaView: React.FC = () => {
                                           <tr className="bg-slate-50 dark:bg-navy-800 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold">
                                             <th className="p-3 border-r border-slate-200 dark:border-slate-700 w-20">Turno</th>
                                             {weekCols.map((col, idx) => {
-                                              const isColumnToday = col.dates.includes("2026-11-09");
+                                              const isColumnToday = col.dates.includes(todayStr);
                                               return (
                                                 <th
                                                   key={col.id}
@@ -4638,9 +4666,14 @@ export const AcademiaView: React.FC = () => {
 
           {/* ===================== ABA 3: BUSCAR PROFESSORES ===================== */}
           {activeMenu === "professores" && (() => {
-            const activeTargetShift = gymShifts.find(
-              (s) => s.id === (selectedShiftForRecommendations || gymShifts[0]?.id)
+            const todayStr = getTodayDateString();
+            const openFutureGymShifts = gymShifts.filter(
+              (s) => s.date >= todayStr && s.status !== "cancelado" && s.status !== "realizada" && s.status !== "concluido"
             );
+            const activeTargetShift = openFutureGymShifts.find(
+              (s) => s.id === (selectedShiftForRecommendations || openFutureGymShifts[0]?.id)
+            ) || openFutureGymShifts[0];
+
             const shiftRecommendations = activeTargetShift
               ? getRecommendedInstructorsForShift(activeTargetShift, uniqueInstructors, recommendationSortBy, shifts, gyms, proposals)
               : [];
@@ -4664,7 +4697,7 @@ export const AcademiaView: React.FC = () => {
                 )}
 
                 {/* Painel de Controle de Recomendações: Seletor de Turno + Filtros */}
-                {gymShifts.length > 0 && (
+                {openFutureGymShifts.length > 0 ? (
                   <div className="p-5 rounded-2xl bg-slate-50 dark:bg-navy-900/60 border border-slate-100 dark:border-slate-700/60 space-y-4">
                     <div className="flex flex-col md:flex-row justify-between md:items-center gap-3">
                       <div className="flex-1">
@@ -4676,7 +4709,7 @@ export const AcademiaView: React.FC = () => {
                           onChange={(e) => setSelectedShiftForRecommendations(e.target.value)}
                           className="w-full md:max-w-md p-2.5 bg-white dark:bg-navy-800 text-navy-900 dark:text-white rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold focus:outline-primary"
                         >
-                          {gymShifts.map((s) => (
+                          {openFutureGymShifts.map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.title || s.modality} ({formatDateDDMMAAAA(s.date)} - {s.startTime} às {s.endTime})
                             </option>
@@ -4726,6 +4759,14 @@ export const AcademiaView: React.FC = () => {
                         </div>
                       </div>
                     </div>
+                  </div>
+                ) : (
+                  <div className="p-8 rounded-2xl bg-slate-50 dark:bg-navy-900/60 border border-slate-100 dark:border-slate-700/60 text-center space-y-2">
+                    <Clock className="mx-auto text-muted dark:text-slate-500" size={28} />
+                    <p className="text-sm font-bold text-navy-900 dark:text-white">Nenhum turno futuro em aberto</p>
+                    <p className="text-xs text-muted dark:text-slate-400">
+                      Crie novos turnos na agenda para receber recomendações e convidar instrutores com base em horários e disponibilidade.
+                    </p>
                   </div>
                 )}
 
@@ -4977,7 +5018,7 @@ export const AcademiaView: React.FC = () => {
                               setNewModality(inst.modalities[0] || "Musculação");
                               setShowNewShiftModal(true);
                             }}
-                            className="px-3.5 py-2 rounded-full bg-primary hover:bg-primary-hover text-white font-extrabold text-[11px] sm:text-xs shadow-xs transition-all whitespace-nowrap active:scale-95 shrink-0"
+                            className="px-3.5 py-2 rounded-full bg-navy-900 hover:bg-navy-800 dark:bg-navy-700 dark:hover:bg-navy-600 text-white font-extrabold text-[11px] sm:text-xs shadow-xs transition-all whitespace-nowrap active:scale-95 shrink-0"
                           >
                             Criar Vaga para o Professor
                           </button>

@@ -454,6 +454,19 @@ export function getTodayDateString(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+export function getCurrentWeekMonday(baseDateStr?: string): string {
+  const todayStr = baseDateStr || getTodayDateString();
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d, 12, 0, 0);
+  const day = date.getDay(); // 0 is Sunday, 1 is Monday, ... 6 is Saturday
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function isTimeInPastForDate(dateStr: string, timeStr: string): boolean {
   if (!dateStr || !timeStr) return false;
   const todayStr = getTodayDateString();
