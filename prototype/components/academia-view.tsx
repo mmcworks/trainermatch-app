@@ -1837,7 +1837,7 @@ export const AcademiaView: React.FC = () => {
                       >
                         {gymShifts.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.title} ({s.date} · {s.startTime}–{s.endTime})
+                            {s.title || s.modality} ({formatDateDDMMAAAA(s.date)} - {s.startTime} às {s.endTime})
                           </option>
                         ))}
                       </select>
@@ -2078,7 +2078,7 @@ export const AcademiaView: React.FC = () => {
                       .map((inst) => (
                         <div
                           key={inst.id}
-                          className="bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-3"
+                          className="bg-card dark:bg-navy-800 p-3.5 rounded-2xl shadow-soft border border-slate-100 dark:border-slate-800 space-y-3"
                         >
                           <div
                             onClick={() => setInstructorDetailModal(inst)}
@@ -2089,73 +2089,48 @@ export const AcademiaView: React.FC = () => {
                               {inst.avatar ? (
                                 <img src={inst.avatar} alt={inst.name} className="w-full h-full object-cover" />
                               ) : (
-                                <User size={24} className="text-primary" />
+                                <User size={22} className="text-primary" />
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-black text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">{inst.name}</h4>
-                                <div className="flex items-center gap-1">
-                                  <span className="text-xs font-black text-navy-900 dark:text-white">
-                                    {inst.hasMultipleRates
-                                      ? `R$ ${inst.minRate} - ${inst.maxRate}/h`
-                                      : `R$ ${inst.hourlyRate || 45}/h`}
-                                  </span>
-                                  <ChevronRight size={13} className="text-slate-400 opacity-60 group-hover:opacity-100 transition-opacity" />
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">{inst.cref} (Ativo)</span>
-                                {inst.hasMultipleRates && (
-                                  <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.2 rounded font-bold">
-                                    Valores agrupados
+                              <div className="flex items-center gap-1.5">
+                                <h4 className="text-xs font-black text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">
+                                  {inst.name}
+                                </h4>
+                                {inst.workExperiences && inst.workExperiences.length > 0 && (
+                                  <span
+                                    title={`Atenção: Possui ${inst.workExperiences.length} atividade(s) profissional(is) cadastrada(s)`}
+                                    className="text-amber-500 shrink-0"
+                                  >
+                                    <AlertTriangle size={13} />
                                   </span>
                                 )}
                               </div>
-                              {(inst.ratingCount || 0) > 0 ? (
-                                <div className="flex items-center gap-1 text-[11px] text-amber-500 font-bold mt-0.5">
-                                  <Star size={12} fill="currentColor" />
-                                  <span>{inst.rating.toFixed(1)}</span>
-                                  <span className="text-slate-400 font-normal">({inst.ratingCount} contratações)</span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-0.5">
-                                  <Sparkles size={11} />
-                                  <span>Novo Professor · Sem avaliações</span>
-                                </div>
-                              )}
+                              <span className="text-[10px] text-muted dark:text-slate-400 font-medium block">
+                                CREF {inst.cref}
+                              </span>
                             </div>
                           </div>
 
-                          {/* Alerta de Atividades Vigentes (Experiências Profissionais) */}
-                          {inst.workExperiences && inst.workExperiences.length > 0 && (
-                            <div className="pt-0.5">
-                              <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 text-[10px] font-black inline-flex items-center gap-1">
-                                <AlertTriangle size={11} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                                Possui atividades vigentes ({inst.workExperiences.length})
+                          <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <span className="text-[10px] text-muted dark:text-slate-400 block font-medium">Valor hora:</span>
+                              <span className="text-xs font-black text-navy-900 dark:text-white truncate block">
+                                {inst.hasMultipleRates
+                                  ? `R$ ${inst.minRate} - ${inst.maxRate}/h`
+                                  : `R$ ${inst.hourlyRate || 45}/h`}
                               </span>
                             </div>
-                          )}
 
-                          <div className="flex flex-wrap gap-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
-                            {inst.modalities.map(m => (
-                              <span key={m} className="bg-slate-100 dark:bg-navy-700 px-2.5 py-0.5 rounded-full">
-                                {m}
-                              </span>
-                            ))}
-                          </div>
-
-                          <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex justify-between items-center">
-                            <span className="text-[11px] text-muted dark:text-slate-400">Vitória · 4 km</span>
                             <button
                               onClick={() => {
                                 setNewTitle(`${inst.modalities[0] || "Musculação"} - Convite`);
                                 setNewModality(inst.modalities[0] || "Musculação");
                                 setShowNewShiftModal(true);
                               }}
-                              className="px-3.5 py-1.5 rounded-full text-xs font-extrabold bg-primary text-white hover:bg-primary-hover shadow-xs transition-all"
+                              className="px-3 py-1.5 rounded-full text-[11px] font-extrabold bg-primary text-white hover:bg-primary-hover shadow-xs transition-all whitespace-nowrap active:scale-95 shrink-0"
                             >
-                              Convidar para Vaga
+                              Criar Vaga para o Professor
                             </button>
                           </div>
                         </div>
@@ -4703,7 +4678,7 @@ export const AcademiaView: React.FC = () => {
                         >
                           {gymShifts.map((s) => (
                             <option key={s.id} value={s.id}>
-                              {s.title} ({s.date} · {s.startTime}–{s.endTime} · R$ {s.maxRate ?? (s as any).rate ?? 45}/h)
+                              {s.title || s.modality} ({formatDateDDMMAAAA(s.date)} - {s.startTime} às {s.endTime})
                             </option>
                           ))}
                         </select>
@@ -4948,87 +4923,65 @@ export const AcademiaView: React.FC = () => {
                     {uniqueInstructors.map((inst) => (
                       <div
                         key={inst.id}
-                        className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-900/60 border border-slate-100 dark:border-slate-700/60 space-y-3 flex flex-col justify-between"
+                        className="p-4 rounded-2xl bg-card dark:bg-navy-800 border border-slate-100 dark:border-slate-800 shadow-soft flex flex-col justify-between gap-3"
                       >
-                        <div className="space-y-2.5">
-                          <div
-                            onClick={() => setInstructorDetailModal(inst)}
-                            className="flex gap-3 items-center cursor-pointer group"
-                            title="Ver perfil completo e avaliações do professor"
-                          >
-                            <img
-                              src={inst.avatar}
-                              alt={inst.name}
-                              className="w-12 h-12 rounded-full object-cover border border-white dark:border-navy-700 shrink-0"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <h4 className="text-sm font-bold text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">
+                        <div
+                          onClick={() => setInstructorDetailModal(inst)}
+                          className="flex items-center gap-3 cursor-pointer group"
+                          title="Ver perfil completo e avaliações do professor"
+                        >
+                          <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-200 dark:bg-navy-700 shrink-0 border border-white dark:border-navy-700 flex items-center justify-center">
+                            {inst.avatar ? (
+                              <img
+                                src={inst.avatar}
+                                alt={inst.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <User size={24} className="text-primary" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="text-sm font-extrabold text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">
                                 {inst.name}
                               </h4>
-                              <span className="text-xs text-primary font-semibold block">CREF {inst.cref}</span>
-                              {(inst.ratingCount || 0) > 0 ? (
-                                <div className="flex items-center gap-1 text-[11px] text-amber-500 font-bold mt-0.5">
-                                  <Star size={11} fill="currentColor" />
-                                  <span>{inst.rating.toFixed(1)}</span>
-                                  <span className="text-slate-400 font-normal">({inst.ratingCount} contratações)</span>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-0.5">
-                                  <Sparkles size={11} />
-                                  <span>Novo Professor</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Alerta de Atividades Vigentes (Experiências Profissionais) */}
-                          {inst.workExperiences && inst.workExperiences.length > 0 && (
-                            <div>
-                              <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 text-[10px] font-black inline-flex items-center gap-1">
-                                <AlertTriangle size={11} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                                Atividades vigentes ({inst.workExperiences.length})
-                              </span>
-                            </div>
-                          )}
-
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-muted dark:text-slate-400">Valor hora:</span>
-                            <div className="text-right">
-                              <span className="font-extrabold text-navy-900 dark:text-white">
-                                {inst.hasMultipleRates
-                                  ? `R$ ${inst.minRate} - ${inst.maxRate}/h`
-                                  : `R$ ${inst.hourlyRate || 45}/h`}
-                              </span>
-                              {inst.hasMultipleRates && (
-                                <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.2 rounded font-bold ml-1.5 inline-block">
-                                  Valores agrupados
+                              {inst.workExperiences && inst.workExperiences.length > 0 && (
+                                <span
+                                  title={`Atenção: Possui ${inst.workExperiences.length} atividade(s) profissional(is) cadastrada(s)`}
+                                  className="text-amber-500 shrink-0"
+                                >
+                                  <AlertTriangle size={14} />
                                 </span>
                               )}
                             </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-1">
-                            {inst.modalities.map((m) => (
-                              <span
-                                key={m}
-                                className="bg-white dark:bg-navy-800 px-2 py-0.5 rounded-full text-[10px] text-slate-600 dark:text-slate-300 font-medium border border-slate-200 dark:border-slate-700"
-                              >
-                                {m}
-                              </span>
-                            ))}
+                            <span className="text-[11px] text-muted dark:text-slate-400 font-medium block">
+                              CREF {inst.cref}
+                            </span>
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => {
-                            setNewTitle(`${inst.modalities[0] || "Musculação"} - Convite`);
-                            setNewModality(inst.modalities[0] || "Musculação");
-                            setShowNewShiftModal(true);
-                          }}
-                          className="w-full bg-navy-900 dark:bg-primary hover:bg-navy-800 dark:hover:bg-primary-hover text-white font-bold py-2 rounded-full text-xs transition-all shadow-xs"
-                        >
-                          Criar Vaga para este Professor
-                        </button>
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-[10px] text-muted dark:text-slate-400 block font-medium">Valor hora:</span>
+                            <span className="text-xs font-black text-navy-900 dark:text-white truncate block">
+                              {inst.hasMultipleRates
+                                ? `R$ ${inst.minRate} - ${inst.maxRate}/h`
+                                : `R$ ${inst.hourlyRate || 45}/h`}
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              setNewTitle(`${inst.modalities[0] || "Musculação"} - Convite`);
+                              setNewModality(inst.modalities[0] || "Musculação");
+                              setShowNewShiftModal(true);
+                            }}
+                            className="px-3.5 py-2 rounded-full bg-primary hover:bg-primary-hover text-white font-extrabold text-[11px] sm:text-xs shadow-xs transition-all whitespace-nowrap active:scale-95 shrink-0"
+                          >
+                            Criar Vaga para o Professor
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
