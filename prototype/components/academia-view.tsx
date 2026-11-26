@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useAppStore } from "@/store/use-app-store";
 import {
   Calendar as CalendarIcon,
@@ -16,7 +16,10 @@ import {
   ShieldCheck,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   AlertCircle,
+  AlertTriangle,
   Camera,
   Upload,
   Lock,
@@ -181,6 +184,8 @@ export const AcademiaView: React.FC = () => {
   const [scheduleViewMode, setScheduleViewMode] = useState<"mes" | "semana">("mes");
   const [proposalFilter, setProposalFilter] = useState<"todas" | "aceita" | "pendente" | "recusada">("todas");
   const [proposalModalityFilter, setProposalModalityFilter] = useState<string>("todas");
+  const [selectedProposalMonth, setSelectedProposalMonth] = useState<string>("todos");
+  const [collapsedProposalMonths, setCollapsedProposalMonths] = useState<Record<string, boolean>>({});
   const [proposalToConfirmAccept, setProposalToConfirmAccept] = useState<{ id: string; instructorName: string; modality: string; date: string; time: string; rate: number } | null>(null);
   const [showNewShiftModal, setShowNewShiftModal] = useState(false);
   // Wizard Quero Contratar um(a) Instrutor(a)
@@ -530,6 +535,88 @@ export const AcademiaView: React.FC = () => {
     return true;
   });
 
+  // Deduplicação e consolidação de instrutores para evitar cards repetidos do mesmo professor
+  const uniqueInstructors = useMemo(() => {
+    const map = new Map<string, Instructor & { minRate?: number; maxRate?: number; proposalCount?: number; hasMultipleRates?: boolean }>();
+
+    activeInstructors.forEach((inst) => {
+      // Chave única: CREF normalizado ou email ou id
+      const key = (inst.cref ? inst.cref.trim().toUpperCase() : "") || (inst.email ? inst.email.trim().toLowerCase() : "") || inst.id;
+
+      const instructorProposals = gymProposals.filter((p) => p.instructorId === inst.id);
+      const rates = [inst.hourlyRate || 45];
+      instructorProposals.forEach((p) => {
+        if (p.proposedRate) rates.push(p.proposedRate);
+      });
+      const minRate = Math.min(...rates);
+      const maxRate = Math.max(...rates);
+
+      if (!map.has(key)) {
+        map.set(key, {
+          ...inst,
+          minRate,
+          maxRate,
+          proposalCount: instructorProposals.length,
+          hasMultipleRates: minRate !== maxRate,
+        });
+      } else {
+        const existing = map.get(key)!;
+        const allRates = [existing.minRate || 45, existing.maxRate || 45, minRate, maxRate];
+        existing.minRate = Math.min(...allRates);
+        existing.maxRate = Math.max(...allRates);
+        existing.hasMultipleRates = existing.minRate !== existing.maxRate;
+        existing.proposalCount = (existing.proposalCount || 0) + instructorProposals.length;
+        // Agrupar modalidades sem duplicatas
+        existing.modalities = Array.from(new Set([...existing.modalities, ...inst.modalities]));
+        // Preservar experiências profissionais
+        if (inst.workExperiences && inst.workExperiences.length > 0) {
+          if (!existing.workExperiences || existing.workExperiences.length === 0) {
+            existing.workExperiences = inst.workExperiences;
+          }
+        }
+      }
+    });
+
+    return Array.from(map.values());
+  }, [activeInstructors, gymProposals]);
+
+  // Extração dinâmica e ordenação dos meses das propostas para separação mensal
+  const proposalMonthsData = useMemo(() => {
+    const monthCounts: Record<string, { key: string; label: string; total: number; pending: number }> = {};
+    const monthNames = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+
+    gymProposals.forEach((p) => {
+      const shift = shifts.find((s) => s.id === p.shiftId);
+      const mKey = shift?.date ? shift.date.substring(0, 7) : "Outros";
+
+      let label = mKey;
+      if (mKey.includes("-")) {
+        const [y, m] = mKey.split("-").map(Number);
+        label = `${monthNames[m - 1]} ${y}`;
+      }
+
+      if (!monthCounts[mKey]) {
+        monthCounts[mKey] = { key: mKey, label, total: 0, pending: 0 };
+      }
+      monthCounts[mKey].total += 1;
+      if (p.status === "pendente") {
+        monthCounts[mKey].pending += 1;
+      }
+    });
+
+    return Object.values(monthCounts).sort((a, b) => a.key.localeCompare(b.key));
+  }, [gymProposals, shifts]);
+
+  const toggleMonthCollapse = (mKey: string) => {
+    setCollapsedProposalMonths((prev) => ({
+      ...prev,
+      [mKey]: prev[mKey] === undefined ? true : !prev[mKey],
+    }));
+  };
+
   // Aulas onde o professor confirmou início (check-in) e aguardam validação da academia
   const pendingCheckInShifts = gymShifts.filter(
     (s) => s.status === "confirmado" && Boolean(s.instructorCheckInAt)
@@ -621,7 +708,9 @@ export const AcademiaView: React.FC = () => {
     if (!shift) return false;
     const matchStatus = proposalFilter === "todas" ? true : p.status === proposalFilter;
     const matchModality = proposalModalityFilter === "todas" ? true : shift.modality === proposalModalityFilter;
-    return matchStatus && matchModality;
+    const shiftMonth = shift.date ? shift.date.substring(0, 7) : "Outros";
+    const matchMonth = selectedProposalMonth === "todos" ? true : shiftMonth === selectedProposalMonth;
+    return matchStatus && matchModality && matchMonth;
   });
 
   const startAcceptProposal = (proposal: Proposal) => {
@@ -1337,7 +1426,7 @@ export const AcademiaView: React.FC = () => {
 
                               {/* Botão de Recomendação Automática (para vagas abertas) */}
                               {!isConfirmed && !isCancelled && (() => {
-                                const recMatches = getRecommendedInstructorsForShift(shift, activeInstructors, "horarios", shifts, gyms);
+                                const recMatches = getRecommendedInstructorsForShift(shift, uniqueInstructors, "horarios", shifts, gyms);
                                 const recCount = recMatches.filter((m) => m.isRecommended).length;
 
                                 return (
@@ -1443,6 +1532,38 @@ export const AcademiaView: React.FC = () => {
                       </button>
                     ))}
                   </div>
+
+                  {/* Separação Rápida por Mês */}
+                  {proposalMonthsData.length > 0 && (
+                    <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-1">
+                      <button
+                        onClick={() => setSelectedProposalMonth("todos")}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+                          selectedProposalMonth === "todos"
+                            ? "bg-primary text-white shadow-xs"
+                            : "bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-300"
+                        }`}
+                      >
+                        Todos os Meses ({gymProposals.length})
+                      </button>
+                      {proposalMonthsData.map((m) => (
+                        <button
+                          key={m.key}
+                          onClick={() => setSelectedProposalMonth(m.key)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                            selectedProposalMonth === m.key
+                              ? "bg-primary text-white shadow-xs"
+                              : "bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-300"
+                          }`}
+                        >
+                          <span>{m.label} ({m.total})</span>
+                          {m.pending > 0 && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Lista de Propostas Agrupadas por Mês */}
@@ -1472,19 +1593,36 @@ export const AcademiaView: React.FC = () => {
                       }
 
                       const mProposals = monthsMap[mKey];
+                      const isCollapsed = Boolean(collapsedProposalMonths[mKey]);
 
                       return (
                         <div key={mKey} className="space-y-2.5">
-                          <div className="flex items-center justify-between px-1 border-b border-slate-100 dark:border-slate-800 pb-1">
-                            <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                              <CalendarIcon size={12} className="text-primary" /> {monthTitle}
-                            </span>
-                            <span className="text-[10px] bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-bold">
-                              {mProposals.length} {mProposals.length === 1 ? "proposta" : "propostas"}
-                            </span>
+                          <div
+                            onClick={() => toggleMonthCollapse(mKey)}
+                            className="flex items-center justify-between px-3 py-2 bg-slate-100/90 dark:bg-navy-900/90 rounded-xl cursor-pointer hover:bg-slate-200/70 dark:hover:bg-navy-900 transition-all border border-slate-200/50 dark:border-slate-800"
+                          >
+                            <div className="flex items-center gap-2">
+                              <CalendarIcon size={13} className="text-primary" />
+                              <span className="text-xs font-black uppercase tracking-wider text-navy-900 dark:text-white">
+                                {monthTitle}
+                              </span>
+                              <span className="text-[10px] bg-white dark:bg-navy-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-bold border border-slate-200 dark:border-slate-700">
+                                {mProposals.length}
+                              </span>
+                              {mProposals.some(p => p.status === "pendente") && (
+                                <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 px-2 py-0.5 rounded-full font-extrabold flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                  Pendente
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-slate-400">
+                              {isCollapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+                            </div>
                           </div>
 
-                          <div className="space-y-3">
+                          {!isCollapsed && (
+                            <div className="space-y-3">
                             {mProposals.map((proposal) => {
                               const shift = shifts.find(s => s.id === proposal.shiftId);
                               const instructor = instructors.find(i => i.id === proposal.instructorId);
@@ -1650,6 +1788,7 @@ export const AcademiaView: React.FC = () => {
                               );
                             })}
                           </div>
+                        )}
                         </div>
                       );
                     });
@@ -1662,7 +1801,7 @@ export const AcademiaView: React.FC = () => {
             {activeMenu === "professores" && (() => {
               const activeTargetShift = gymShifts.find(s => s.id === (selectedShiftForRecommendations || gymShifts[0]?.id));
               const shiftRecommendations = activeTargetShift
-                ? getRecommendedInstructorsForShift(activeTargetShift, activeInstructors, recommendationSortBy, shifts, gyms, proposals)
+                ? getRecommendedInstructorsForShift(activeTargetShift, uniqueInstructors, recommendationSortBy, shifts, gyms, proposals)
                 : [];
 
               return (
@@ -1757,7 +1896,7 @@ export const AcademiaView: React.FC = () => {
                       </div>
 
                       {shiftRecommendations.map((rec) => {
-                        const inst = rec.instructor;
+                        const inst = rec.instructor as (Instructor & { minRate?: number; maxRate?: number; proposalCount?: number; hasMultipleRates?: boolean });
                         const alreadyInvited = proposals.some(
                           (p) => p.shiftId === activeTargetShift.id && p.instructorId === inst.id
                         );
@@ -1783,11 +1922,22 @@ export const AcademiaView: React.FC = () => {
                                 <div className="flex items-center justify-between">
                                   <h4 className="text-xs font-black text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">{inst.name}</h4>
                                   <div className="flex items-center gap-1">
-                                    <span className="text-xs font-black text-navy-900 dark:text-white">R$ {inst.hourlyRate || 45}/h</span>
+                                    <span className="text-xs font-black text-navy-900 dark:text-white">
+                                      {inst.hasMultipleRates
+                                        ? `R$ ${inst.minRate} - ${inst.maxRate}/h`
+                                        : `R$ ${inst.hourlyRate || 45}/h`}
+                                    </span>
                                     <ChevronRight size={13} className="text-slate-400 opacity-60 group-hover:opacity-100 transition-opacity" />
                                   </div>
                                 </div>
-                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">{inst.cref} (Ativo)</span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">{inst.cref} (Ativo)</span>
+                                  {inst.hasMultipleRates && (
+                                    <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.2 rounded font-bold">
+                                      Valores agrupados
+                                    </span>
+                                  )}
+                                </div>
                                 {(inst.ratingCount || 0) > 0 ? (
                                   <div className="flex items-center gap-1 text-[11px] text-amber-500 font-bold mt-0.5">
                                     <Star size={12} fill="currentColor" strokeWidth={1.5} />
@@ -1803,8 +1953,15 @@ export const AcademiaView: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* Badge de Prioridade de Cobertura de Horário e Candidatura */}
+                            {/* Badges de Destaque, Conflitos de Agenda e Candidatura */}
                             <div className="flex flex-wrap gap-1.5">
+                              {/* Alerta de Atividades Vigentes (Experiências Profissionais) */}
+                              {inst.workExperiences && inst.workExperiences.length > 0 && (
+                                <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 text-[10px] font-black flex items-center gap-1">
+                                  <AlertTriangle size={11} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                                  Atividades vigentes ({inst.workExperiences.length})
+                                </span>
+                              )}
                               {rec.hasActiveProposal && (
                                 <span className="px-2.5 py-1 rounded-full bg-primary text-white text-[10px] font-black flex items-center gap-1 shadow-xs animate-pulse-subtle">
                                   <Sparkles size={11} className="fill-white" />
@@ -1912,7 +2069,7 @@ export const AcademiaView: React.FC = () => {
 
                   {/* Lista Geral de Professores */}
                   <div className="space-y-3">
-                    {activeInstructors
+                    {uniqueInstructors
                       .filter(i => 
                         mobileSearchTeacher === "" ||
                         i.name.toLowerCase().includes(mobileSearchTeacher.toLowerCase()) ||
@@ -1923,7 +2080,11 @@ export const AcademiaView: React.FC = () => {
                           key={inst.id}
                           className="bg-card dark:bg-navy-800 p-4 rounded-squircle shadow-soft border border-slate-100 dark:border-slate-800 space-y-3"
                         >
-                          <div className="flex items-center gap-3">
+                          <div
+                            onClick={() => setInstructorDetailModal(inst)}
+                            className="flex items-center gap-3 cursor-pointer group"
+                            title="Ver detalhes e avaliações do professor"
+                          >
                             <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-200 dark:bg-navy-700 shrink-0 border border-white dark:border-navy-700 flex items-center justify-center">
                               {inst.avatar ? (
                                 <img src={inst.avatar} alt={inst.name} className="w-full h-full object-cover" />
@@ -1933,10 +2094,24 @@ export const AcademiaView: React.FC = () => {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between">
-                                <h4 className="text-xs font-black text-navy-900 dark:text-white truncate">{inst.name}</h4>
-                                <span className="text-xs font-black text-navy-900 dark:text-white">R$ {inst.hourlyRate || 45}/h</span>
+                                <h4 className="text-xs font-black text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">{inst.name}</h4>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs font-black text-navy-900 dark:text-white">
+                                    {inst.hasMultipleRates
+                                      ? `R$ ${inst.minRate} - ${inst.maxRate}/h`
+                                      : `R$ ${inst.hourlyRate || 45}/h`}
+                                  </span>
+                                  <ChevronRight size={13} className="text-slate-400 opacity-60 group-hover:opacity-100 transition-opacity" />
+                                </div>
                               </div>
-                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">{inst.cref} (Ativo)</span>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">{inst.cref} (Ativo)</span>
+                                {inst.hasMultipleRates && (
+                                  <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.2 rounded font-bold">
+                                    Valores agrupados
+                                  </span>
+                                )}
+                              </div>
                               {(inst.ratingCount || 0) > 0 ? (
                                 <div className="flex items-center gap-1 text-[11px] text-amber-500 font-bold mt-0.5">
                                   <Star size={12} fill="currentColor" />
@@ -1951,6 +2126,16 @@ export const AcademiaView: React.FC = () => {
                               )}
                             </div>
                           </div>
+
+                          {/* Alerta de Atividades Vigentes (Experiências Profissionais) */}
+                          {inst.workExperiences && inst.workExperiences.length > 0 && (
+                            <div className="pt-0.5">
+                              <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 text-[10px] font-black inline-flex items-center gap-1">
+                                <AlertTriangle size={11} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                                Possui atividades vigentes ({inst.workExperiences.length})
+                              </span>
+                            </div>
+                          )}
 
                           <div className="flex flex-wrap gap-1 text-[10px] font-bold text-slate-600 dark:text-slate-300">
                             {inst.modalities.map(m => (
@@ -3902,7 +4087,7 @@ export const AcademiaView: React.FC = () => {
                                   </div>
                                 ) : (
                                   (() => {
-                                    const matchCount = getRecommendedInstructorsForShift(shift, activeInstructors, "horarios", shifts, gyms).length;
+                                    const matchCount = getRecommendedInstructorsForShift(shift, uniqueInstructors, "horarios", shifts, gyms).length;
                                     return (
                                       <div className="space-y-1.5">
                                         <button
@@ -4101,11 +4286,11 @@ export const AcademiaView: React.FC = () => {
                 <div>
                   <h2 className="text-xl font-extrabold text-navy-900 dark:text-white">Gerenciar Propostas</h2>
                   <p className="text-xs text-muted dark:text-slate-400">
-                    Controle de propostas aceitas, em negociação e recusadas
+                    Controle e aprovação de propostas recebidas e convites enviados por mês
                   </p>
                 </div>
 
-                {/* Filtro em Pílulas */}
+                {/* Filtro de Status em Pílulas */}
                 <div className="flex bg-slate-100 dark:bg-navy-900 p-1 rounded-full text-xs font-bold">
                   {(["todas", "pendente", "aceita", "recusada"] as const).map((filter) => (
                     <button
@@ -4123,184 +4308,356 @@ export const AcademiaView: React.FC = () => {
                 </div>
               </div>
 
-              {filteredProposals.length === 0 ? (
-                <div className="p-8 text-center text-muted dark:text-slate-400">
-                  Nenhuma proposta encontrada neste filtro.
+              {/* Filtros Secundários: Modalidades e Separação Mensal */}
+              <div className="space-y-3 pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                {/* Filtro por Modalidade */}
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                  <span className="text-[11px] font-bold text-muted dark:text-slate-400 whitespace-nowrap">Modalidade:</span>
+                  {["todas", "Musculação", "Spinning", "Funcional", "Pilates", "Crossfit", "Natação"].map((mod) => (
+                    <button
+                      key={mod}
+                      onClick={() => setProposalModalityFilter(mod)}
+                      className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+                        proposalModalityFilter === mod
+                          ? "bg-navy-900 text-white dark:bg-slate-100 dark:text-navy-900 shadow-xs"
+                          : "bg-slate-100 dark:bg-navy-900 text-slate-500 dark:text-slate-400 hover:text-slate-800"
+                      }`}
+                    >
+                      {mod === "todas" ? "Todas Modalidades" : mod}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredProposals.map((prop) => {
-                    const inst = instructors.find((i) => i.id === prop.instructorId);
-                    const shift = shifts.find((s) => s.id === prop.shiftId);
 
-                    return (
-                      <div
-                        key={prop.id}
-                        className="p-5 rounded-2xl bg-slate-50 dark:bg-navy-900/60 border border-slate-100 dark:border-slate-700/60 space-y-4"
+                {/* Separação Rápida por Mês */}
+                {proposalMonthsData.length > 0 && (
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                    <span className="text-[11px] font-bold text-muted dark:text-slate-400 whitespace-nowrap">Mês:</span>
+                    <button
+                      onClick={() => setSelectedProposalMonth("todos")}
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+                        selectedProposalMonth === "todos"
+                          ? "bg-primary text-white shadow-xs"
+                          : "bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-300 hover:text-navy-900"
+                      }`}
+                    >
+                      Todos os Meses ({gymProposals.length})
+                    </button>
+                    {proposalMonthsData.map((m) => (
+                      <button
+                        key={m.key}
+                        onClick={() => setSelectedProposalMonth(m.key)}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                          selectedProposalMonth === m.key
+                            ? "bg-primary text-white shadow-xs"
+                            : "bg-slate-100 dark:bg-navy-900 text-slate-600 dark:text-slate-300 hover:text-navy-900"
+                        }`}
                       >
-                        <div className="flex justify-between items-start">
-                          <div className="flex gap-3 items-center">
-                            <img src={inst?.avatar} alt={inst?.name} className="w-12 h-12 rounded-full object-cover" />
-                            <div>
-                              <h3 className="text-sm font-bold text-navy-900 dark:text-white">{inst?.name}</h3>
-                              <p className="text-[11px] text-muted dark:text-slate-400">CREF {inst?.cref}</p>
-                            </div>
-                          </div>
-                          <span
-                            className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase ${
-                              prop.status === "aceita"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : prop.status === "pendente"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {prop.status === "pendente" ? "Aguardando" : prop.status}
-                          </span>
-                        </div>
-
-                        <div className="space-y-1.5 text-xs bg-white dark:bg-navy-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                          <div className="flex justify-between">
-                            <span className="text-muted dark:text-slate-400">Turno:</span>
-                            <span className="font-bold text-navy-900 dark:text-white">{shift?.title}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted dark:text-slate-400">Data e Hora:</span>
-                            <span className="font-bold text-primary">{shift?.date} · {shift?.startTime}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted dark:text-slate-400">Valor da Proposta:</span>
-                            <span className="font-extrabold text-navy-900 dark:text-white">R$ {prop.proposedRate || shift?.rate || shift?.maxRate || 45}/h (Fixo)</span>
-                          </div>
-                        </div>
-
-                        {prop.status === "pendente" && (
-                          <div className="space-y-2 pt-1">
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => startAcceptProposal(prop)}
-                                className="flex-1 bg-primary text-white font-extrabold py-2.5 rounded-full text-xs shadow-xs hover:bg-primary-hover transition-all active:scale-95"
-                              >
-                                Aprovar e Contratar (R$ {prop.proposedRate || shift?.rate || shift?.maxRate || 45}/h)
-                              </button>
-                              <button
-                                onClick={() => rejectProposal(prop.id)}
-                                className="px-4 py-2.5 rounded-full text-xs font-bold text-slate-500 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors"
-                              >
-                                Recusar
-                              </button>
-                            </div>
-                          </div>
+                        <span>{m.label} ({m.total})</span>
+                        {m.pending > 0 && (
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title={`${m.pending} pendente(s)`} />
                         )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-                        {prop.status === "aceita" && (
-                          <div className="space-y-3 pt-1">
-                            <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl p-3.5 space-y-2.5 text-xs">
-                              <div className="flex justify-between items-center pb-2 border-b border-emerald-200/60 dark:border-emerald-800/40">
-                                <span className="font-extrabold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5 text-xs">
-                                  <ShieldCheck size={14} className="text-emerald-600" /> Contatos do Professor Liberados
-                                </span>
-                                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-extrabold px-2 py-0.5 rounded-full">
-                                  CREF Ativo
-                                </span>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
-                                <div className="flex items-center gap-2">
-                                  <Phone size={13} className="text-primary flex-shrink-0" />
-                                  <span className="font-semibold">{inst?.phone || "(27) 99933-8822"}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Mail size={13} className="text-primary flex-shrink-0" />
-                                  <span className="truncate">{inst?.email || "contato@professor.com"}</span>
-                                </div>
-                              </div>
-
-                              {/* Chave Pix do Professor */}
-                              <div className="bg-white dark:bg-navy-900 p-2.5 rounded-lg border border-emerald-100 dark:border-navy-700 flex items-center justify-between gap-2">
-                                <div className="min-w-0">
-                                  <span className="text-[10px] text-muted dark:text-slate-400 block font-bold">Chave Pix para Acerto:</span>
-                                  <span className="font-mono font-bold text-navy-900 dark:text-white truncate block text-[11px]">
-                                    {inst?.pixKey || inst?.email || "lucas.ferreira.ef@gmail.com"}
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (typeof navigator !== "undefined" && navigator.clipboard) {
-                                      navigator.clipboard.writeText(inst?.pixKey || inst?.email || "");
-                                    }
-                                    setCopiedPixKey(inst?.id || "copied");
-                                    setTimeout(() => setCopiedPixKey(null), 3000);
-                                  }}
-                                  className="px-2.5 py-1 rounded bg-slate-100 dark:bg-navy-800 hover:bg-slate-200 text-[10px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1 transition-colors"
-                                >
-                                  {copiedPixKey === inst?.id ? (
-                                    <>
-                                      <Check size={11} className="text-emerald-500" />
-                                      <span className="text-emerald-600">Copiado!</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy size={11} />
-                                      <span>Copiar Pix</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-
-                              {/* Ações: WhatsApp direto e Confirmação de Aula Realizada */}
-                              <div className="flex flex-wrap gap-2 pt-1">
-                                <a
-                                  href={`https://wa.me/55${(inst?.phone || "").replace(/\D/g, "")}?text=Olá%20${encodeURIComponent(inst?.name || "Professor")},%20sua%20aula%20foi%20confirmada%20na%20${encodeURIComponent(currentGym.name)}!`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex-1 min-w-[120px] py-2 px-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] flex items-center justify-center gap-1.5 shadow-xs transition-all"
-                                >
-                                  <MessageSquare size={13} />
-                                  <span>Abrir WhatsApp</span>
-                                </a>
-
-                                {shift && shift.status === "confirmado" && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleValidateAttendance(shift.id, inst?.name)}
-                                    className="flex-1 min-w-[140px] py-2 px-3 rounded-full bg-navy-900 hover:bg-navy-800 dark:bg-primary dark:hover:bg-primary-hover text-white font-extrabold text-[11px] flex items-center justify-center gap-1.5 shadow-xs transition-all"
-                                  >
-                                    <CheckCheck size={13} />
-                                    <span>{shift.instructorCheckInAt ? `Validar Presença (${shift.instructorCheckInAt})` : "Confirmar Presença"}</span>
-                                  </button>
-                                )}
-
-                                 {shift && shift.status === "realizada" && (
-                                   <>
-                                     <div className="w-full py-1.5 px-3 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-extrabold text-[11px] flex items-center justify-center gap-1.5">
-                                       <CheckCheck size={13} className="text-emerald-600" />
-                                       <span>Presença Validada · {shift.instructorReviewedByGym ? "Avaliado ★" : "Pendente Avaliação"}</span>
-                                     </div>
-                                     {!shift.instructorReviewedByGym && (
-                                       <button
-                                         type="button"
-                                         onClick={() => {
-                                           if (inst) setReviewShift({ shift, instructor: inst });
-                                         }}
-                                         className="w-full py-2 px-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-[11px] flex items-center justify-center gap-1.5 shadow-xs transition-all mt-1"
-                                       >
-                                         <Star size={13} strokeWidth={1.5} />
-                                         <span>Avaliar Professor</span>
-                                       </button>
-                                     )}
-                                   </>
-                                 )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+              {filteredProposals.length === 0 ? (
+                <div className="p-12 text-center text-muted dark:text-slate-400 bg-slate-50 dark:bg-navy-900/40 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-2">
+                  <Clock className="mx-auto text-slate-300 dark:text-slate-600" size={36} />
+                  <p className="text-sm font-bold text-navy-900 dark:text-white">Nenhuma proposta encontrada neste filtro</p>
+                  <p className="text-xs text-slate-400">Tente ajustar o status, modalidade ou período selecionado.</p>
                 </div>
-              )}
+              ) : (() => {
+                const monthsMap: Record<string, Proposal[]> = {};
+                filteredProposals.forEach((p) => {
+                  const shift = shifts.find(s => s.id === p.shiftId);
+                  const key = shift?.date ? shift.date.substring(0, 7) : "Outros";
+                  if (!monthsMap[key]) monthsMap[key] = [];
+                  monthsMap[key].push(p);
+                });
+
+                const sortedMonthKeys = Object.keys(monthsMap).sort();
+
+                return (
+                  <div className="space-y-6">
+                    {sortedMonthKeys.map((mKey) => {
+                      let monthTitle = mKey;
+                      if (mKey.includes("-")) {
+                        const [y, m] = mKey.split("-").map(Number);
+                        const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+                        monthTitle = `${monthNames[m - 1]} ${y}`;
+                      }
+
+                      const mProposals = monthsMap[mKey];
+                      const isCollapsed = Boolean(collapsedProposalMonths[mKey]);
+
+                      return (
+                        <div key={mKey} className="space-y-3">
+                          {/* Cabeçalho Sanfona do Mês */}
+                          <div
+                            onClick={() => toggleMonthCollapse(mKey)}
+                            className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100/90 dark:bg-navy-900/90 dark:hover:bg-navy-900 rounded-2xl cursor-pointer transition-all border border-slate-200/60 dark:border-slate-800 shadow-2xs"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <CalendarIcon size={16} className="text-primary" />
+                              <span className="text-sm font-extrabold uppercase tracking-wider text-navy-900 dark:text-white">
+                                {monthTitle}
+                              </span>
+                              <span className="text-xs bg-white dark:bg-navy-800 text-slate-600 dark:text-slate-300 px-2.5 py-0.5 rounded-full font-bold border border-slate-200 dark:border-slate-700">
+                                {mProposals.length} {mProposals.length === 1 ? "proposta" : "propostas"}
+                              </span>
+                              {mProposals.some(p => p.status === "pendente") && (
+                                <span className="text-[11px] bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-extrabold flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                  {mProposals.filter(p => p.status === "pendente").length} aguardando aprovação
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-slate-400">
+                              <span className="text-xs font-semibold hidden sm:inline">
+                                {isCollapsed ? "Expandir" : "Recolher"}
+                              </span>
+                              {isCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                            </div>
+                          </div>
+
+                          {/* Grid de Cards do Mês */}
+                          {!isCollapsed && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {mProposals.map((prop) => {
+                                const inst = instructors.find((i) => i.id === prop.instructorId);
+                                const shift = shifts.find((s) => s.id === prop.shiftId);
+
+                                return (
+                                  <div
+                                    key={prop.id}
+                                    className="p-5 rounded-2xl bg-slate-50 dark:bg-navy-900/60 border border-slate-100 dark:border-slate-700/60 space-y-4 flex flex-col justify-between"
+                                  >
+                                    <div className="space-y-3">
+                                      {/* Cabeçalho do Card */}
+                                      <div className="flex justify-between items-start gap-2">
+                                        <div className="min-w-0">
+                                          <span className="text-[10px] text-primary font-extrabold uppercase tracking-wider block truncate">
+                                            {shift?.modality || "Aula"} · {formatDateDDMMAAAA(shift?.date || "")}
+                                          </span>
+                                          <h4 className="text-sm font-extrabold text-navy-900 dark:text-white truncate">
+                                            {shift?.title || "Turno"}
+                                          </h4>
+                                          <span className="text-[11px] text-muted dark:text-slate-400">
+                                            {shift?.startTime} – {shift?.endTime}
+                                          </span>
+                                        </div>
+
+                                        <div className="text-right shrink-0">
+                                          <span
+                                            className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider inline-block ${
+                                              prop.status === "aceita"
+                                                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                                : prop.status === "pendente"
+                                                ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300"
+                                                : "bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300"
+                                            }`}
+                                          >
+                                            {prop.status === "pendente" ? "Aguardando" : prop.status}
+                                          </span>
+                                          <span className="text-[10px] text-muted dark:text-slate-400 mt-1 block">
+                                            {prop.type === "convite" ? "Convite enviado" : "Candidatura recebida"}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      {/* Perfil Clicável do Professor com Avaliação em Estrelas */}
+                                      <div
+                                        onClick={() => inst && setInstructorDetailModal(inst)}
+                                        className="p-3 bg-white dark:bg-navy-800 hover:bg-slate-100/70 dark:hover:bg-navy-700/60 rounded-xl flex items-center gap-3 border border-slate-100 dark:border-slate-700 cursor-pointer transition-colors group shadow-2xs"
+                                        title="Ver perfil completo e avaliações do professor"
+                                      >
+                                        <div className="w-11 h-11 rounded-full overflow-hidden bg-slate-200 dark:bg-navy-700 shrink-0 border border-white dark:border-navy-700 flex items-center justify-center">
+                                          {inst?.avatar ? (
+                                            <img src={inst.avatar} alt={inst.name} className="w-full h-full object-cover" />
+                                          ) : (
+                                            <User size={22} className="text-primary" />
+                                          )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center justify-between">
+                                            <h5 className="text-xs font-bold text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">
+                                              {inst?.name}
+                                            </h5>
+                                            <ChevronRight size={14} className="text-slate-400 opacity-60 group-hover:opacity-100 transition-opacity" />
+                                          </div>
+                                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">
+                                            CREF {inst?.cref} (Ativo)
+                                          </span>
+                                          {(inst?.ratingCount || 0) > 0 ? (
+                                            <div className="flex items-center gap-1 text-[11px] text-amber-500 font-bold mt-0.5">
+                                              <Star size={12} fill="currentColor" strokeWidth={1.5} />
+                                              <span>{inst?.rating.toFixed(1)}</span>
+                                              <span className="text-slate-400 font-normal">({inst?.ratingCount} contratações)</span>
+                                            </div>
+                                          ) : (
+                                            <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-0.5">
+                                              <Sparkles size={11} strokeWidth={1.5} />
+                                              <span>Novo Professor · Sem avaliações</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Informações da Proposta e Valor Fixo */}
+                                      <div className="space-y-1.5 text-xs bg-white dark:bg-navy-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-muted dark:text-slate-400">Valor da Proposta:</span>
+                                          <span className="font-extrabold text-primary bg-primary/10 px-2 py-0.5 rounded-full text-xs">
+                                            R$ {prop.proposedRate || shift?.rate || shift?.maxRate || 45}/h fixo
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      {/* Alerta de Check-in Realizado */}
+                                      {shift?.instructorCheckInAt && (
+                                        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 p-2.5 rounded-xl flex items-center gap-2 text-xs font-bold text-amber-800 dark:text-amber-200">
+                                          <Clock size={14} className="text-amber-600 shrink-0" />
+                                          <span>Professor fez check-in às {shift.instructorCheckInAt}</span>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Ações da Proposta */}
+                                    {prop.status === "pendente" && (
+                                      <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={() => startAcceptProposal(prop)}
+                                            className="flex-1 bg-primary text-white font-extrabold py-2.5 rounded-full text-xs shadow-xs hover:bg-primary-hover transition-all active:scale-95"
+                                          >
+                                            Aprovar e Contratar (R$ {prop.proposedRate || shift?.rate || shift?.maxRate || 45}/h)
+                                          </button>
+                                          <button
+                                            onClick={() => rejectProposal(prop.id)}
+                                            className="px-4 py-2.5 rounded-full text-xs font-bold text-slate-500 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-navy-700 transition-colors"
+                                          >
+                                            Recusar
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {prop.status === "aceita" && (
+                                      <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                                        <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl p-3.5 space-y-2.5 text-xs">
+                                          <div className="flex justify-between items-center pb-2 border-b border-emerald-200/60 dark:border-emerald-800/40">
+                                            <span className="font-extrabold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5 text-xs">
+                                              <ShieldCheck size={14} className="text-emerald-600" /> Contatos Liberados
+                                            </span>
+                                            <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-extrabold px-2 py-0.5 rounded-full">
+                                              CREF Ativo
+                                            </span>
+                                          </div>
+
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700 dark:text-slate-300">
+                                            <div className="flex items-center gap-2">
+                                              <Phone size={13} className="text-primary flex-shrink-0" />
+                                              <span className="font-semibold">{inst?.phone || "(27) 99933-8822"}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <Mail size={13} className="text-primary flex-shrink-0" />
+                                              <span className="truncate">{inst?.email || "contato@professor.com"}</span>
+                                            </div>
+                                          </div>
+
+                                          {/* Chave Pix do Professor */}
+                                          <div className="bg-white dark:bg-navy-900 p-2.5 rounded-lg border border-emerald-100 dark:border-navy-700 flex items-center justify-between gap-2">
+                                            <div className="min-w-0">
+                                              <span className="text-[10px] text-muted dark:text-slate-400 block font-bold">Chave Pix para Acerto:</span>
+                                              <span className="font-mono font-bold text-navy-900 dark:text-white truncate block text-[11px]">
+                                                {inst?.pixKey || inst?.email || "lucas.ferreira.ef@gmail.com"}
+                                              </span>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                                                  navigator.clipboard.writeText(inst?.pixKey || inst?.email || "");
+                                                }
+                                                setCopiedPixKey(inst?.id || "copied");
+                                                setTimeout(() => setCopiedPixKey(null), 3000);
+                                              }}
+                                              className="px-2.5 py-1 rounded bg-slate-100 dark:bg-navy-800 hover:bg-slate-200 text-[10px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1 transition-colors"
+                                            >
+                                              {copiedPixKey === inst?.id ? (
+                                                <>
+                                                  <Check size={11} className="text-emerald-500" />
+                                                  <span className="text-emerald-600">Copiado!</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Copy size={11} />
+                                                  <span>Copiar Pix</span>
+                                                </>
+                                              )}
+                                            </button>
+                                          </div>
+
+                                          {/* Ações: WhatsApp direto e Confirmação de Presença */}
+                                          <div className="flex flex-wrap gap-2 pt-1">
+                                            <a
+                                              href={`https://wa.me/55${(inst?.phone || "").replace(/\D/g, "")}?text=Olá%20${encodeURIComponent(inst?.name || "Professor")},%20sua%20aula%20foi%20confirmada%20na%20${encodeURIComponent(currentGym.name)}!`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="flex-1 min-w-[120px] py-2 px-3 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] flex items-center justify-center gap-1.5 shadow-xs transition-all"
+                                            >
+                                              <MessageSquare size={13} />
+                                              <span>Abrir WhatsApp</span>
+                                            </a>
+
+                                            {shift && shift.status === "confirmado" && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleValidateAttendance(shift.id, inst?.name)}
+                                                className="flex-1 min-w-[140px] py-2 px-3 rounded-full bg-navy-900 hover:bg-navy-800 dark:bg-primary dark:hover:bg-primary-hover text-white font-extrabold text-[11px] flex items-center justify-center gap-1.5 shadow-xs transition-all"
+                                              >
+                                                <CheckCheck size={13} />
+                                                <span>{shift.instructorCheckInAt ? `Validar Presença (${shift.instructorCheckInAt})` : "Confirmar Presença"}</span>
+                                              </button>
+                                            )}
+
+                                            {shift && shift.status === "realizada" && (
+                                              <>
+                                                <div className="w-full py-1.5 px-3 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-extrabold text-[11px] flex items-center justify-center gap-1.5">
+                                                  <CheckCheck size={13} className="text-emerald-600" />
+                                                  <span>Presença Validada · {shift.instructorReviewedByGym ? "Avaliado ★" : "Pendente Avaliação"}</span>
+                                                </div>
+                                                {!shift.instructorReviewedByGym && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      if (inst) setReviewShift({ shift, instructor: inst });
+                                                    }}
+                                                    className="w-full py-2 px-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-[11px] flex items-center justify-center gap-1.5 shadow-xs transition-all mt-1"
+                                                  >
+                                                    <Star size={13} strokeWidth={1.5} />
+                                                    <span>Avaliar Professor</span>
+                                                  </button>
+                                                )}
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -4310,7 +4667,7 @@ export const AcademiaView: React.FC = () => {
               (s) => s.id === (selectedShiftForRecommendations || gymShifts[0]?.id)
             );
             const shiftRecommendations = activeTargetShift
-              ? getRecommendedInstructorsForShift(activeTargetShift, activeInstructors, recommendationSortBy, shifts, gyms, proposals)
+              ? getRecommendedInstructorsForShift(activeTargetShift, uniqueInstructors, recommendationSortBy, shifts, gyms, proposals)
               : [];
 
             return (
@@ -4417,7 +4774,7 @@ export const AcademiaView: React.FC = () => {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {shiftRecommendations.map((rec) => {
-                          const inst = rec.instructor;
+                          const inst = rec.instructor as (Instructor & { minRate?: number; maxRate?: number; proposalCount?: number; hasMultipleRates?: boolean });
                           const alreadyInvited = proposals.some(
                             (p) => p.shiftId === activeTargetShift.id && p.instructorId === inst.id
                           );
@@ -4428,7 +4785,11 @@ export const AcademiaView: React.FC = () => {
                               className="p-5 rounded-2xl bg-slate-50 dark:bg-navy-900/60 border border-slate-100 dark:border-slate-700/60 space-y-3.5 flex flex-col justify-between"
                             >
                               <div className="space-y-3">
-                                <div className="flex gap-3 items-center">
+                                <div
+                                  onClick={() => setInstructorDetailModal(inst)}
+                                  className="flex gap-3 items-center cursor-pointer group"
+                                  title="Ver perfil completo e avaliações do professor"
+                                >
                                   <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-200 dark:bg-navy-700 shrink-0 border border-white dark:border-navy-700 flex items-center justify-center">
                                     {inst.avatar ? (
                                       <img
@@ -4442,16 +4803,25 @@ export const AcademiaView: React.FC = () => {
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center">
-                                      <h3 className="text-sm font-bold text-navy-900 dark:text-white truncate">
+                                      <h3 className="text-sm font-bold text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">
                                         {inst.name}
                                       </h3>
                                       <span className="text-xs font-black text-navy-900 dark:text-white">
-                                        R$ {inst.hourlyRate || 45}/h
+                                        {inst.hasMultipleRates
+                                          ? `R$ ${inst.minRate} - ${inst.maxRate}/h`
+                                          : `R$ ${inst.hourlyRate || 45}/h`}
                                       </span>
                                     </div>
-                                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold block">
-                                      CREF {inst.cref} (Ativo)
-                                    </span>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold block">
+                                        CREF {inst.cref} (Ativo)
+                                      </span>
+                                      {inst.hasMultipleRates && (
+                                        <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.2 rounded font-bold">
+                                          Valores agrupados
+                                        </span>
+                                      )}
+                                    </div>
                                     {(inst.ratingCount || 0) > 0 ? (
                                       <div className="flex items-center gap-1 text-xs text-amber-500 font-bold mt-0.5">
                                         <Star size={12} fill="currentColor" />
@@ -4469,8 +4839,15 @@ export const AcademiaView: React.FC = () => {
                                   </div>
                                 </div>
 
-                                {/* Badge de Prioridade de Cobertura de Horário */}
+                                {/* Badges de Destaque, Experiências e Cobertura */}
                                 <div className="flex flex-wrap gap-1.5">
+                                  {/* Alerta de Atividades Vigentes (Experiências Profissionais) */}
+                                  {inst.workExperiences && inst.workExperiences.length > 0 && (
+                                    <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 text-[10px] font-black flex items-center gap-1">
+                                      <AlertTriangle size={11} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                                      Atividades vigentes ({inst.workExperiences.length})
+                                    </span>
+                                  )}
                                   {rec.isExactMatch ? (
                                     <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 text-[10px] font-black flex items-center gap-1">
                                       <Sparkles size={11} className="text-amber-500 fill-amber-500" />
@@ -4564,31 +4941,70 @@ export const AcademiaView: React.FC = () => {
                 {/* Todos os Professores da Plataforma */}
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-700/60 space-y-4">
                   <h3 className="text-xs font-bold text-navy-900 dark:text-white uppercase tracking-wider">
-                    Todos os Instrutores Cadastrados na Plataforma
+                    Todos os Instrutores Cadastrados na Plataforma ({uniqueInstructors.length})
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {activeInstructors.map((inst) => (
+                    {uniqueInstructors.map((inst) => (
                       <div
                         key={inst.id}
                         className="p-4 rounded-2xl bg-slate-50 dark:bg-navy-900/60 border border-slate-100 dark:border-slate-700/60 space-y-3 flex flex-col justify-between"
                       >
                         <div className="space-y-2.5">
-                          <div className="flex gap-3 items-center">
+                          <div
+                            onClick={() => setInstructorDetailModal(inst)}
+                            className="flex gap-3 items-center cursor-pointer group"
+                            title="Ver perfil completo e avaliações do professor"
+                          >
                             <img
                               src={inst.avatar}
                               alt={inst.name}
-                              className="w-12 h-12 rounded-full object-cover border border-white dark:border-navy-700"
+                              className="w-12 h-12 rounded-full object-cover border border-white dark:border-navy-700 shrink-0"
                             />
-                            <div>
-                              <h4 className="text-sm font-bold text-navy-900 dark:text-white">{inst.name}</h4>
-                              <span className="text-xs text-primary font-semibold">CREF {inst.cref}</span>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-sm font-bold text-navy-900 dark:text-white truncate group-hover:text-primary transition-colors">
+                                {inst.name}
+                              </h4>
+                              <span className="text-xs text-primary font-semibold block">CREF {inst.cref}</span>
+                              {(inst.ratingCount || 0) > 0 ? (
+                                <div className="flex items-center gap-1 text-[11px] text-amber-500 font-bold mt-0.5">
+                                  <Star size={11} fill="currentColor" />
+                                  <span>{inst.rating.toFixed(1)}</span>
+                                  <span className="text-slate-400 font-normal">({inst.ratingCount} contratações)</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-0.5">
+                                  <Sparkles size={11} />
+                                  <span>Novo Professor</span>
+                                </div>
+                              )}
                             </div>
                           </div>
 
+                          {/* Alerta de Atividades Vigentes (Experiências Profissionais) */}
+                          {inst.workExperiences && inst.workExperiences.length > 0 && (
+                            <div>
+                              <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 text-[10px] font-black inline-flex items-center gap-1">
+                                <AlertTriangle size={11} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                                Atividades vigentes ({inst.workExperiences.length})
+                              </span>
+                            </div>
+                          )}
+
                           <div className="flex justify-between items-center text-xs">
-                            <span className="text-muted dark:text-slate-400">Valor base:</span>
-                            <span className="font-extrabold text-navy-900 dark:text-white">R$ {inst.hourlyRate || 45}/h</span>
+                            <span className="text-muted dark:text-slate-400">Valor hora:</span>
+                            <div className="text-right">
+                              <span className="font-extrabold text-navy-900 dark:text-white">
+                                {inst.hasMultipleRates
+                                  ? `R$ ${inst.minRate} - ${inst.maxRate}/h`
+                                  : `R$ ${inst.hourlyRate || 45}/h`}
+                              </span>
+                              {inst.hasMultipleRates && (
+                                <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.2 rounded font-bold ml-1.5 inline-block">
+                                  Valores agrupados
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <div className="flex flex-wrap gap-1">
@@ -4609,7 +5025,7 @@ export const AcademiaView: React.FC = () => {
                             setNewModality(inst.modalities[0] || "Musculação");
                             setShowNewShiftModal(true);
                           }}
-                          className="w-full bg-navy-900 dark:bg-primary hover:bg-navy-800 dark:hover:bg-primary-hover text-white font-bold py-2 rounded-full text-xs transition-all"
+                          className="w-full bg-navy-900 dark:bg-primary hover:bg-navy-800 dark:hover:bg-primary-hover text-white font-bold py-2 rounded-full text-xs transition-all shadow-xs"
                         >
                           Criar Vaga para este Professor
                         </button>
@@ -7429,6 +7845,19 @@ export const AcademiaView: React.FC = () => {
               <X className="w-5 h-5" strokeWidth={1.5} />
             </button>
           </div>
+
+          {/* Alerta de Atividades Profissionais Vigentes para Prevenção de Conflito de Horário */}
+          {instructorDetailModal.workExperiences && instructorDetailModal.workExperiences.length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 p-3.5 rounded-2xl space-y-1.5 shadow-2xs">
+              <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-extrabold text-xs">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>Atenção aos Horários: Atividades Profissionais Cadastradas</span>
+              </div>
+              <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                Este professor possui <strong>{instructorDetailModal.workExperiences.length}</strong> {instructorDetailModal.workExperiences.length === 1 ? "vínculo/atividade profissional cadastrada" : "vínculos/atividades profissionais cadastradas"}. Recomendamos verificar a compatibilidade de horários na seção de experiências abaixo para evitar conflitos de agenda antes da contratação.
+              </p>
+            </div>
+          )}
 
           {/* Rating Summary Card */}
           <div className="bg-slate-50 dark:bg-navy-900/60 p-4 rounded-2xl border border-slate-100 dark:border-navy-800/80 space-y-2">
